@@ -1,0 +1,212 @@
+/* =========================================================
+   ROCK BUSTER AR - style.css
+   NES/8bit風・ブラウン管風のレトロスタイル
+   ========================================================= */
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+  -webkit-tap-highlight-color: transparent;
+  user-select: none;
+}
+
+html, body {
+  width: 100%;
+  height: 100%;
+  background: #000;
+  overflow: hidden;
+  font-family: 'Press Start 2P', monospace;
+  color: #7fdcff;
+}
+
+#game-root {
+  position: relative;
+  width: 100vw;
+  height: 100vh;
+  overflow: hidden;
+  background: #000;
+}
+
+/* インカメラ映像。selfieなので左右反転して映す */
+#camera-video {
+  position: absolute;
+  top: 0; left: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transform: scaleX(-1);
+  filter: saturate(0.7) contrast(1.05) brightness(0.9) hue-rotate(180deg) sepia(0.15);
+  /* 青系サイバーな雰囲気にするための色味補正 */
+}
+
+/* ゲーム描画キャンバス（映像の上に重ねる。座標はミラー変換済みで計算する） */
+#game-canvas {
+  position: absolute;
+  top: 0; left: 0;
+  width: 100%;
+  height: 100%;
+}
+
+/* ===================== ブラウン管風エフェクト ===================== */
+#crt-overlay {
+  position: absolute;
+  top: 0; left: 0;
+  width: 100%; height: 100%;
+  pointer-events: none;
+  z-index: 50;
+  background:
+    repeating-linear-gradient(
+      to bottom,
+      rgba(0,0,0,0.0) 0px,
+      rgba(0,0,0,0.15) 1px,
+      rgba(0,0,0,0.0) 2px,
+      rgba(0,0,0,0.0) 3px
+    );
+  box-shadow: inset 0 0 120px rgba(0,0,0,0.85), inset 0 0 40px rgba(0,60,120,0.4);
+  mix-blend-mode: multiply;
+  animation: flicker 3.5s infinite;
+}
+@keyframes flicker {
+  0%, 96%, 100% { opacity: 1; }
+  97% { opacity: 0.85; }
+  98% { opacity: 1; }
+}
+
+/* ===================== 共通UIパーツ ===================== */
+.hidden { display: none !important; }
+
+.pixel-box {
+  position: absolute;
+  top: 50%; left: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 100;
+  background: rgba(4, 8, 24, 0.9);
+  border: 4px solid #7fdcff;
+  box-shadow: 0 0 0 4px #001830, 0 0 20px #00e5ff;
+  padding: 24px 20px;
+  text-align: center;
+  width: min(86vw, 460px);
+  image-rendering: pixelated;
+}
+
+.pixel-box p {
+  line-height: 1.8;
+  font-size: 12px;
+  margin-bottom: 10px;
+  text-shadow: 2px 2px 0 #003;
+}
+
+.title-text {
+  font-size: 18px !important;
+  color: #ffe66d;
+  text-shadow: 3px 3px 0 #a83232 !important;
+  margin-bottom: 16px !important;
+  letter-spacing: 1px;
+}
+
+.small-text {
+  font-size: 9px !important;
+  color: #b8f2ff;
+  line-height: 1.6 !important;
+}
+
+.blink { animation: blink 1s steps(2) infinite; }
+@keyframes blink { 50% { opacity: 0; } }
+
+.pixel-btn {
+  font-family: 'Press Start 2P', monospace;
+  margin-top: 14px;
+  padding: 12px 18px;
+  background: #ffe66d;
+  color: #221800;
+  border: 4px solid #221800;
+  box-shadow: 4px 4px 0 #7a5a00;
+  font-size: 11px;
+  cursor: pointer;
+  outline: none;
+}
+.pixel-btn:active {
+  box-shadow: 1px 1px 0 #7a5a00;
+  transform: translate(3px, 3px);
+}
+
+/* ===================== キャリブレーションバー ===================== */
+#calib-bar-outer {
+  width: 100%;
+  height: 14px;
+  border: 2px solid #7fdcff;
+  margin-top: 10px;
+  background: #001020;
+}
+#calib-bar-inner {
+  height: 100%;
+  width: 0%;
+  background: linear-gradient(90deg, #00e5ff, #7fffd4);
+  transition: width 0.1s linear;
+}
+
+/* ===================== HUD ===================== */
+#hud {
+  position: absolute;
+  top: 0; left: 0;
+  width: 100%;
+  padding: 10px 12px;
+  z-index: 60;
+  pointer-events: none;
+}
+
+.hp-row {
+  display: flex;
+  align-items: center;
+  margin-bottom: 6px;
+  gap: 8px;
+}
+
+.hp-label {
+  font-size: 8px;
+  width: 62px;
+  color: #fff;
+  text-shadow: 2px 2px 0 #000;
+  flex-shrink: 0;
+}
+
+.hp-bar-outer {
+  flex: 1;
+  height: 14px;
+  border: 3px solid #fff;
+  background: #200000;
+  box-shadow: 0 0 6px rgba(0,0,0,0.8);
+}
+
+.hp-bar-inner {
+  height: 100%;
+  width: 100%;
+  transition: width 0.25s ease-out;
+}
+
+.player-hp { background: linear-gradient(90deg,#4dff8f,#0fbf5f); }
+.boss-hp   { background: linear-gradient(90deg,#ff6b6b,#c0392b); }
+.charge-fill { background: linear-gradient(90deg,#7fdcff,#ffe66d); width: 0%; }
+
+#charge-gauge-wrap {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+#status-text {
+  margin-top: 6px;
+  font-size: 9px;
+  color: #ffe66d;
+  text-shadow: 2px 2px 0 #000;
+  min-height: 12px;
+}
+
+/* 横持ち推奨の案内（縦持ち時に表示） */
+@media (orientation: portrait) {
+  #status-text::after {
+    content: " (横持ち推奨)";
+  }
+}
