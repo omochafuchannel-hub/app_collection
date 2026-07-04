@@ -25,6 +25,9 @@
     <!-- 骨格・敵・弾・エフェクトを描画するキャンバス（映像の上に重なる） -->
     <canvas id="game-canvas"></canvas>
 
+    <!-- 画面全体を囲むドット絵ブロックの枠（ロックマン風ボス部屋演出。装飾のみで当たり判定には影響しない） -->
+    <canvas id="frame-canvas"></canvas>
+
     <!-- ブラウン管風スキャンライン・ノイズ演出（CSSのみ） -->
     <div id="crt-overlay"></div>
 
@@ -64,7 +67,8 @@
         <p class="title-text">ROCK BUSTER AR</p>
         <p class="small-text">腕を伸ばして肘を曲げるとエネルギー弾発射</p>
         <p class="small-text">ジャンプで地上弾を回避 / しゃがみで空中弾を回避</p>
-        <button id="start-btn" class="pixel-btn">TAP TO START</button>
+        <p class="small-text blink">まもなく自動スタートします...</p>
+        <button id="start-btn" class="pixel-btn">TAP TO SKIP</button>
       </div>
     </div>
 
