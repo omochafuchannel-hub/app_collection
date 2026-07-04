@@ -73,6 +73,19 @@ html, body {
   98% { opacity: 1; }
 }
 
+/* ===================== デプロイ確認用バージョン表示 ===================== */
+#version-tag {
+  position: fixed;
+  bottom: 6px;
+  right: 8px;
+  z-index: 1000;
+  font-size: 8px;
+  color: rgba(255, 255, 255, 0.55);
+  text-shadow: 1px 1px 0 #000;
+  pointer-events: none;
+  letter-spacing: 0.5px;
+}
+
 /* ===================== 縦持ち案内オーバーレイ ===================== */
 #rotate-overlay {
   position: fixed;
