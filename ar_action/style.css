@@ -73,6 +73,27 @@ html, body {
   98% { opacity: 1; }
 }
 
+/* ===================== 縦持ち案内オーバーレイ ===================== */
+#rotate-overlay {
+  position: fixed;
+  top: 0; left: 0;
+  width: 100vw;
+  height: 100vh;
+  z-index: 999;
+  background: #000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.rotate-icon {
+  font-size: 34px !important;
+  animation: rotate-hint 1.4s ease-in-out infinite;
+}
+@keyframes rotate-hint {
+  0%, 100% { transform: rotate(0deg); }
+  50% { transform: rotate(90deg); }
+}
+
 /* ===================== 共通UIパーツ ===================== */
 .hidden { display: none !important; }
 
@@ -144,6 +165,16 @@ html, body {
   width: 0%;
   background: linear-gradient(90deg, #00e5ff, #7fffd4);
   transition: width 0.1s linear;
+}
+
+.align-status {
+  font-size: 9px !important;
+  color: #ff8c42;
+  margin-bottom: 4px !important;
+  transition: color 0.2s;
+}
+.align-status.ok {
+  color: #4dff8f !important;
 }
 
 /* ===================== HUD ===================== */
