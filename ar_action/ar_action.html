@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+<title>ROCK BUSTER AR - レトロARボスバトル</title>
+
+<!-- レトロ風ドットフォント（Google Fonts CDN） -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
+
+<link rel="stylesheet" href="style.css" />
+</head>
+<body>
+
+  <!-- ============================================
+       AR ゲームのルートコンテナ
+       中に「カメラ映像」と「ゲーム描画キャンバス」を重ねる
+  ============================================ -->
+  <div id="game-root">
+
+    <!-- インカメラ映像（自分の姿がここに映る） -->
+    <video id="camera-video" autoplay playsinline muted></video>
+
+    <!-- 骨格・敵・弾・エフェクトを描画するキャンバス（映像の上に重なる） -->
+    <canvas id="game-canvas"></canvas>
+
+    <!-- ブラウン管風スキャンライン・ノイズ演出（CSSのみ） -->
+    <div id="crt-overlay"></div>
+
+    <!-- ロード中・キャリブレーション中の画面 -->
+    <div id="loading-screen">
+      <div class="pixel-box">
+        <p class="blink">LOADING...</p>
+        <p id="loading-detail" class="small-text">姿勢推定モデルを読み込み中</p>
+      </div>
+    </div>
+
+    <!-- キャリブレーション（初期姿勢取得）画面 -->
+    <div id="calibration-screen" class="hidden">
+      <div class="pixel-box">
+        <p>キャリブレーション中</p>
+        <p class="small-text">画面に上半身が映るように立ってください</p>
+        <div id="calib-bar-outer"><div id="calib-bar-inner"></div></div>
+      </div>
+    </div>
+
+    <!-- スタート画面 -->
+    <div id="start-screen" class="hidden">
+      <div class="pixel-box">
+        <p class="title-text">ROCK BUSTER AR</p>
+        <p class="small-text">腕を伸ばして肘を曲げるとエネルギー弾発射</p>
+        <p class="small-text">ジャンプで地上弾を回避 / しゃがみで空中弾を回避</p>
+        <button id="start-btn" class="pixel-btn">TAP TO START</button>
+      </div>
+    </div>
+
+    <!-- ============ ゲーム中 HUD ============ -->
+    <div id="hud" class="hidden">
+      <div class="hp-row">
+        <span class="hp-label">PLAYER</span>
+        <div class="hp-bar-outer"><div id="player-hp-bar" class="hp-bar-inner player-hp"></div></div>
+      </div>
+      <div class="hp-row">
+        <span class="hp-label">BOSS</span>
+        <div class="hp-bar-outer"><div id="boss-hp-bar" class="hp-bar-inner boss-hp"></div></div>
+      </div>
+
+      <div id="charge-gauge-wrap">
+        <span class="hp-label">CHARGE</span>
+        <div class="hp-bar-outer"><div id="charge-bar" class="hp-bar-inner charge-fill"></div></div>
+      </div>
+
+      <div id="status-text"></div>
+    </div>
+
+    <!-- 結果画面（勝利／敗北） -->
+    <div id="result-screen" class="hidden">
+      <div class="pixel-box">
+        <p id="result-title" class="title-text"></p>
+        <button id="retry-btn" class="pixel-btn">RETRY</button>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- =====================================================
+       MediaPipe Tasks Vision (Pose Landmarker) を CDN から読み込み
+       npm不要・GitHub Pagesでそのまま動作
+  ===================================================== -->
+  <script type="module" src="script.js"></script>
+</body>
+</html>
