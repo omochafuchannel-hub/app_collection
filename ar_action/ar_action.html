@@ -28,6 +28,15 @@
     <!-- ブラウン管風スキャンライン・ノイズ演出（CSSのみ） -->
     <div id="crt-overlay"></div>
 
+    <!-- 縦持ち時に表示する「横にしてください」案内。横持ちになるまでゲームは一時停止する -->
+    <div id="rotate-overlay" class="hidden">
+      <div class="pixel-box">
+        <p class="rotate-icon">📱↻</p>
+        <p>スマホを横向きにしてください</p>
+        <p class="small-text">このゲームは横持ち専用です</p>
+      </div>
+    </div>
+
     <!-- ロード中・キャリブレーション中の画面 -->
     <div id="loading-screen">
       <div class="pixel-box">
@@ -36,11 +45,12 @@
       </div>
     </div>
 
-    <!-- キャリブレーション（初期姿勢取得）画面 -->
+    <!-- キャリブレーション（シルエット位置合わせ）画面 -->
     <div id="calibration-screen" class="hidden">
       <div class="pixel-box">
-        <p>キャリブレーション中</p>
-        <p class="small-text">画面に上半身が映るように立ってください</p>
+        <p>画面のシルエットに合わせてください</p>
+        <p class="small-text">肩の位置と高さをだいたい合わせると自動でスタートします</p>
+        <p id="align-status" class="align-status">位置を合わせています...</p>
         <div id="calib-bar-outer"><div id="calib-bar-inner"></div></div>
       </div>
     </div>
