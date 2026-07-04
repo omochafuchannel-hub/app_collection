@@ -24,11 +24,14 @@ const loadingScreen = document.getElementById("loading-screen");
 const loadingDetail = document.getElementById("loading-detail");
 const calibrationScreen = document.getElementById("calibration-screen");
 const calibBarInner = document.getElementById("calib-bar-inner");
+const alignStatus = document.getElementById("align-status");
 const startScreen = document.getElementById("start-screen");
 const startBtn = document.getElementById("start-btn");
 const resultScreen = document.getElementById("result-screen");
 const resultTitle = document.getElementById("result-title");
 const retryBtn = document.getElementById("retry-btn");
+
+const rotateOverlay = document.getElementById("rotate-overlay");
 
 const hud = document.getElementById("hud");
 const playerHpBar = document.getElementById("player-hp-bar");
@@ -39,12 +42,23 @@ const statusText = document.getElementById("status-text");
 // ゲーム全体のステート機械: loading -> calibrating -> ready -> playing -> win/lose
 let gameState = "loading";
 
-// キャリブレーション用
-const CALIB_FRAMES_NEEDED = 45; // 約45フレーム分の姿勢平均を基準姿勢とする
+// キャリブレーション（シルエット位置合わせ）用
+const ALIGN_FRAMES_NEEDED = 30; // これだけ連続で位置が合っていれば自動スタートへ進む
+let alignFrameCount = 0;
 let calibFrameCount = 0;
 let calibShoulderYSum = 0;
+let calibTorsoLenSum = 0;
 let baselineShoulderY = null; // 基準時の肩の高さ（画面比率 0〜1）
 let baselineTorsoLen = null;  // 基準時の肩〜腰の距離（縦の目安）
+
+// 画面に表示するシルエットの「合わせてほしい位置」（キャンバス比率）
+// X: ボスが右端に出るぶん、プレイヤーはやや左寄りに立ってもらう
+// Y: 肩の高さの目標位置
+const TARGET_SHOULDER_X_RATIO = 0.38;
+const TARGET_SHOULDER_Y_RATIO = 0.42;
+// 「なんとなく近ければOK」にするための許容範囲（広め）
+const ALIGN_TOLERANCE_X_RATIO = 0.16;
+const ALIGN_TOLERANCE_Y_RATIO = 0.14;
 
 // =====================================================================
 // 1. 8bit風サウンド（Web Audio APIでその場合成。外部音声ファイル不要）
@@ -123,7 +137,6 @@ const CHARGE_LV3_MS = 1100;
 const BOSS_MAX_HP = 100;
 const boss = {
   hp: BOSS_MAX_HP,
-  baseX: 0, baseY: 0, // canvasサイズ確定後に設定
   bobPhase: 0,
   attackTimer: 0,
   attackInterval: 1800, // ms、徐々に短縮される
@@ -131,6 +144,11 @@ const boss = {
   hitFlash: 0,
   dead: false
 };
+
+// ボスは常に画面右端付近に固定表示する（横持ち前提のレイアウト）
+// canvasの幅・高さから毎回計算することで、回転・リサイズ後も右端に追従する
+function bossX() { return canvas.width * 0.88; }
+function bossY() { return canvas.height * 0.42; }
 
 // プレイヤー / 敵の弾丸リスト
 let playerBolts = [];   // {x,y,vx,level,w,h}
@@ -163,9 +181,6 @@ async function main() {
   calibrationScreen.classList.remove("hidden");
   gameState = "calibrating";
 
-  boss.baseX = canvas.width * 0.82;
-  boss.baseY = canvas.height * 0.42;
-
   requestAnimationFrame(() => gameLoop(poseLandmarker));
 }
 
@@ -173,6 +188,38 @@ function resizeCanvas() {
   canvas.width = window.innerWidth;
   canvas.height = window.innerHeight;
 }
+
+// ---------------------------------------------------------------------
+// 横持ち専用オーバーレイ制御
+// 横向きでない間は「回転してください」画面を表示し、ゲームを一時停止する
+// ---------------------------------------------------------------------
+function isLandscape() {
+  return window.innerWidth >= window.innerHeight;
+}
+
+function updateOrientationUI() {
+  if (isLandscape()) {
+    rotateOverlay.classList.add("hidden");
+  } else {
+    rotateOverlay.classList.remove("hidden");
+  }
+}
+
+// 端末が対応していれば横向き固定を試みる（iOS Safariは非対応のためベストエフォート）
+async function tryLockLandscape() {
+  try {
+    if (document.documentElement.requestFullscreen) {
+      await document.documentElement.requestFullscreen().catch(() => {});
+    }
+    if (screen.orientation && screen.orientation.lock) {
+      await screen.orientation.lock("landscape").catch(() => {});
+    }
+  } catch (e) { /* 非対応環境では無視して縦横案内オーバーレイに任せる */ }
+}
+
+window.addEventListener("resize", updateOrientationUI);
+window.addEventListener("orientationchange", updateOrientationUI);
+updateOrientationUI();
 
 async function startCamera() {
   const stream = await navigator.mediaDevices.getUserMedia({
@@ -201,6 +248,7 @@ async function createPoseLandmarker() {
 
 // スタートボタン
 startBtn.addEventListener("click", () => {
+  tryLockLandscape(); // ユーザー操作のタイミングでないと許可されないブラウザが多いためここで試みる
   startScreen.classList.add("hidden");
   hud.classList.remove("hidden");
   gameState = "playing";
@@ -233,6 +281,9 @@ let lastVideoTime = -1;
 function gameLoop(poseLandmarker) {
   requestAnimationFrame(() => gameLoop(poseLandmarker));
 
+  // 縦持ちの間は姿勢推定・当たり判定・描画をすべて止めて一時停止する
+  if (!isLandscape()) return;
+
   ctx.clearRect(0, 0, canvas.width, canvas.height);
 
   // --- 姿勢推定（動画フレームが更新された時だけ実行し負荷を抑える） ---
@@ -246,7 +297,8 @@ function gameLoop(poseLandmarker) {
   }
 
   if (gameState === "calibrating") {
-    handleCalibration(landmarks);
+    const aligned = handleCalibration(landmarks);
+    drawSilhouetteGuide(aligned);
   } else if (gameState === "playing") {
     if (landmarks) updatePlayerFromPose(landmarks);
     updateBoss();
@@ -266,29 +318,115 @@ function gameLoop(poseLandmarker) {
 }
 
 // =====================================================================
-// 6. キャリブレーション（基準姿勢の取得）
+// 6. キャリブレーション（シルエットへの位置合わせ＋基準姿勢の取得）
 // =====================================================================
+function computeShoulderScreenPos(landmarks) {
+  const ls = landmarks[11], rs = landmarks[12];
+  if (!ls || !rs) return null;
+  const lsPx = toScreenPx(ls);
+  const rsPx = toScreenPx(rs);
+  return { x: (lsPx.x + rsPx.x) / 2, y: (lsPx.y + rsPx.y) / 2 };
+}
+
 function handleCalibration(landmarks) {
-  if (!landmarks) return;
-  const ls = landmarks[11], rs = landmarks[12]; // 左肩・右肩
-  const lh = landmarks[23], rh = landmarks[24]; // 左腰・右腰
-  if (!ls || !rs) return;
+  if (!landmarks) {
+    alignStatus.textContent = "画面内に上半身を映してください";
+    alignStatus.classList.remove("ok");
+    return false;
+  }
 
-  const shoulderY = (ls.y + rs.y) / 2;
-  const hipY = lh && rh ? (lh.y + rh.y) / 2 : shoulderY + 0.25;
+  const shoulderPos = computeShoulderScreenPos(landmarks);
+  if (!shoulderPos) return false;
 
-  calibShoulderYSum += shoulderY;
-  calibFrameCount++;
+  const targetX = canvas.width * TARGET_SHOULDER_X_RATIO;
+  const targetY = canvas.height * TARGET_SHOULDER_Y_RATIO;
+  const tolX = canvas.width * ALIGN_TOLERANCE_X_RATIO;
+  const tolY = canvas.height * ALIGN_TOLERANCE_Y_RATIO;
 
-  calibBarInner.style.width = `${Math.min(100, (calibFrameCount / CALIB_FRAMES_NEEDED) * 100)}%`;
+  // X軸の開始位置・Y軸の高さが、どちらもだいたい目標範囲に収まっていればOK
+  const aligned =
+    Math.abs(shoulderPos.x - targetX) < tolX &&
+    Math.abs(shoulderPos.y - targetY) < tolY;
 
-  if (calibFrameCount >= CALIB_FRAMES_NEEDED) {
+  if (aligned) {
+    alignStatus.textContent = "OK! そのまま少し待ってください";
+    alignStatus.classList.add("ok");
+    alignFrameCount++;
+
+    // 位置が合っている間の姿勢を基準（ベースライン）として蓄積する
+    const ls = landmarks[11], rs = landmarks[12];
+    const lh = landmarks[23], rh = landmarks[24];
+    const shoulderYNorm = (ls.y + rs.y) / 2;
+    const hipYNorm = lh && rh ? (lh.y + rh.y) / 2 : shoulderYNorm + 0.25;
+    calibShoulderYSum += shoulderYNorm;
+    calibTorsoLenSum += Math.abs(hipYNorm - shoulderYNorm) || 0.25;
+    calibFrameCount++;
+  } else {
+    alignStatus.textContent = "位置を合わせています...";
+    alignStatus.classList.remove("ok");
+    // 外れても即リセットはせず、少しずつ巻き戻すだけにして負担を減らす
+    alignFrameCount = Math.max(0, alignFrameCount - 2);
+  }
+
+  calibBarInner.style.width = `${Math.min(100, (alignFrameCount / ALIGN_FRAMES_NEEDED) * 100)}%`;
+
+  if (alignFrameCount >= ALIGN_FRAMES_NEEDED && calibFrameCount > 0) {
     baselineShoulderY = calibShoulderYSum / calibFrameCount;
-    baselineTorsoLen = Math.abs(hipY - shoulderY) || 0.25;
+    baselineTorsoLen = calibTorsoLenSum / calibFrameCount;
     calibrationScreen.classList.add("hidden");
     startScreen.classList.remove("hidden");
     gameState = "ready-wait";
   }
+
+  return aligned;
+}
+
+// プレイヤーに合わせてほしい「お手本シルエット」を描画する
+// 頭・肩・胴体・腕を単純な線画で表現（既存キャラクター素材は使用しない自作図形）
+function drawSilhouetteGuide(aligned) {
+  const targetX = canvas.width * TARGET_SHOULDER_X_RATIO;
+  const targetY = canvas.height * TARGET_SHOULDER_Y_RATIO;
+  const scale = canvas.height * 0.011;
+
+  ctx.save();
+  ctx.lineWidth = 4;
+  ctx.strokeStyle = aligned ? "#4dff8f" : "rgba(127,220,255,0.75)";
+  ctx.shadowColor = aligned ? "#4dff8f" : "#7fdcff";
+  ctx.shadowBlur = aligned ? 26 : 10;
+
+  // 頭
+  const headR = scale * 9;
+  ctx.beginPath();
+  ctx.arc(targetX, targetY - headR * 2.6, headR, 0, Math.PI * 2);
+  ctx.stroke();
+
+  // 肩ライン
+  const shoulderHalfW = scale * 20;
+  ctx.beginPath();
+  ctx.moveTo(targetX - shoulderHalfW, targetY);
+  ctx.lineTo(targetX + shoulderHalfW, targetY);
+  ctx.stroke();
+
+  // 胴体（肩幅→腰幅の台形）
+  const hipHalfW = scale * 14;
+  const hipY = targetY + scale * 34;
+  ctx.beginPath();
+  ctx.moveTo(targetX - shoulderHalfW, targetY);
+  ctx.lineTo(targetX - hipHalfW, hipY);
+  ctx.lineTo(targetX + hipHalfW, hipY);
+  ctx.lineTo(targetX + shoulderHalfW, targetY);
+  ctx.closePath();
+  ctx.stroke();
+
+  // 腕（軽く外側に下ろした自然なポーズ）
+  ctx.beginPath();
+  ctx.moveTo(targetX - shoulderHalfW, targetY);
+  ctx.lineTo(targetX - shoulderHalfW - scale * 5, targetY + scale * 22);
+  ctx.moveTo(targetX + shoulderHalfW, targetY);
+  ctx.lineTo(targetX + shoulderHalfW + scale * 5, targetY + scale * 22);
+  ctx.stroke();
+
+  ctx.restore();
 }
 
 // =====================================================================
@@ -442,7 +580,7 @@ function launchEnemyAttack() {
 
   const y = type === "ground" ? canvas.height * 0.86 : canvas.height * 0.38;
   enemyProjectiles.push({
-    x: boss.baseX,
+    x: bossX(),
     y,
     vx: -6.5,
     type,
@@ -477,14 +615,14 @@ function checkCollisions() {
   // --- プレイヤー弾 vs ボス ---
   if (!boss.dead) {
     playerBolts.forEach(b => {
-      const dx = b.x - boss.baseX;
-      const dy = b.y - (boss.baseY + Math.sin(boss.bobPhase) * 10);
+      const dx = b.x - bossX();
+      const dy = b.y - (bossY() + Math.sin(boss.bobPhase) * 10);
       if (Math.hypot(dx, dy) < 55 + b.r * 0.3) {
         const dmg = [0, 8, 16, 32][b.level] || 8;
         boss.hp = Math.max(0, boss.hp - dmg);
         boss.hitFlash = 10;
         b.x = 99999; // 消去マーク
-        spawnHitParticles(boss.baseX, boss.baseY, "#ff6b6b");
+        spawnHitParticles(bossX(), bossY(), "#ff6b6b");
         AudioSys.hit();
         screenShake = 6;
         if (boss.hp <= 0) triggerWin();
@@ -550,8 +688,8 @@ function triggerWin() {
   AudioSys.win();
   for (let i = 0; i < 60; i++) {
     particles.push({
-      x: boss.baseX + (Math.random() - 0.5) * 80,
-      y: boss.baseY + (Math.random() - 0.5) * 80,
+      x: bossX() + (Math.random() - 0.5) * 80,
+      y: bossY() + (Math.random() - 0.5) * 80,
       vx: (Math.random() - 0.5) * 8,
       vy: (Math.random() - 0.5) * 8,
       life: 40,
@@ -614,8 +752,8 @@ function drawSkeletonHint(landmarks) {
 // ボス（ロボット風ドット絵）を canvas 図形で自前描画。既存キャラクター素材は使用しない
 function drawEnemy() {
   if (gameState === "loading" || gameState === "calibrating") return;
-  const bx = boss.baseX;
-  const by = boss.baseY + Math.sin(boss.bobPhase) * 10;
+  const bx = bossX();
+  const by = bossY() + Math.sin(boss.bobPhase) * 10;
   const flash = boss.hitFlash > 0;
 
   ctx.save();
