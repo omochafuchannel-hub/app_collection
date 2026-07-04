@@ -17,7 +17,7 @@ import {
 // デプロイ確認用バージョン表示
 // 再デプロイのたびにこの文字列を変更すれば、実機で最新版か一目で確認できる
 // =====================================================================
-const APP_VERSION = "v1.2.0";
+const APP_VERSION = "v1.4.0";
 document.getElementById("version-tag").textContent = APP_VERSION;
 
 // =====================================================================
@@ -26,6 +26,47 @@ document.getElementById("version-tag").textContent = APP_VERSION;
 const video = document.getElementById("camera-video");
 const canvas = document.getElementById("game-canvas");
 const ctx = canvas.getContext("2d");
+const frameCanvas = document.getElementById("frame-canvas");
+const frameCtx = frameCanvas.getContext("2d");
+
+// 人物セグメンテーション（検知した人だけを青くするための下描き用オフスクリーンキャンバス）
+const maskCanvas = document.createElement("canvas");
+const maskCtx = maskCanvas.getContext("2d");
+let segmentationTintEnabled = true; // 環境非対応で失敗したら以降は自動的に諦める
+
+// 検知した人物の部分だけをうっすら青く光らせる。
+// 対応していない/エラーが出た環境では自動的に無効化し、素の映像のまま表示する
+function drawPersonTint(mask) {
+  if (!segmentationTintEnabled) return;
+  try {
+    const w = mask.width, h = mask.height;
+    const data = mask.getAsFloat32Array(); // 各ピクセルの「人物らしさ」0.0〜1.0
+    if (maskCanvas.width !== w || maskCanvas.height !== h) {
+      maskCanvas.width = w;
+      maskCanvas.height = h;
+    }
+    const imageData = maskCtx.createImageData(w, h);
+    for (let i = 0; i < data.length; i++) {
+      const confidence = data[i];
+      const idx = i * 4;
+      imageData.data[idx] = 90;       // R
+      imageData.data[idx + 1] = 180;  // G
+      imageData.data[idx + 2] = 255;  // B
+      imageData.data[idx + 3] = confidence > 0.5 ? Math.min(255, confidence * 150) : 0;
+    }
+    maskCtx.putImageData(imageData, 0, 0);
+
+    // カメラ映像はCSSでミラー表示(scaleX(-1))しているため、マスクも同様にミラーして重ねる
+    ctx.save();
+    ctx.translate(canvas.width, 0);
+    ctx.scale(-1, 1);
+    ctx.drawImage(maskCanvas, 0, 0, canvas.width, canvas.height);
+    ctx.restore();
+  } catch (e) {
+    segmentationTintEnabled = false;
+    console.warn("人物セグメンテーションの青み演出はこの環境では利用できないため無効化しました", e);
+  }
+}
 
 const loadingScreen = document.getElementById("loading-screen");
 const loadingDetail = document.getElementById("loading-detail");
@@ -194,6 +235,46 @@ async function main() {
 function resizeCanvas() {
   canvas.width = window.innerWidth;
   canvas.height = window.innerHeight;
+  frameCanvas.width = window.innerWidth;
+  frameCanvas.height = window.innerHeight;
+  drawPixelFrame();
+}
+
+// ロックマン風ボス部屋のような、ドット絵ブロックの枠を画面の四辺に描画する
+// （純粋な装飾。ゲームロジックの座標系には影響しない）
+function drawPixelFrame() {
+  frameCtx.clearRect(0, 0, frameCanvas.width, frameCanvas.height);
+
+  const TILE = Math.max(14, Math.min(24, Math.floor(Math.min(frameCanvas.width, frameCanvas.height) / 26)));
+  const ROWS = 2; // 枠の厚み（タイル何個分か）
+
+  function drawTile(x, y) {
+    frameCtx.fillStyle = "#26313f";
+    frameCtx.fillRect(x, y, TILE, TILE);
+    frameCtx.fillStyle = "#4a5f74"; // 左上ハイライト
+    frameCtx.fillRect(x, y, TILE, 2);
+    frameCtx.fillRect(x, y, 2, TILE);
+    frameCtx.fillStyle = "#121a22"; // 右下シャドウ
+    frameCtx.fillRect(x, y + TILE - 2, TILE, 2);
+    frameCtx.fillRect(x + TILE - 2, y, 2, TILE);
+    frameCtx.fillStyle = "#0a0f14"; // 中央のリベット
+    frameCtx.fillRect(x + TILE / 2 - 1, y + TILE / 2 - 1, 2, 2);
+  }
+
+  // 上下の帯
+  for (let x = 0; x < frameCanvas.width; x += TILE) {
+    for (let r = 0; r < ROWS; r++) {
+      drawTile(x, r * TILE);
+      drawTile(x, frameCanvas.height - TILE * (r + 1));
+    }
+  }
+  // 左右の帯
+  for (let y = 0; y < frameCanvas.height; y += TILE) {
+    for (let c = 0; c < ROWS; c++) {
+      drawTile(c * TILE, y);
+      drawTile(frameCanvas.width - TILE * (c + 1), y);
+    }
+  }
 }
 
 // ---------------------------------------------------------------------
@@ -249,17 +330,38 @@ async function createPoseLandmarker() {
       delegate: "GPU"
     },
     runningMode: "VIDEO",
-    numPoses: 1
+    numPoses: 1,
+    outputSegmentationMasks: true
   });
 }
 
-// スタートボタン
-startBtn.addEventListener("click", () => {
-  tryLockLandscape(); // ユーザー操作のタイミングでないと許可されないブラウザが多いためここで試みる
+// スタート処理を共通化（タップ開始／自動開始の両方から呼べるようにする）
+let autoStartTimer = null;
+
+function beginPlaying() {
+  clearTimeout(autoStartTimer);
   startScreen.classList.add("hidden");
   hud.classList.remove("hidden");
   gameState = "playing";
   boss.attackTimer = performance.now() + 1200;
+}
+
+// シルエットへの位置合わせが完了したら、タップしなくても少し待つと自動でスタートする
+// （早くプレイしたい人はタップすればすぐ開始できる）
+function scheduleAutoStart() {
+  clearTimeout(autoStartTimer);
+  autoStartTimer = setTimeout(() => {
+    if (gameState === "ready-wait") {
+      tryLockLandscape();
+      beginPlaying();
+    }
+  }, 1800);
+}
+
+// スタートボタン（タップした場合は待たずに即開始）
+startBtn.addEventListener("click", () => {
+  tryLockLandscape(); // ユーザー操作のタイミングでないと許可されないブラウザが多いためここで試みる
+  beginPlaying();
 });
 
 retryBtn.addEventListener("click", () => {
@@ -300,6 +402,13 @@ function gameLoop(poseLandmarker) {
     const result = poseLandmarker.detectForVideo(video, performance.now());
     if (result.landmarks && result.landmarks.length > 0) {
       landmarks = result.landmarks[0];
+    }
+    // 検知した人物の部分だけを青く光らせる（対応していない環境では自動的に諦めて素の映像のまま）
+    if (result.segmentationMasks && result.segmentationMasks.length > 0) {
+      drawPersonTint(result.segmentationMasks[0]);
+      if (typeof result.segmentationMasks[0].close === "function") {
+        result.segmentationMasks[0].close();
+      }
     }
   }
 
@@ -383,6 +492,7 @@ function handleCalibration(landmarks) {
     calibrationScreen.classList.add("hidden");
     startScreen.classList.remove("hidden");
     gameState = "ready-wait";
+    scheduleAutoStart(); // タップしなくても少し待てば自動的にスタートする
   }
 
   return aligned;
@@ -580,6 +690,9 @@ function updateBoss() {
   if (boss.hitFlash > 0) boss.hitFlash--;
 }
 
+// 敵の飛び道具の移動速度（値を小さくするほどゆっくりになる）
+const ENEMY_PROJECTILE_SPEED = 3.2;
+
 function launchEnemyAttack() {
   const type = boss.nextAttackType;
   boss.nextAttackType = type === "ground" ? "air" : "ground"; // 交互に出す
@@ -589,7 +702,7 @@ function launchEnemyAttack() {
   enemyProjectiles.push({
     x: bossX(),
     y,
-    vx: -6.5,
+    vx: -ENEMY_PROJECTILE_SPEED,
     type,
     warned: false
   });
@@ -765,36 +878,66 @@ function drawEnemy() {
 
   ctx.save();
   ctx.translate(bx, by);
+  if (boss.dead) ctx.globalAlpha = 0.4;
 
-  const bodyColor = flash ? "#ffffff" : "#3a6fa5";
-  const darkColor = flash ? "#dddddd" : "#1c3a5e";
-  const eyeColor = boss.dead ? "#555" : "#ff4444";
-
-  // ドット絵風に見せるため、細かい矩形の集合で描画する
-  const px = 6; // 1ドットのピクセルサイズ
+  // ドット絵風「シェフロボット」ボスを自前の図形描画で表現
+  // （既存キャラクター素材は使用せず、コックハット・丸い笑顔・片腕が露出した金属アーム・
+  //  お玉を持たせた自作のオリジナルデザイン）
+  const px = 8; // 1ドットのピクセルサイズ
   const grid = [
-    "..OOOOOO..",
-    ".OOOOOOOO.",
-    "OO.O..O.OO",
-    "OOOOOOOOOO",
-    ".OOOOOOOO.",
-    "..O.OO.O..",
-    "..O.OO.O..",
-    ".OO.OO.OO.",
+    "...HHHHHH...",
+    "..HHHHHHHH..",
+    ".HHHHHHHHHH.",
+    ".hhhhhhhhhh.",
+    "..FFFFFFFF..",
+    ".FFFFFFFFFF.",
+    "FFFEFFFFEFFF",
+    "FFFFFFFFFFFF",
+    ".FTTTTTTTTF.",
+    "..FFFFFFFF..",
+    "GBBBBBBBBBBG",
+    "GBBBBBBBBBBG",
+    "GBBBBBBBBBBG",
+    ".AAAAAAAAAA.",
+    "..AAAAAAAA..",
+    "..KK....KK.."
   ];
+
+  const colorFor = (ch) => {
+    if (flash) return "#ffffff";
+    switch (ch) {
+      case "H": return "#f5f5f5"; // コック帽（白）
+      case "h": return "#c9c9c9"; // 帽子バンドの影
+      case "F": return "#e8792a"; // 顔（オレンジ）
+      case "E": return "#1a1a1a"; // 目
+      case "T": return "#fff8e8"; // 歯・笑顔
+      case "B": return "#c0392b"; // ボディアーマー（赤）
+      case "G": return "#9aa0a6"; // 露出した金属アーム
+      case "A": return "#f5f0e6"; // エプロン（クリーム色）
+      case "K": return "#141414"; // ブーツ
+      default: return "#ffffff";
+    }
+  };
+
   for (let row = 0; row < grid.length; row++) {
     for (let col = 0; col < grid[row].length; col++) {
-      if (grid[row][col] === "O") {
-        const isEye = (row === 2 && (col === 2 || col === 7));
-        ctx.fillStyle = isEye ? eyeColor : (row % 2 === 0 ? bodyColor : darkColor);
-        ctx.fillRect((col - 5) * px, (row - 4) * px, px, px);
-      }
+      const ch = grid[row][col];
+      if (ch === ".") continue;
+      ctx.fillStyle = colorFor(ch);
+      ctx.fillRect((col - 5.5) * px, (row - 8) * px, px, px);
     }
   }
 
-  if (boss.dead) {
-    ctx.globalAlpha = 0.4;
-  }
+  // 片手に持たせたお玉（レードル）。露出した金属アーム側（グリッド左端の G 列）に添える
+  const handleX = (-1 - 5.5) * px;
+  const handleY = (11 - 8) * px;
+  ctx.fillStyle = flash ? "#ffffff" : "#8d8d8d";
+  ctx.fillRect(handleX - px * 0.5, handleY, px * 0.6, px * 2.2);
+  ctx.beginPath();
+  ctx.fillStyle = flash ? "#ffffff" : "#d8d8d8";
+  ctx.arc(handleX - px * 0.2, handleY + px * 2.7, px * 1.05, 0, Math.PI * 2);
+  ctx.fill();
+
   ctx.restore();
 }
 
