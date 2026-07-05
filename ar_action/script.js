@@ -17,7 +17,7 @@ import {
 // デプロイ確認用バージョン表示
 // 再デプロイのたびにこの文字列を変更すれば、実機で最新版か一目で確認できる
 // =====================================================================
-const APP_VERSION = "v1.5.0";
+const APP_VERSION = "v1.5.1";
 document.getElementById("version-tag").textContent = APP_VERSION;
 
 // =====================================================================
@@ -893,9 +893,9 @@ bossImage.onload = () => {
   bossImageLoaded = true;
 };
 bossImage.onerror = () => {
-  console.warn("ボス画像(assets/boss.png)の読み込みに失敗しました。ドット絵版で代用します。");
+  console.warn("ボス画像(assets/boss.PNG)の読み込みに失敗しました。ドット絵版で代用します。");
 };
-bossImage.src = "assets/boss.png";
+bossImage.src = "assets/boss.PNG";
 
 function drawEnemy() {
   if (gameState === "loading" || gameState === "calibrating") return;
