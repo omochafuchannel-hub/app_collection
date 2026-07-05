@@ -17,7 +17,7 @@ import {
 // デプロイ確認用バージョン表示
 // 再デプロイのたびにこの文字列を変更すれば、実機で最新版か一目で確認できる
 // =====================================================================
-const APP_VERSION = "v1.4.1";
+const APP_VERSION = "v1.5.0";
 document.getElementById("version-tag").textContent = APP_VERSION;
 
 // =====================================================================
@@ -183,12 +183,18 @@ const CHARGE_LV3_MS = 1100;
 // 3. 敵（ボス）状態
 // =====================================================================
 const BOSS_MAX_HP = 100;
+
+// 攻撃間隔の調整用定数（値を大きくするほど攻撃の間隔が広がる）
+const BOSS_ATTACK_INTERVAL_START = 2600; // 最初の攻撃間隔(ms)
+const BOSS_ATTACK_INTERVAL_MIN = 1500;   // どれだけ速くなっても、これより短くはならない
+const BOSS_ATTACK_INTERVAL_DECAY = 18;   // 1回攻撃するごとに間隔が縮む量(ms)
+
 const boss = {
   hp: BOSS_MAX_HP,
   bobPhase: 0,
   attackTimer: 0,
-  attackInterval: 1800, // ms、徐々に短縮される
-  nextAttackType: "ground",
+  attackInterval: BOSS_ATTACK_INTERVAL_START,
+  lastAttackType: null, // 直前の攻撃タイプ（同じ攻撃が連続しすぎないようにするため記録）
   hitFlash: 0,
   dead: false
 };
@@ -343,7 +349,7 @@ function beginPlaying() {
   startScreen.classList.add("hidden");
   hud.classList.remove("hidden");
   gameState = "playing";
-  boss.attackTimer = performance.now() + 1200;
+  boss.attackTimer = performance.now() + 1800;
 }
 
 // シルエットへの位置合わせが完了したら、タップしなくても少し待つと自動でスタートする
@@ -374,7 +380,7 @@ function resetGame() {
   player.hp = PLAYER_MAX_HP;
   boss.hp = BOSS_MAX_HP;
   boss.dead = false;
-  boss.attackInterval = 1800;
+  boss.attackInterval = BOSS_ATTACK_INTERVAL_START;
   playerBolts = [];
   enemyProjectiles = [];
   particles = [];
@@ -394,6 +400,9 @@ function gameLoop(poseLandmarker) {
   if (!isLandscape()) return;
 
   ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+  // ロックマン風ボス部屋の枠を毎フレーム描き写す（別レイヤーのスタッキングに頼らず、常に確実に表示する）
+  ctx.drawImage(frameCanvas, 0, 0);
 
   // --- 姿勢推定（動画フレームが更新された時だけ実行し負荷を抑える） ---
   let landmarks = null;
@@ -684,7 +693,7 @@ function updateBoss() {
   const now = performance.now();
   if (now > boss.attackTimer) {
     launchEnemyAttack();
-    boss.attackInterval = Math.max(900, boss.attackInterval - 25); // 徐々に速くなる
+    boss.attackInterval = Math.max(BOSS_ATTACK_INTERVAL_MIN, boss.attackInterval - BOSS_ATTACK_INTERVAL_DECAY);
     boss.attackTimer = now + boss.attackInterval;
   }
   if (boss.hitFlash > 0) boss.hitFlash--;
@@ -694,8 +703,12 @@ function updateBoss() {
 const ENEMY_PROJECTILE_SPEED = 3.2;
 
 function launchEnemyAttack() {
-  const type = boss.nextAttackType;
-  boss.nextAttackType = type === "ground" ? "air" : "ground"; // 交互に出す
+  // 攻撃タイプをランダムに選ぶ。ただし同じタイプが3連続以上にならないよう軽く調整する
+  let type = Math.random() < 0.5 ? "ground" : "air";
+  if (type === boss.lastAttackType && Math.random() < 0.65) {
+    type = type === "ground" ? "air" : "ground";
+  }
+  boss.lastAttackType = type;
   AudioSys.enemyShoot();
 
   const y = type === "ground" ? canvas.height * 0.86 : canvas.height * 0.38;
@@ -870,6 +883,20 @@ function drawSkeletonHint(landmarks) {
 }
 
 // ボス（ロボット風ドット絵）を canvas 図形で自前描画。既存キャラクター素材は使用しない
+// ユーザー提供の画像をボスのスプライトとして使用する。
+// 読み込みが完了するまで／万一読み込みに失敗した場合は、下のドット絵版を代わりに表示する
+const bossImage = new Image();
+let bossImageLoaded = false;
+let bossImageAspect = 1; // 幅 ÷ 高さ
+bossImage.onload = () => {
+  bossImageAspect = bossImage.naturalWidth / bossImage.naturalHeight;
+  bossImageLoaded = true;
+};
+bossImage.onerror = () => {
+  console.warn("ボス画像(assets/boss.png)の読み込みに失敗しました。ドット絵版で代用します。");
+};
+bossImage.src = "assets/boss.png";
+
 function drawEnemy() {
   if (gameState === "loading" || gameState === "calibrating") return;
   const bx = bossX();
@@ -880,9 +907,30 @@ function drawEnemy() {
   ctx.translate(bx, by);
   if (boss.dead) ctx.globalAlpha = 0.4;
 
-  // ドット絵風「シェフロボット」ボスを自前の図形描画で表現
-  // （既存キャラクター素材は使用せず、コックハット・丸い笑顔・片腕が露出した金属アーム・
-  //  お玉を持たせた自作のオリジナルデザイン）
+  if (bossImageLoaded) {
+    // 提供画像をそのままスプライトとして描画する
+    const h = canvas.height * 0.36;
+    const w = h * bossImageAspect;
+    ctx.drawImage(bossImage, -w / 2, -h * 0.52, w, h);
+
+    if (flash) {
+      // 画像の不透明部分だけに白を重ねて被弾フラッシュを表現する
+      ctx.save();
+      ctx.globalCompositeOperation = "source-atop";
+      ctx.fillStyle = "rgba(255,255,255,0.85)";
+      ctx.fillRect(-w / 2, -h * 0.52, w, h);
+      ctx.restore();
+    }
+  } else {
+    drawEnemyFallbackSprite(flash);
+  }
+
+  ctx.restore();
+}
+
+// 画像読み込み前・失敗時のフォールバック用ドット絵シェフロボット
+// （既存キャラクター素材は使用しない自作図形）
+function drawEnemyFallbackSprite(flash) {
   const px = 8; // 1ドットのピクセルサイズ
   const grid = [
     "...HHHHHH...",
@@ -928,7 +976,7 @@ function drawEnemy() {
     }
   }
 
-  // 片手に持たせたお玉（レードル）。露出した金属アーム側（グリッド左端の G 列）に添える
+  // 片手に持たせたお玉（レードル）
   const handleX = (-1 - 5.5) * px;
   const handleY = (11 - 8) * px;
   ctx.fillStyle = flash ? "#ffffff" : "#8d8d8d";
@@ -937,8 +985,6 @@ function drawEnemy() {
   ctx.fillStyle = flash ? "#ffffff" : "#d8d8d8";
   ctx.arc(handleX - px * 0.2, handleY + px * 2.7, px * 1.05, 0, Math.PI * 2);
   ctx.fill();
-
-  ctx.restore();
 }
 
 function drawProjectiles() {
