@@ -17,7 +17,7 @@ import {
 // デプロイ確認用バージョン表示
 // 再デプロイのたびにこの文字列を変更すれば、実機で最新版か一目で確認できる
 // =====================================================================
-const APP_VERSION = "v1.5.2";
+const APP_VERSION = "v1.5.3";
 document.getElementById("version-tag").textContent = APP_VERSION;
 
 // =====================================================================
@@ -374,6 +374,7 @@ retryBtn.addEventListener("click", () => {
   resetGame();
   resultScreen.classList.add("hidden");
   startScreen.classList.remove("hidden");
+  scheduleAutoStart(); // リトライ時もタップ不要で自動的にスタートする
 });
 
 function resetGame() {
