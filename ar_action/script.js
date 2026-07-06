@@ -17,7 +17,7 @@ import {
 // デプロイ確認用バージョン表示
 // 再デプロイのたびにこの文字列を変更すれば、実機で最新版か一目で確認できる
 // =====================================================================
-const APP_VERSION = "v1.5.3";
+const APP_VERSION = "v1.6.0";
 document.getElementById("version-tag").textContent = APP_VERSION;
 
 // =====================================================================
@@ -182,22 +182,91 @@ const CHARGE_LV3_MS = 1100;
 // =====================================================================
 // 3. 敵（ボス）状態
 // =====================================================================
-const BOSS_MAX_HP = 100;
+
+// ボスごとの設定。1体倒すと自動的に次のボスとのバトルが始まる。
+// 画像は「通常時」「攻撃時」「飛び道具」の3種類を差し替え可能。
+// ファイルが用意されていない/読み込めない場合は自動的にドット絵版で代用される。
+const BOSS_CONFIGS = [
+  {
+    name: "BOSS 1",
+    maxHp: 100,
+    idleSrc: "assets/boss.PNG",
+    attackSrc: "assets/boss_attack.PNG",
+    projectileSrc: "assets/boss_bullet.PNG"
+  },
+  {
+    name: "BOSS 2",
+    maxHp: Math.round(100 * 1.2), // 1体目の1.2倍のHP
+    idleSrc: "assets/boss2.PNG",
+    attackSrc: "assets/boss2_attack.PNG",
+    projectileSrc: "assets/boss2_bullet.PNG"
+  }
+];
+
+// 画像を1枚読み込むための共通ヘルパー。読み込み状況とアスペクト比を保持する
+function loadBossImageAsset(src) {
+  const asset = { img: new Image(), loaded: false, aspect: 1 };
+  asset.img.onload = () => {
+    asset.aspect = asset.img.naturalWidth / asset.img.naturalHeight;
+    asset.loaded = true;
+  };
+  asset.img.onerror = () => {
+    console.warn(`ボス画像の読み込みに失敗しました: ${src}（ドット絵版で代用します）`);
+  };
+  asset.img.src = src;
+  return asset;
+}
+
+// 各ボスの「通常」「攻撃」「飛び道具」画像をあらかじめまとめて読み込んでおく
+const bossAssets = BOSS_CONFIGS.map((cfg) => ({
+  idle: loadBossImageAsset(cfg.idleSrc),
+  attack: loadBossImageAsset(cfg.attackSrc),
+  projectile: loadBossImageAsset(cfg.projectileSrc)
+}));
 
 // 攻撃間隔の調整用定数（値を大きくするほど攻撃の間隔が広がる）
 const BOSS_ATTACK_INTERVAL_START = 2600; // 最初の攻撃間隔(ms)
 const BOSS_ATTACK_INTERVAL_MIN = 1500;   // どれだけ速くなっても、これより短くはならない
 const BOSS_ATTACK_INTERVAL_DECAY = 18;   // 1回攻撃するごとに間隔が縮む量(ms)
+const BOSS_ATTACK_POSE_MS = 550;         // 攻撃ポーズの画像を表示しておく時間(ms)
+const BOSS_TRANSITION_MS = 1700;         // 1体目を倒してから2体目が出てくるまでの間(ms)
 
 const boss = {
-  hp: BOSS_MAX_HP,
+  index: 0,          // 現在何体目のボスと戦っているか（0始まり）
+  hp: 0,
+  maxHp: 0,
   bobPhase: 0,
   attackTimer: 0,
   attackInterval: BOSS_ATTACK_INTERVAL_START,
   lastAttackType: null, // 直前の攻撃タイプ（同じ攻撃が連続しすぎないようにするため記録）
   hitFlash: 0,
-  dead: false
+  dead: false,
+  isAttacking: false,   // 攻撃ポーズの画像を表示中かどうか
+  attackPoseUntil: 0,
+  transitioning: false  // 次のボスへの切り替え演出中かどうか
 };
+
+// 指定したボスとのバトルを開始する（ゲーム開始時、および1体目撃破後の2体目開始時に使用）
+function startBossBattle(index) {
+  const cfg = BOSS_CONFIGS[index];
+  boss.index = index;
+  boss.maxHp = cfg.maxHp;
+  boss.hp = cfg.maxHp;
+  boss.bobPhase = 0;
+  boss.attackInterval = BOSS_ATTACK_INTERVAL_START;
+  boss.lastAttackType = null;
+  boss.hitFlash = 0;
+  boss.dead = false;
+  boss.isAttacking = false;
+  boss.attackPoseUntil = 0;
+  boss.transitioning = false;
+  boss.attackTimer = performance.now() + 1800;
+  enemyProjectiles = [];
+  updateHpBars();
+
+  statusText.textContent = `${cfg.name} APPEARED!`;
+  setTimeout(() => { if (statusText.textContent.includes("APPEARED")) statusText.textContent = ""; }, 1200);
+}
 
 // ボスは常に画面右端付近に固定表示する（横持ち前提のレイアウト）
 // canvasの幅・高さから毎回計算することで、回転・リサイズ後も右端に追従する
@@ -349,7 +418,7 @@ function beginPlaying() {
   startScreen.classList.add("hidden");
   hud.classList.remove("hidden");
   gameState = "playing";
-  boss.attackTimer = performance.now() + 1800;
+  startBossBattle(0); // 1体目のボスからスタート
 }
 
 // シルエットへの位置合わせが完了したら、タップしなくても少し待つと自動でスタートする
@@ -379,14 +448,11 @@ retryBtn.addEventListener("click", () => {
 
 function resetGame() {
   player.hp = PLAYER_MAX_HP;
-  boss.hp = BOSS_MAX_HP;
-  boss.dead = false;
-  boss.attackInterval = BOSS_ATTACK_INTERVAL_START;
   playerBolts = [];
   enemyProjectiles = [];
   particles = [];
-  updateHpBars();
   gameState = "ready-wait"; // スタートボタン待ち（start-screenはretryBtn側で表示済み）
+  // ボスの状態はbeginPlaying()内のstartBossBattle(0)で1体目からリセットされる
 }
 
 // =====================================================================
@@ -688,7 +754,7 @@ function spawnChargeParticles(pos, level) {
 // 9. 敵（ボス）AI
 // =====================================================================
 function updateBoss() {
-  if (boss.dead) return;
+  if (boss.dead || boss.transitioning) return;
   boss.bobPhase += 0.05;
 
   const now = performance.now();
@@ -696,6 +762,10 @@ function updateBoss() {
     launchEnemyAttack();
     boss.attackInterval = Math.max(BOSS_ATTACK_INTERVAL_MIN, boss.attackInterval - BOSS_ATTACK_INTERVAL_DECAY);
     boss.attackTimer = now + boss.attackInterval;
+  }
+  // 攻撃ポーズの画像を一定時間表示したら通常画像に戻す
+  if (boss.isAttacking && now > boss.attackPoseUntil) {
+    boss.isAttacking = false;
   }
   if (boss.hitFlash > 0) boss.hitFlash--;
 }
@@ -711,6 +781,10 @@ function launchEnemyAttack() {
   }
   boss.lastAttackType = type;
   AudioSys.enemyShoot();
+
+  // 攻撃の瞬間だけ「攻撃時PNG」に切り替え、一定時間後に通常PNGへ戻す
+  boss.isAttacking = true;
+  boss.attackPoseUntil = performance.now() + BOSS_ATTACK_POSE_MS;
 
   const y = type === "ground" ? canvas.height * 0.86 : canvas.height * 0.38;
   enemyProjectiles.push({
@@ -747,7 +821,7 @@ function checkCollisions() {
   const now = performance.now();
 
   // --- プレイヤー弾 vs ボス ---
-  if (!boss.dead) {
+  if (!boss.dead && !boss.transitioning) {
     playerBolts.forEach(b => {
       const dx = b.x - bossX();
       const dy = b.y - (bossY() + Math.sin(boss.bobPhase) * 10);
@@ -816,11 +890,15 @@ function applyScreenShakeDecay() {
 // 12. 勝敗処理
 // =====================================================================
 function triggerWin() {
-  if (gameState !== "playing") return;
-  gameState = "win";
+  if (gameState !== "playing" || boss.transitioning) return;
+
+  const isFinalBoss = boss.index >= BOSS_CONFIGS.length - 1;
   boss.dead = true;
-  AudioSys.win();
-  for (let i = 0; i < 60; i++) {
+
+  // 撃破エフェクトは共通（爆発パーティクル＋撃破音）
+  AudioSys.hit();
+  screenShake = 10;
+  for (let i = 0; i < 40; i++) {
     particles.push({
       x: bossX() + (Math.random() - 0.5) * 80,
       y: bossY() + (Math.random() - 0.5) * 80,
@@ -831,6 +909,23 @@ function triggerWin() {
       size: 5
     });
   }
+
+  if (!isFinalBoss) {
+    // まだ次のボスが残っている場合は、少し間を置いて2体目のバトルを始める
+    boss.transitioning = true;
+    playerBolts = [];
+    enemyProjectiles = [];
+    statusText.textContent = "BOSS DEFEATED! NEXT BOSS...";
+    setTimeout(() => {
+      startBossBattle(boss.index + 1);
+      statusText.textContent = "";
+    }, BOSS_TRANSITION_MS);
+    return;
+  }
+
+  // 最終ボスを倒した場合のみ、本当のゲームクリア演出に入る
+  gameState = "win";
+  AudioSys.win();
   setTimeout(() => showResult(true), 900);
 }
 
@@ -883,36 +978,28 @@ function drawSkeletonHint(landmarks) {
   }
 }
 
-// ボス（ロボット風ドット絵）を canvas 図形で自前描画。既存キャラクター素材は使用しない
-// ユーザー提供の画像をボスのスプライトとして使用する。
-// 読み込みが完了するまで／万一読み込みに失敗した場合は、下のドット絵版を代わりに表示する
-const bossImage = new Image();
-let bossImageLoaded = false;
-let bossImageAspect = 1; // 幅 ÷ 高さ
-bossImage.onload = () => {
-  bossImageAspect = bossImage.naturalWidth / bossImage.naturalHeight;
-  bossImageLoaded = true;
-};
-bossImage.onerror = () => {
-  console.warn("ボス画像(assets/boss.PNG)の読み込みに失敗しました。ドット絵版で代用します。");
-};
-bossImage.src = "assets/boss.PNG";
-
+// ボスのスプライトを描画する。
+// 現在のボス(boss.index)・攻撃中かどうか(boss.isAttacking)に応じて
+// 「通常画像」「攻撃時画像」を自動的に切り替える。読み込めていない場合はドット絵版で代用する
 function drawEnemy() {
   if (gameState === "loading" || gameState === "calibrating") return;
+  if (boss.transitioning) return; // 次のボスに切り替わる演出中は何も表示しない
+
   const bx = bossX();
   const by = bossY() + Math.sin(boss.bobPhase) * 10;
   const flash = boss.hitFlash > 0;
+  const assets = bossAssets[boss.index];
+  const activeAsset = boss.isAttacking && assets.attack.loaded ? assets.attack : assets.idle;
 
   ctx.save();
   ctx.translate(bx, by);
   if (boss.dead) ctx.globalAlpha = 0.4;
 
-  if (bossImageLoaded) {
+  if (activeAsset.loaded) {
     // 提供画像をそのままスプライトとして描画する
     const h = canvas.height * 0.36;
-    const w = h * bossImageAspect;
-    ctx.drawImage(bossImage, -w / 2, -h * 0.52, w, h);
+    const w = h * activeAsset.aspect;
+    ctx.drawImage(activeAsset.img, -w / 2, -h * 0.52, w, h);
 
     if (flash) {
       // 画像の不透明部分だけに白を重ねて被弾フラッシュを表現する
@@ -1002,16 +1089,23 @@ function drawProjectiles() {
     ctx.restore();
   });
 
-  // 敵の弾（地上/空中で色を変える）
+  // 敵の弾（現在のボスの「飛び道具PNG」があればそれを使用。なければ色付きの丸で代用）
+  const projectileAsset = bossAssets[boss.index] ? bossAssets[boss.index].projectile : null;
   enemyProjectiles.forEach(p => {
     ctx.save();
-    const color = p.type === "ground" ? "#ff8c42" : "#c86bff";
-    ctx.fillStyle = color;
-    ctx.shadowColor = color;
-    ctx.shadowBlur = 14;
-    ctx.beginPath();
-    ctx.arc(p.x, p.y, 14, 0, Math.PI * 2);
-    ctx.fill();
+    if (projectileAsset && projectileAsset.loaded) {
+      const h = 40;
+      const w = h * projectileAsset.aspect;
+      ctx.drawImage(projectileAsset.img, p.x - w / 2, p.y - h / 2, w, h);
+    } else {
+      const color = p.type === "ground" ? "#ff8c42" : "#c86bff";
+      ctx.fillStyle = color;
+      ctx.shadowColor = color;
+      ctx.shadowBlur = 14;
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, 14, 0, Math.PI * 2);
+      ctx.fill();
+    }
     ctx.restore();
   });
 }
@@ -1031,7 +1125,7 @@ function drawParticles() {
 // =====================================================================
 function updateHpBars() {
   playerHpBar.style.width = `${(player.hp / PLAYER_MAX_HP) * 100}%`;
-  bossHpBar.style.width = `${(boss.hp / BOSS_MAX_HP) * 100}%`;
+  bossHpBar.style.width = `${(boss.hp / boss.maxHp) * 100}%`;
 }
 
 function updateHud() {
