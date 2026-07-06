@@ -17,7 +17,7 @@ import {
 // デプロイ確認用バージョン表示
 // 再デプロイのたびにこの文字列を変更すれば、実機で最新版か一目で確認できる
 // =====================================================================
-const APP_VERSION = "v1.6.0";
+const APP_VERSION = "v1.7.0";
 document.getElementById("version-tag").textContent = APP_VERSION;
 
 // =====================================================================
@@ -204,10 +204,45 @@ const BOSS_CONFIGS = [
 ];
 
 // 画像を1枚読み込むための共通ヘルパー。読み込み状況とアスペクト比を保持する
+// 画像の「透明ではない実際の描画範囲」を検出する。
+// PNGごとにキャラクター周りの余白量が違っても、後で見た目のサイズを揃えて描画できるようにする
+function computeContentBBox(img) {
+  const w = img.naturalWidth, h = img.naturalHeight;
+  const c = document.createElement("canvas");
+  c.width = w;
+  c.height = h;
+  const cctx = c.getContext("2d");
+  cctx.drawImage(img, 0, 0);
+  const data = cctx.getImageData(0, 0, w, h).data;
+
+  let minX = w, minY = h, maxX = -1, maxY = -1;
+  const ALPHA_THRESHOLD = 10;
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      if (data[(y * w + x) * 4 + 3] > ALPHA_THRESHOLD) {
+        if (x < minX) minX = x;
+        if (x > maxX) maxX = x;
+        if (y < minY) minY = y;
+        if (y > maxY) maxY = y;
+      }
+    }
+  }
+  if (maxX < minX || maxY < minY) {
+    return { x: 0, y: 0, w, h }; // 完全に透明な画像だった場合のフォールバック
+  }
+  return { x: minX, y: minY, w: maxX - minX + 1, h: maxY - minY + 1 };
+}
+
 function loadBossImageAsset(src) {
-  const asset = { img: new Image(), loaded: false, aspect: 1 };
+  const asset = { img: new Image(), loaded: false, aspect: 1, bbox: null };
   asset.img.onload = () => {
     asset.aspect = asset.img.naturalWidth / asset.img.naturalHeight;
+    try {
+      asset.bbox = computeContentBBox(asset.img);
+    } catch (e) {
+      // 何らかの理由で解析できなければ、画像全体をそのまま使う
+      asset.bbox = { x: 0, y: 0, w: asset.img.naturalWidth, h: asset.img.naturalHeight };
+    }
     asset.loaded = true;
   };
   asset.img.onerror = () => {
@@ -215,6 +250,28 @@ function loadBossImageAsset(src) {
   };
   asset.img.src = src;
   return asset;
+}
+
+// 透明な余白を無視して「実際に描かれている部分の高さ」を基準に画像を描画する共通ヘルパー。
+// これにより、PNGごとに余白の量が違っても見た目のサイズが揃う。
+// verticalAnchor: このアンカー点をY座標の基準にする（"bottom"=足元, "center"=中心, "top"=頭）
+function drawTrimmedImage(img, bbox, targetContentHeight, anchorX, anchorY, verticalAnchor) {
+  const scale = targetContentHeight / bbox.h;
+  const fullW = img.naturalWidth * scale;
+  const fullH = img.naturalHeight * scale;
+  const drawX = anchorX - (bbox.x + bbox.w / 2) * scale;
+
+  let drawY;
+  if (verticalAnchor === "center") {
+    drawY = anchorY - (bbox.y + bbox.h / 2) * scale;
+  } else if (verticalAnchor === "top") {
+    drawY = anchorY - bbox.y * scale;
+  } else {
+    drawY = anchorY - (bbox.y + bbox.h) * scale; // "bottom"（デフォルト）
+  }
+
+  ctx.drawImage(img, drawX, drawY, fullW, fullH);
+  return { x: drawX, y: drawY, w: fullW, h: fullH };
 }
 
 // 各ボスの「通常」「攻撃」「飛び道具」画像をあらかじめまとめて読み込んでおく
@@ -996,17 +1053,19 @@ function drawEnemy() {
   if (boss.dead) ctx.globalAlpha = 0.4;
 
   if (activeAsset.loaded) {
-    // 提供画像をそのままスプライトとして描画する
-    const h = canvas.height * 0.36;
-    const w = h * activeAsset.aspect;
-    ctx.drawImage(activeAsset.img, -w / 2, -h * 0.52, w, h);
+    // 透明な余白を無視し、「実際に描かれているキャラクター部分」の高さを基準に揃えて描画する
+    // （PNGごとに余白の量が違っても、通常時と攻撃時でキャラクターの見た目サイズが揃うようにする）
+    const targetContentHeight = canvas.height * 0.32;
+    const bbox = activeAsset.bbox || { x: 0, y: 0, w: activeAsset.img.naturalWidth, h: activeAsset.img.naturalHeight };
+    const feetY = canvas.height * 0.04; // 足元の位置（原点からの相対オフセット）
+    const rect = drawTrimmedImage(activeAsset.img, bbox, targetContentHeight, 0, feetY, "bottom");
 
     if (flash) {
       // 画像の不透明部分だけに白を重ねて被弾フラッシュを表現する
       ctx.save();
       ctx.globalCompositeOperation = "source-atop";
       ctx.fillStyle = "rgba(255,255,255,0.85)";
-      ctx.fillRect(-w / 2, -h * 0.52, w, h);
+      ctx.fillRect(rect.x, rect.y, rect.w, rect.h);
       ctx.restore();
     }
   } else {
@@ -1094,9 +1153,8 @@ function drawProjectiles() {
   enemyProjectiles.forEach(p => {
     ctx.save();
     if (projectileAsset && projectileAsset.loaded) {
-      const h = 40;
-      const w = h * projectileAsset.aspect;
-      ctx.drawImage(projectileAsset.img, p.x - w / 2, p.y - h / 2, w, h);
+      const bbox = projectileAsset.bbox || { x: 0, y: 0, w: projectileAsset.img.naturalWidth, h: projectileAsset.img.naturalHeight };
+      drawTrimmedImage(projectileAsset.img, bbox, 30, p.x, p.y, "center");
     } else {
       const color = p.type === "ground" ? "#ff8c42" : "#c86bff";
       ctx.fillStyle = color;
