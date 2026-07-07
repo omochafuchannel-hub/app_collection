@@ -17,7 +17,7 @@ import {
 // デプロイ確認用バージョン表示
 // 再デプロイのたびにこの文字列を変更すれば、実機で最新版か一目で確認できる
 // =====================================================================
-const APP_VERSION = "v1.8.0";
+const APP_VERSION = "v1.10.0";
 document.getElementById("version-tag").textContent = APP_VERSION;
 
 // =====================================================================
@@ -80,6 +80,8 @@ const resultTitle = document.getElementById("result-title");
 const retryBtn = document.getElementById("retry-btn");
 
 const rotateOverlay = document.getElementById("rotate-overlay");
+const fullscreenBtn = document.getElementById("fullscreen-btn");
+const fullscreenHint = document.getElementById("fullscreen-hint");
 
 const hud = document.getElementById("hud");
 const playerHpBar = document.getElementById("player-hp-bar");
@@ -200,6 +202,13 @@ const BOSS_CONFIGS = [
     idleSrc: "assets/boss2.PNG",
     attackSrc: "assets/boss2_attack.PNG",
     projectileSrc: "assets/boss2_bullet.PNG"
+  },
+  {
+    name: "BOSS 3",
+    maxHp: Math.round(100 * 1.5), // 1体目の1.5倍のHP
+    idleSrc: "assets/boss3.PNG",
+    attackSrc: "assets/boss3_attack.PNG",
+    projectileSrc: "assets/boss3_bullet.PNG"
   }
 ];
 
@@ -464,6 +473,49 @@ async function tryLockLandscape() {
 window.addEventListener("resize", updateOrientationUI);
 window.addEventListener("orientationchange", updateOrientationUI);
 updateOrientationUI();
+
+// ---------------------------------------------------------------------
+// 全画面表示ボタン（左下）
+// 対応しているブラウザ（Android Chromeなど）ではURLバーごと全画面にする。
+// iPhoneのSafariなど非対応の環境では、諦めて「ホーム画面に追加」の案内を表示する。
+// ---------------------------------------------------------------------
+let fullscreenHintTimer = null;
+function showFullscreenHint(message) {
+  clearTimeout(fullscreenHintTimer);
+  fullscreenHint.textContent = message;
+  fullscreenHint.classList.remove("hidden");
+  fullscreenHintTimer = setTimeout(() => fullscreenHint.classList.add("hidden"), 4200);
+}
+
+async function toggleFullscreen() {
+  const canRequestFullscreen = !!(
+    document.documentElement.requestFullscreen ||
+    document.documentElement.webkitRequestFullscreen
+  );
+
+  if (!canRequestFullscreen) {
+    // iPhoneのSafariはページ全体のFullscreen APIに対応していないため、
+    // URLバー・タブを消すには「ホーム画面に追加」してアプリのように開く方法しかない
+    showFullscreenHint("このブラウザは全画面表示に対応していません。iPhoneの場合は共有ボタン→「ホーム画面に追加」でURLバーなしで開けます");
+    return;
+  }
+
+  try {
+    if (!document.fullscreenElement) {
+      if (document.documentElement.requestFullscreen) {
+        await document.documentElement.requestFullscreen();
+      } else if (document.documentElement.webkitRequestFullscreen) {
+        document.documentElement.webkitRequestFullscreen();
+      }
+    } else if (document.exitFullscreen) {
+      await document.exitFullscreen();
+    }
+  } catch (e) {
+    showFullscreenHint("全画面表示にできませんでした。iPhoneの場合は共有ボタン→「ホーム画面に追加」もお試しください");
+  }
+}
+
+fullscreenBtn.addEventListener("click", toggleFullscreen);
 
 async function startCamera() {
   const stream = await navigator.mediaDevices.getUserMedia({
