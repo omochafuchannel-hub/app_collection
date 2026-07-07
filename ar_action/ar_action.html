@@ -3,6 +3,10 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+<!-- iPhoneでホーム画面に追加した際に、URLバー・タブなしのアプリのように起動させるための設定 -->
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
 <title>ROCK BUSTER AR - レトロARボスバトル</title>
 
 <!-- レトロ風ドットフォント（Google Fonts CDN） -->
@@ -42,6 +46,12 @@
 
     <!-- デプロイ確認用のバージョン表示（常に最前面・小さく表示） -->
     <div id="version-tag"></div>
+
+    <!-- 全画面表示ボタン（左下）。対応環境ではブラウザのURLバー等を隠して全画面にする -->
+    <button id="fullscreen-btn" aria-label="全画面表示">⛶</button>
+
+    <!-- 全画面表示に対応していない環境向けの案内（iPhone Safariなど） -->
+    <div id="fullscreen-hint" class="hidden"></div>
 
     <!-- ロード中・キャリブレーション中の画面 -->
     <div id="loading-screen">
