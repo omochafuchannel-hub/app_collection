@@ -61,6 +61,46 @@ const CONFIG = {
 /* 4色のロボットIDに対応する既定カラー（画像未設定時のプレースホルダー用） */
 const DEFAULT_COLORS = ['#ffb930', '#28f2ff', '#ff4fd8', '#63ff8a'];
 
+/* ============================== 外部アセット画像 ==============================
+   ここに指定したパスの画像が用意されていれば、ボーガンの矢／ミサイル／トラップの
+   描画にそのまま使われます。ファイルが無い、または読み込めない場合は自動的に
+   Canvas で描いた代替グラフィックにフォールバックするので、画像が無くても
+   ゲームは問題なく動作します。
+
+   用意してもらいたい画像（任意・GitHub Pages上の assets/ フォルダに配置）:
+     assets/crossbow_bolt.png   ... ボーガンの矢 1本分の画像
+     assets/missile_big.png     ... 大型ミサイル（1発）の画像
+     assets/missile_homing.png  ... 追跡ミサイル（1発分）の画像　※無ければ missile_big.png を代用
+     assets/trap.png            ... トラップ（地雷）の画像
+   推奨サイズ: 横長の乗り物系画像で 64x32px 前後（正方形でも自動調整されます）
+   ================================================================================ */
+const ASSET_PATHS = {
+  crossbow: 'assets/crossbow_bolt.png',
+  missileBig: 'assets/missile_big.png',
+  missileHoming: 'assets/missile_homing.png',
+  trap: 'assets/trap.png',
+};
+const assetImages = {};
+function loadAssetImage(key, path) {
+  const img = new Image();
+  img._ready = false;
+  img.onload = () => { img._ready = true; };
+  img.onerror = () => { img._ready = false; };
+  img.src = path;
+  assetImages[key] = img;
+}
+Object.entries(ASSET_PATHS).forEach(([k, p]) => loadAssetImage(k, p));
+function assetReady(key) {
+  const img = assetImages[key];
+  return img && img._ready && img.naturalWidth > 0;
+}
+/* homing 用画像が無ければ missileBig を代用できるようにするヘルパー */
+function homingAssetImage() {
+  if (assetReady('missileHoming')) return assetImages.missileHoming;
+  if (assetReady('missileBig')) return assetImages.missileBig;
+  return null;
+}
+
 /* ============================== ユーティリティ ============================== */
 const rand = (a, b) => a + Math.random() * (b - a);
 const randInt = (a, b) => Math.floor(rand(a, b + 1));
@@ -93,6 +133,82 @@ function generatePlaceholderRobot(colorHex) {
   g.fillRect(36, 50, 10, 12);
   return c.toDataURL();
 }
+
+/* ============================== サウンド（WebAudioで効果音を自動生成） ==============================
+   外部の音声ファイルは使用せず、Web Audio API でその場に効果音を生成しています。
+   ブラウザの自動再生制限があるため、最初のユーザー操作（GAME STARTボタン押下等）で
+   AudioContext を起動 (ensureAudio) しています。
+   ================================================================================================ */
+const SFX = (() => {
+  const AudioCtxClass = window.AudioContext || window.webkitAudioContext;
+  let actx = null;
+
+  function ensureAudio() {
+    if (!actx) {
+      try { actx = new AudioCtxClass(); } catch (e) { actx = null; }
+    }
+    if (actx && actx.state === 'suspended') actx.resume();
+  }
+
+  /* 単純なビープ音（ジャンプ・カウントダウン等に使用） */
+  function beep(freq, duration, type = 'square', vol = 0.15, delay = 0, slideTo = null) {
+    if (!actx) return;
+    const t0 = actx.currentTime + delay;
+    const osc = actx.createOscillator();
+    const gain = actx.createGain();
+    osc.type = type;
+    osc.frequency.setValueAtTime(freq, t0);
+    if (slideTo) osc.frequency.exponentialRampToValueAtTime(slideTo, t0 + duration);
+    gain.gain.setValueAtTime(vol, t0);
+    gain.gain.exponentialRampToValueAtTime(0.001, t0 + duration);
+    osc.connect(gain); gain.connect(actx.destination);
+    osc.start(t0); osc.stop(t0 + duration + 0.03);
+  }
+
+  /* ノイズバースト（爆発・衝突・歓声などに使用） */
+  function noiseBurst(duration, vol = 0.2, filterFreq = null) {
+    if (!actx) return;
+    const bufferSize = Math.floor(actx.sampleRate * duration);
+    const buffer = actx.createBuffer(1, bufferSize, actx.sampleRate);
+    const data = buffer.getChannelData(0);
+    for (let i = 0; i < bufferSize; i++) data[i] = (Math.random() * 2 - 1) * (1 - i / bufferSize);
+    const src = actx.createBufferSource();
+    src.buffer = buffer;
+    let node = src;
+    if (filterFreq) {
+      const filt = actx.createBiquadFilter();
+      filt.type = 'bandpass'; filt.frequency.value = filterFreq;
+      node.connect(filt); node = filt;
+    }
+    const gain = actx.createGain();
+    gain.gain.setValueAtTime(vol, actx.currentTime);
+    node.connect(gain); gain.connect(actx.destination);
+    src.start();
+  }
+
+  return {
+    ensureAudio,
+    jump() { beep(500, 0.1, 'square', 0.1, 0, 700); },
+    hit() { noiseBurst(0.28, 0.3); beep(110, 0.22, 'sawtooth', 0.18, 0, 60); },
+    turboStart() { beep(220, 0.35, 'sawtooth', 0.12, 0, 900); },
+    overheat() { beep(180, 0.6, 'square', 0.16, 0, 60); noiseBurst(0.3, 0.15); },
+    itemGet() { beep(660, 0.08, 'square', 0.14, 0); beep(880, 0.08, 'square', 0.14, 0.08); beep(1180, 0.12, 'square', 0.14, 0.16); },
+    fireCrossbow() { for (let i = 0; i < 3; i++) beep(900 - i * 120, 0.06, 'square', 0.08, i * 0.03); },
+    fireMissile() { noiseBurst(0.4, 0.2, 300); beep(90, 0.4, 'sawtooth', 0.15, 0, 40); },
+    fireHoming() { beep(500, 0.5, 'sawtooth', 0.1, 0, 1400); noiseBurst(0.3, 0.12, 600); },
+    fireLaser() { beep(1400, 0.35, 'sawtooth', 0.16, 0, 220); },
+    fireTrap() { beep(300, 0.15, 'square', 0.1); },
+    explosion(big) { noiseBurst(big ? 0.6 : 0.35, big ? 0.35 : 0.22); beep(80, big ? 0.5 : 0.3, 'sawtooth', 0.2, 0, 30); },
+    countdownTick() { beep(440, 0.14, 'square', 0.15); },
+    go() { beep(880, 0.35, 'square', 0.22, 0, 1200); },
+    lap() { beep(700, 0.1, 'square', 0.15, 0); beep(900, 0.12, 'square', 0.15, 0.1); },
+    finish() { [0, 0.12, 0.24, 0.4].forEach((d, i) => beep(520 + i * 140, 0.2, 'square', 0.2, d)); },
+    victory() {
+      [0, 0.18, 0.36, 0.54, 0.78].forEach((d, i) => beep([523, 659, 784, 1047, 1319][i], 0.28, 'square', 0.2, d));
+      noiseBurst(1.2, 0.08, 1500);
+    },
+  };
+})();
 
 /* ============================== 障害物定義 ============================== */
 /*
@@ -243,10 +359,28 @@ function buildSettingsUI() {
 }
 
 document.getElementById('startBtn').addEventListener('click', () => {
+  SFX.ensureAudio(); // ユーザー操作のタイミングでAudioContextを起動（自動再生制限対策）
+  tryLockLandscape();
   document.getElementById('settingsScreen').classList.add('hidden');
   document.getElementById('gameContainer').classList.remove('hidden');
   initRace();
 });
+
+/* 横向き固定のベストエフォート処理。対応ブラウザ・PWA以外では失敗しても無視する */
+function tryLockLandscape() {
+  try {
+    const el = document.documentElement;
+    if (el.requestFullscreen) {
+      el.requestFullscreen().catch(() => {}).then(() => {
+        if (screen.orientation && screen.orientation.lock) {
+          screen.orientation.lock('landscape').catch(() => {});
+        }
+      });
+    } else if (screen.orientation && screen.orientation.lock) {
+      screen.orientation.lock('landscape').catch(() => {});
+    }
+  } catch (e) { /* ロックできない環境では無視。CSSのローテート案内で対応 */ }
+}
 
 document.getElementById('restartBtn').addEventListener('click', () => {
   document.getElementById('resultScreen').classList.add('hidden');
@@ -283,7 +417,7 @@ class Racer {
     this.cpuItemUseAt = 0;         // CPU用: このタイマーが0になったら使用
 
     this.finished = false;
-    this.finishTime = null;
+    this.finishOrder = null;
     this.rank = null;
 
     this.cpuTargetLane = this.lane;
@@ -299,6 +433,7 @@ function doJump(racer, velocity) {
   if (racer.jumping) return;
   racer.jumping = true;
   racer.vz = velocity;
+  if (racer.isPlayer) SFX.jump();
 }
 function stunRacer(racer, time, kind) {
   if (racer.stunTimer > 0) return; // 既にスタン中は重複させない
@@ -307,6 +442,7 @@ function stunRacer(racer, time, kind) {
   racer.hitFlashTimer = 0.5;
   spawnExplosion(racer.x, racer.lane, kind === 'fall' ? 'small' : 'medium');
   triggerHitStop();
+  if (racer.isPlayer) SFX.hit();
 }
 function shakeScreen(amount) { state.camera.shake = Math.max(state.camera.shake, amount); }
 function triggerHitStop() { state.hitStopTimer = Math.max(state.hitStopTimer, CONFIG.HIT_STOP_TIME); }
@@ -369,6 +505,8 @@ function initRace() {
   state.raceStarted = false;
   state.raceFinished = false;
   state.countdownValue = 3;
+  state.finishCounter = 0;
+  state._prevPlayerLap = undefined;
   generateTrack();
   resizeCanvas();
 
@@ -383,15 +521,18 @@ function initRace() {
 function runCountdown() {
   state.countdownValue = 3;
   state.countdownEl.textContent = state.countdownValue;
+  SFX.countdownTick();
   const iv = setInterval(() => {
     state.countdownValue--;
     if (state.countdownValue <= 0) {
       state.countdownEl.textContent = 'GO!';
+      SFX.go();
       setTimeout(() => { state.countdownEl.classList.add('hidden'); }, 500);
       state.raceStarted = true;
       clearInterval(iv);
     } else {
       state.countdownEl.textContent = state.countdownValue;
+      SFX.countdownTick();
     }
   }, 800);
 }
@@ -489,15 +630,18 @@ function update(dt) {
 function updateRacerCommon(r, dt) {
   // ターボゲージ／オーバーヒート
   if (r.turboActive && !r.overheated && r.stunTimer <= 0) {
+    if (!r._turboWasActive && r.isPlayer) SFX.turboStart();
     r.turboGauge = clamp(r.turboGauge + CONFIG.TURBO_FILL_RATE * dt, 0, CONFIG.TURBO_GAUGE_MAX);
     if (r.turboGauge >= CONFIG.TURBO_GAUGE_MAX) {
       r.overheated = true;
       r.stunTimer = Math.max(r.stunTimer, CONFIG.OVERHEAT_STUN_TIME);
+      if (r.isPlayer) SFX.overheat();
     }
   } else {
     r.turboGauge = clamp(r.turboGauge - CONFIG.TURBO_COOL_RATE * dt, 0, CONFIG.TURBO_GAUGE_MAX);
     if (r.turboGauge <= 0) r.overheated = false;
   }
+  r._turboWasActive = r.turboActive && !r.overheated;
 
   // ジャンプ物理
   if (r.jumping) {
@@ -516,7 +660,7 @@ function updateRacerCommon(r, dt) {
 }
 
 function integrateMovement(r, dt) {
-  if (r.finished) return;
+  if (r.finished) { r.currentSpeed = 0; return; }
   let speed = 0;
   if (r.stunTimer <= 0) {
     speed = r.baseSpeed * r.speedMult;
@@ -526,6 +670,13 @@ function integrateMovement(r, dt) {
   r.currentSpeed = speed;
   r.x += speed * dt;
   r.x = clamp(r.x, 0, state.totalDistance);
+
+  // ゴール到達時刻を記録する（同着に見える clamp 後の座標ではなく、
+  // 「何番目にゴールしたか」で最終順位を決めるためのバグ修正）
+  if (r.x >= state.totalDistance && !r.finished) {
+    r.finished = true;
+    r.finishOrder = ++state.finishCounter;
+  }
 }
 
 /* ---- プレイヤー操作 ---- */
@@ -628,7 +779,8 @@ function applyItemBoxPickup(r) {
       box.taken = true;
       r.heldItem = choice(WEAPON_TYPES);
       if (!r.isPlayer) r.cpuItemUseAt = rand(CONFIG.CPU_ITEM_USE_DELAY[0], CONFIG.CPU_ITEM_USE_DELAY[1]);
-      spawnExplosion(r.x, r.lane, 'spark');
+      spawnItemSparkleBurst(r.x, r.lane);
+      if (r.isPlayer) SFX.itemGet();
     }
   }
 }
@@ -652,11 +804,11 @@ function useItem(r) {
   const kind = r.heldItem;
   r.heldItem = null;
   switch (kind) {
-    case 'crossbow': fireCrossbow(r); break;
-    case 'big_missile': fireBigMissile(r); break;
-    case 'homing': fireHomingMissiles(r); break;
-    case 'laser': fireLaser(r); break;
-    case 'trap': placeTrap(r); break;
+    case 'crossbow': fireCrossbow(r); if (r.isPlayer) SFX.fireCrossbow(); break;
+    case 'big_missile': fireBigMissile(r); if (r.isPlayer) SFX.fireMissile(); break;
+    case 'homing': fireHomingMissiles(r); if (r.isPlayer) SFX.fireHoming(); break;
+    case 'laser': fireLaser(r); if (r.isPlayer) SFX.fireLaser(); break;
+    case 'trap': placeTrap(r); if (r.isPlayer) SFX.fireTrap(); break;
   }
 }
 
@@ -725,6 +877,7 @@ function updateProjectiles(dt) {
         p.hit = true; p.life = 0;
         stunRacer(o, CONFIG.STUN_TIME, 'fall');
         spawnExplosion(o.x, o.lane, p.big ? 'large' : 'medium');
+        if (o.isPlayer || p.owner.isPlayer) SFX.explosion(!!p.big);
         if (p.big) {
           // 大型ミサイルは爆風で近隣レーンにも被害
           for (const near of state.racers) {
@@ -762,6 +915,19 @@ function spawnExplosion(x, lane, size) {
 function spawnSmoke(x, lane) {
   state.particles.push({ kind: 'smoke', x, lane, vx: rand(-10, 10), vy: rand(-20, -5), life: 0.4, color: 'rgba(200,200,210,0.5)' });
 }
+/* アイテムボックスの周りにキラキラ浮かぶ虹色パーティクル（派手な演出用） */
+function spawnItemSparkle(x, lane) {
+  state.particles.push({
+    kind: 'sparkle', x: x + rand(-16, 16), lane,
+    vx: rand(-20, 20), vy: rand(-50, -10), life: rand(0.4, 0.8),
+    color: `hsl(${randInt(0, 360)}, 100%, 65%)`,
+  });
+}
+/* アイテム取得時の派手な閃光バースト */
+function spawnItemSparkleBurst(x, lane) {
+  for (let i = 0; i < 18; i++) spawnItemSparkle(x, lane);
+  state.particles.push({ kind: 'flash', x, lane, vx: 0, vy: 0, life: 0.25, color: '#ffffff' });
+}
 function updateParticles(dt) {
   for (const p of state.particles) {
     p.life -= dt;
@@ -778,16 +944,28 @@ function updateCamera(dt, player) {
 }
 
 /* ============================== 順位・周回・ゴール判定 ============================== */
+/*
+  重要: ゴールした選手は x が totalDistance で頭打ち（clamp）になるため、
+  「x が大きい順」だけで並べると、4位の選手も1位の選手も同じ x 値になり
+  同着扱いになってしまう（＝表彰台の順位がおかしくなるバグの原因）。
+  そのため、ゴール済みの選手は「何番目にゴールしたか(finishOrder)」を優先し、
+  まだ完走していない選手だけを x の大きい順に並べるようにしている。
+*/
 function computeRanks() {
-  const sorted = state.racers.slice().sort((a, b) => b.x - a.x);
-  sorted.forEach((r, i) => { r.rank = i + 1; });
+  const finishedRacers = state.racers.filter(r => r.finished)
+    .sort((a, b) => a.finishOrder - b.finishOrder);
+  const unfinished = state.racers.filter(r => !r.finished)
+    .sort((a, b) => b.x - a.x);
+  const ordered = finishedRacers.concat(unfinished);
+  ordered.forEach((r, i) => { r.rank = i + 1; });
 }
 function checkFinish() {
   computeRanks();
   const player = state.racers.find(r => r.isPlayer);
-  if (!state.raceFinished && player.x >= state.totalDistance) {
+  if (!state.raceFinished && player.finished) {
     state.raceFinished = true;
     computeRanks();
+    SFX.finish();
     setTimeout(showResults, 600);
   }
   updateHud(player);
@@ -795,6 +973,11 @@ function checkFinish() {
 
 /* ============================== HUD 更新 ============================== */
 function updateHud(player) {
+  if (state._prevPlayerLap === undefined) state._prevPlayerLap = player.lap;
+  if (player.lap !== state._prevPlayerLap) {
+    state._prevPlayerLap = player.lap;
+    if (!state.raceFinished) SFX.lap();
+  }
   document.getElementById('hudRank').textContent = `${player.rank}/${state.racers.length}`;
   document.getElementById('hudLap').textContent = `${player.lap}/${CONFIG.LAPS}`;
   document.getElementById('hudSpeed').textContent = String(Math.round(player.currentSpeed)).padStart(3, '0');
@@ -880,15 +1063,42 @@ function drawBackground(w, h) {
 function worldToScreenX(worldX) { return worldX - state.camera.x; }
 
 function drawTrack(w, h) {
-  ctx.fillStyle = '#26283a';
-  ctx.fillRect(0, h * 0.30, w, h * 0.46);
-  ctx.strokeStyle = 'rgba(255,255,255,0.12)';
+  const trackTop = h * 0.30, trackH = h * 0.46;
+
+  // 道路本体：見やすい茶色のアスファルト（縞のグラデーションで軽い質感を出す）
+  const roadGrad = ctx.createLinearGradient(0, trackTop, 0, trackTop + trackH);
+  roadGrad.addColorStop(0, '#7a5738');
+  roadGrad.addColorStop(0.5, '#6b4a30');
+  roadGrad.addColorStop(1, '#5e3f28');
+  ctx.fillStyle = roadGrad;
+  ctx.fillRect(0, trackTop, w, trackH);
+
+  // 走行によるうっすらとしたタイヤ痕（横スクロールに合わせて流れる）
+  ctx.strokeStyle = 'rgba(0,0,0,0.10)';
+  ctx.lineWidth = 3;
+  const scrollOffset = state.camera.x % 90;
+  for (let i = -1; i < w / 90 + 2; i++) {
+    const x = i * 90 - scrollOffset;
+    ctx.beginPath(); ctx.moveTo(x, trackTop + 6); ctx.lineTo(x + 30, trackTop + trackH - 6); ctx.stroke();
+  }
+
+  // レーンの区切り線（白の破線・視認性重視ではっきり描画）
+  ctx.strokeStyle = 'rgba(255,255,255,0.9)';
+  ctx.lineWidth = 3;
   for (let l = 1; l < CONFIG.LANES; l++) {
     const y = laneY(l - 1, h) + (laneY(l, h) - laneY(l - 1, h)) / 2;
-    ctx.setLineDash([16, 14]);
+    ctx.setLineDash([22, 16]);
+    ctx.lineDashOffset = -state.camera.x;
     ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(w, y); ctx.stroke();
   }
   ctx.setLineDash([]);
+  ctx.lineDashOffset = 0;
+
+  // コース両端の白い境界線（実線・太め）
+  ctx.strokeStyle = '#ffffff';
+  ctx.lineWidth = 5;
+  ctx.beginPath(); ctx.moveTo(0, trackTop + 3); ctx.lineTo(w, trackTop + 3); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(0, trackTop + trackH - 3); ctx.lineTo(w, trackTop + trackH - 3); ctx.stroke();
 
   // ゴールライン（世界座標 totalDistance の位置に描画）
   const gx = worldToScreenX(state.totalDistance);
@@ -897,65 +1107,294 @@ function drawTrack(w, h) {
     ctx.translate(gx, 0);
     for (let i = 0; i < 10; i++) {
       ctx.fillStyle = i % 2 === 0 ? '#fff' : '#111';
-      ctx.fillRect(-6, h * 0.30 + i * (h * 0.46 / 10), 12, h * 0.46 / 10);
+      ctx.fillRect(-6, trackTop + i * (trackH / 10), 12, trackH / 10);
     }
     ctx.restore();
   }
 }
+
+/* ----------------------------------------------------------------------
+   障害物の見た目（文字ラベルではなく、種類ごとに実際の形を描画する）
+   sx: 画面X座標（中心）  gy: 接地面のY座標（レーン中央 + 16px 相当）
+   ---------------------------------------------------------------------- */
+const OBSTACLE_DRAWERS = {
+  jump_pad(sx, gy) {
+    // 黄と黒の縞模様のジャンプ台（右肩上がりのスロープ）
+    ctx.fillStyle = '#3a3a3a';
+    ctx.beginPath();
+    ctx.moveTo(sx - 26, gy); ctx.lineTo(sx + 26, gy);
+    ctx.lineTo(sx + 26, gy - 30); ctx.closePath(); ctx.fill();
+    ctx.save();
+    ctx.beginPath();
+    ctx.moveTo(sx - 26, gy); ctx.lineTo(sx + 26, gy); ctx.lineTo(sx + 26, gy - 30); ctx.closePath();
+    ctx.clip();
+    ctx.fillStyle = '#ffb930';
+    for (let i = -30; i < 60; i += 12) {
+      ctx.beginPath();
+      ctx.moveTo(sx - 26 + i, gy - 30); ctx.lineTo(sx - 26 + i + 6, gy - 30);
+      ctx.lineTo(sx - 26 + i + 6 - 30, gy); ctx.lineTo(sx - 26 + i - 30, gy);
+      ctx.closePath(); ctx.fill();
+    }
+    ctx.restore();
+    ctx.strokeStyle = '#111'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(sx - 26, gy); ctx.lineTo(sx + 26, gy - 30); ctx.stroke();
+    // 上向き矢印で「跳ぶ」印象を強調
+    ctx.fillStyle = '#fff';
+    ctx.beginPath();
+    ctx.moveTo(sx + 14, gy - 34); ctx.lineTo(sx + 22, gy - 46); ctx.lineTo(sx + 30, gy - 34); ctx.closePath(); ctx.fill();
+  },
+  small_hill(sx, gy) {
+    const grad = ctx.createRadialGradient(sx, gy, 2, sx, gy, 26);
+    grad.addColorStop(0, '#5aa860'); grad.addColorStop(1, '#3d7a44');
+    ctx.fillStyle = grad;
+    ctx.beginPath(); ctx.ellipse(sx, gy, 26, 20, 0, Math.PI, 0); ctx.fill();
+    ctx.strokeStyle = 'rgba(255,255,255,0.25)'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.ellipse(sx, gy, 26, 20, 0, Math.PI, Math.PI * 1.5); ctx.stroke();
+  },
+  big_hill(sx, gy) {
+    const grad = ctx.createRadialGradient(sx, gy, 4, sx, gy, 40);
+    grad.addColorStop(0, '#4f9a58'); grad.addColorStop(1, '#2c5e33');
+    ctx.fillStyle = grad;
+    ctx.beginPath(); ctx.ellipse(sx, gy, 40, 32, 0, Math.PI, 0); ctx.fill();
+    ctx.strokeStyle = 'rgba(255,255,255,0.25)'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.ellipse(sx, gy, 40, 32, 0, Math.PI, Math.PI * 1.4); ctx.stroke();
+  },
+  grass(sx, gy) {
+    ctx.fillStyle = 'rgba(60,140,70,0.35)';
+    ctx.fillRect(sx - 60, gy - 10, 120, 20);
+    ctx.strokeStyle = '#3fae55'; ctx.lineWidth = 3; ctx.lineCap = 'round';
+    for (let i = -56; i < 56; i += 10) {
+      const wob = Math.sin((sx + i) / 14) * 4;
+      ctx.beginPath();
+      ctx.moveTo(sx + i, gy + 8);
+      ctx.quadraticCurveTo(sx + i + wob, gy - 6, sx + i + wob * 1.4, gy - 20);
+      ctx.stroke();
+    }
+  },
+  rock(sx, gy) {
+    ctx.fillStyle = 'rgba(0,0,0,0.25)';
+    ctx.beginPath(); ctx.ellipse(sx, gy + 4, 20, 6, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#8a8a92';
+    ctx.beginPath();
+    ctx.moveTo(sx - 18, gy); ctx.lineTo(sx - 20, gy - 14); ctx.lineTo(sx - 6, gy - 26);
+    ctx.lineTo(sx + 10, gy - 22); ctx.lineTo(sx + 20, gy - 8); ctx.lineTo(sx + 16, gy);
+    ctx.closePath(); ctx.fill();
+    ctx.fillStyle = 'rgba(255,255,255,0.18)';
+    ctx.beginPath(); ctx.moveTo(sx - 12, gy - 10); ctx.lineTo(sx - 4, gy - 20); ctx.lineTo(sx + 4, gy - 16); ctx.closePath(); ctx.fill();
+  },
+  crater(sx, gy) {
+    ctx.fillStyle = '#4a3a28';
+    ctx.beginPath(); ctx.ellipse(sx, gy, 34, 13, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#0e0a06';
+    ctx.beginPath(); ctx.ellipse(sx, gy + 1, 24, 9, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.strokeStyle = 'rgba(255,140,60,0.25)'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.ellipse(sx, gy, 30, 11.5, 0, 0, Math.PI * 2); ctx.stroke();
+  },
+  oil(sx, gy) {
+    ctx.fillStyle = 'rgba(10,10,18,0.85)';
+    ctx.beginPath(); ctx.ellipse(sx, gy, 34, 13, 0, 0, Math.PI * 2); ctx.fill();
+    const t = performance.now() / 500;
+    const colors = ['rgba(255,80,150,0.35)', 'rgba(80,180,255,0.35)', 'rgba(120,255,150,0.3)'];
+    colors.forEach((c, i) => {
+      ctx.strokeStyle = c; ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.ellipse(sx + Math.sin(t + i) * 4, gy, 24 - i * 6, 7 - i, 0, 0, Math.PI * 2);
+      ctx.stroke();
+    });
+  },
+  bump(sx, gy) {
+    ctx.fillStyle = 'rgba(0,0,0,0.3)';
+    ctx.fillRect(sx - 15, gy - 2, 30, 6);
+    ctx.fillStyle = '#9a9a68';
+    ctx.fillRect(sx - 15, gy - 12, 30, 12);
+    ctx.fillStyle = 'rgba(255,255,255,0.2)';
+    ctx.fillRect(sx - 15, gy - 12, 30, 3);
+  },
+  barricade(sx, gy) {
+    // 支柱
+    ctx.fillStyle = '#333';
+    ctx.fillRect(sx - 22, gy - 4, 6, 16);
+    ctx.fillRect(sx + 16, gy - 4, 6, 16);
+    // 縞模様のバー本体
+    ctx.save();
+    ctx.beginPath(); ctx.rect(sx - 26, gy - 30, 52, 18); ctx.clip();
+    for (let i = -30; i < 60; i += 10) {
+      ctx.fillStyle = (i / 10) % 2 === 0 ? '#ff3b57' : '#fff';
+      ctx.beginPath();
+      ctx.moveTo(sx - 26 + i, gy - 30); ctx.lineTo(sx - 26 + i + 10, gy - 30);
+      ctx.lineTo(sx - 26 + i + 10 - 10, gy - 12); ctx.lineTo(sx - 26 + i - 10, gy - 12);
+      ctx.closePath(); ctx.fill();
+    }
+    ctx.restore();
+    ctx.strokeStyle = '#111'; ctx.lineWidth = 2;
+    ctx.strokeRect(sx - 26, gy - 30, 52, 18);
+  },
+  broken_road(sx, gy) {
+    ctx.fillStyle = 'rgba(20,16,12,0.55)';
+    ctx.fillRect(sx - 80, gy - 16, 160, 32);
+    ctx.strokeStyle = 'rgba(0,0,0,0.6)'; ctx.lineWidth = 2;
+    for (let i = -70; i < 70; i += 26) {
+      ctx.beginPath();
+      ctx.moveTo(sx + i, gy - 14);
+      ctx.lineTo(sx + i + 8, gy - 2);
+      ctx.lineTo(sx + i - 4, gy + 8);
+      ctx.lineTo(sx + i + 10, gy + 15);
+      ctx.stroke();
+    }
+    ctx.fillStyle = '#5a534a';
+    for (let i = -60; i < 60; i += 24) {
+      ctx.beginPath(); ctx.arc(sx + i, gy + 6, 4, 0, Math.PI * 2); ctx.fill();
+    }
+  },
+};
 
 function drawObstacles(w, h) {
   for (const o of state.obstacles) {
     const sx = worldToScreenX(o.x);
     if (sx < -100 || sx > w + 100) continue;
-    const sy = laneY(o.lane, h);
-    ctx.fillStyle = o.type.color;
-    const wpx = Math.max(18, o.type.width * 0.4);
-    ctx.fillRect(sx - wpx / 2, sy - 16, wpx, 32);
-    ctx.fillStyle = 'rgba(0,0,0,0.35)';
-    ctx.font = '9px monospace';
-    ctx.fillText(o.type.label, sx - wpx / 2, sy + 26);
+    const gy = laneY(o.lane, h) + 16; // 接地面（レーン床）の高さ
+    const drawer = OBSTACLE_DRAWERS[o.type.key];
+    if (drawer) drawer(sx, gy);
   }
 }
 
 function drawItemBoxesAndTraps(w, h) {
+  const now = performance.now();
   for (const box of state.itemBoxes) {
     if (box.taken) continue;
     const sx = worldToScreenX(box.x);
-    if (sx < -60 || sx > w + 60) continue;
+    if (sx < -80 || sx > w + 80) continue;
     const sy = laneY(box.lane, h);
+    const pulse = 1 + Math.sin(now / 160 + box.x) * 0.14;
+    const size = 20 * pulse;
+
+    // 周囲に虹色のグロー（派手さ強調）
     ctx.save();
     ctx.translate(sx, sy);
-    ctx.rotate(performance.now() / 400 % (Math.PI * 2) * 0.3);
-    ctx.fillStyle = '#ffb930';
-    ctx.fillRect(-14, -14, 28, 28);
-    ctx.fillStyle = '#0b0d14';
-    ctx.font = 'bold 16px monospace';
-    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-    ctx.fillText('?', 0, 1);
+    ctx.shadowBlur = 26;
+    ctx.shadowColor = `hsl(${(now / 4) % 360}, 100%, 60%)`;
+    ctx.rotate((now / 500) % (Math.PI * 2));
+    const grad = ctx.createLinearGradient(-size, -size, size, size);
+    grad.addColorStop(0, '#ff3b57');
+    grad.addColorStop(0.33, '#ffb930');
+    grad.addColorStop(0.66, '#28f2ff');
+    grad.addColorStop(1, '#ff4fd8');
+    ctx.fillStyle = grad;
+    ctx.fillRect(-size, -size, size * 2, size * 2);
+    ctx.strokeStyle = '#fff'; ctx.lineWidth = 2;
+    ctx.strokeRect(-size, -size, size * 2, size * 2);
     ctx.restore();
+
+    ctx.fillStyle = '#fff';
+    ctx.font = 'bold 18px monospace';
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText('?', sx, sy + 1);
+
+    // ときどきキラキラ粒子を放出して目立たせる
+    if (Math.random() < 0.15) spawnItemSparkle(box.x, box.lane);
   }
   ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
+
   for (const t of state.traps) {
     const sx = worldToScreenX(t.x);
+    if (sx < -60 || sx > w + 60) continue;
     const sy = laneY(t.lane, h);
-    ctx.fillStyle = t.triggered ? 'rgba(255,80,80,0.2)' : '#ff3b57';
-    ctx.beginPath(); ctx.arc(sx, sy, 12, 0, Math.PI * 2); ctx.fill();
+    if (t.triggered) continue;
+    if (assetReady('trap')) {
+      drawAssetImage(assetImages.trap, sx, sy + 16, 44);
+    } else {
+      // 代替描画：点滅する警告地雷
+      const blink = Math.sin(now / 150) > 0;
+      ctx.fillStyle = blink ? '#ff3b57' : '#7a1020';
+      ctx.beginPath(); ctx.arc(sx, sy + 8, 13, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = '#1a1a1a';
+      ctx.beginPath(); ctx.arc(sx, sy + 8, 13, 0, Math.PI * 2); ctx.stroke();
+      for (let i = 0; i < 6; i++) {
+        const ang = (i / 6) * Math.PI * 2;
+        ctx.fillRect(sx + Math.cos(ang) * 12 - 1.5, sy + 8 + Math.sin(ang) * 12 - 1.5, 3, 3);
+      }
+    }
   }
 }
 
+/* 画像アセットを縦横比を保ったまま指定の目標サイズに収めて描画する共通ヘルパー
+   (x, groundY) は接地位置（画像下端の中心）を表す */
+function drawAssetImage(img, x, groundY, targetSize) {
+  const scale = targetSize / Math.max(img.naturalWidth, img.naturalHeight);
+  const dw = img.naturalWidth * scale, dh = img.naturalHeight * scale;
+  ctx.drawImage(img, x - dw / 2, groundY - dh, dw, dh);
+}
+
 function drawProjectiles(w, h) {
+  const now = performance.now();
   for (const p of state.projectiles) {
     const sx = worldToScreenX(p.x);
-    if (sx < -60 || sx > w + 60) continue;
+    if (sx < -80 || sx > w + 80) continue;
     const sy = laneY(p.lane + (p.laneOffset || 0), h);
+
     if (p.type === 'laser') {
-      ctx.fillStyle = 'rgba(40,242,255,0.85)';
-      ctx.fillRect(sx - 10, laneY(0, h) - 20, 20, laneY(CONFIG.LANES - 1, h) - laneY(0, h) + 40);
+      // 極太レーザー：色が高速で明滅するド派手な演出 + グロー
+      const hue = (now / 2) % 360;
+      ctx.save();
+      ctx.shadowBlur = 40;
+      ctx.shadowColor = `hsl(${hue}, 100%, 60%)`;
+      const beamW = 26 + Math.sin(now / 20) * 10;
+      const grad = ctx.createLinearGradient(0, laneY(0, h) - 20, 0, laneY(CONFIG.LANES - 1, h) + 20);
+      grad.addColorStop(0, `hsl(${hue}, 100%, 70%)`);
+      grad.addColorStop(0.5, '#ffffff');
+      grad.addColorStop(1, `hsl(${(hue + 60) % 360}, 100%, 70%)`);
+      ctx.fillStyle = grad;
+      ctx.fillRect(sx - beamW / 2, laneY(0, h) - 20, beamW, laneY(CONFIG.LANES - 1, h) - laneY(0, h) + 40);
+      ctx.restore();
       continue;
     }
+
+    // 進行方向に応じて画像を少し傾ける（レーンオフセットの変化速度から角度を推定）
+    const angle = Math.atan2((p._prevLaneOffset !== undefined ? (p.laneOffset - p._prevLaneOffset) : 0) * 40, 12);
+    p._prevLaneOffset = p.laneOffset || 0;
+
+    if (p.type === 'crossbow') {
+      if (assetReady('crossbow')) {
+        ctx.save(); ctx.translate(sx, sy); ctx.rotate(angle);
+        drawAssetImage(assetImages.crossbow, 0, 8, 34);
+        ctx.restore();
+      } else {
+        ctx.save();
+        ctx.translate(sx, sy); ctx.rotate(angle);
+        ctx.shadowBlur = 14; ctx.shadowColor = '#28f2ff';
+        ctx.fillStyle = '#28f2ff';
+        ctx.beginPath(); ctx.moveTo(-14, 0); ctx.lineTo(10, -4); ctx.lineTo(10, 4); ctx.closePath(); ctx.fill();
+        ctx.strokeStyle = '#fff'; ctx.lineWidth = 1; ctx.stroke();
+        ctx.restore();
+      }
+      continue;
+    }
+
+    if (p.type === 'big_missile' || p.type === 'homing') {
+      const img = p.type === 'big_missile' ? (assetReady('missileBig') ? assetImages.missileBig : null) : homingAssetImage();
+      const size = p.big ? 54 : 30;
+      if (img) {
+        ctx.save(); ctx.translate(sx, sy); ctx.rotate(angle);
+        drawAssetImage(img, 0, size * 0.3, size);
+        ctx.restore();
+      } else {
+        ctx.save();
+        ctx.translate(sx, sy); ctx.rotate(angle);
+        ctx.shadowBlur = p.big ? 24 : 14;
+        ctx.shadowColor = p.color;
+        ctx.fillStyle = p.color;
+        const r = p.big ? 16 : 8;
+        ctx.beginPath(); ctx.ellipse(0, 0, r * 1.6, r, 0, 0, Math.PI * 2); ctx.fill();
+        ctx.fillStyle = '#fff';
+        ctx.beginPath(); ctx.moveTo(r * 1.4, 0); ctx.lineTo(r * 2.4, -r * 0.6); ctx.lineTo(r * 2.4, r * 0.6); ctx.closePath(); ctx.fill();
+        ctx.restore();
+      }
+      continue;
+    }
+
+    // その他予期しない種類のフォールバック
     ctx.fillStyle = p.color;
-    const r = p.big ? 16 : (p.type === 'homing' ? 8 : 6);
-    ctx.beginPath(); ctx.arc(sx, sy, r, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.arc(sx, sy, 6, 0, Math.PI * 2); ctx.fill();
   }
 }
 
@@ -964,8 +1403,27 @@ function drawParticles(w, h) {
     const sx = worldToScreenX(p.x);
     const sy = laneY(p.lane, h) + (p.laneOffsetPx || 0);
     ctx.globalAlpha = clamp(p.life, 0, 1);
+    if (p.kind === 'flash') {
+      const r = (1 - p.life / 0.25) * 60;
+      ctx.strokeStyle = p.color; ctx.lineWidth = 3;
+      ctx.beginPath(); ctx.arc(sx, sy, r, 0, Math.PI * 2); ctx.stroke();
+      ctx.globalAlpha = 1;
+      continue;
+    }
     ctx.fillStyle = p.color;
-    const size = p.kind === 'smoke' ? 10 : 4;
+    let size = 4;
+    if (p.kind === 'smoke') size = 10;
+    if (p.kind === 'sparkle') {
+      size = 3;
+      ctx.save();
+      ctx.translate(sx, sy);
+      ctx.rotate(performance.now() / 120);
+      ctx.fillRect(-size, -1, size * 2, 2);
+      ctx.fillRect(-1, -size, 2, size * 2);
+      ctx.restore();
+      ctx.globalAlpha = 1;
+      continue;
+    }
     ctx.beginPath(); ctx.arc(sx, sy, size, 0, Math.PI * 2); ctx.fill();
     ctx.globalAlpha = 1;
   }
@@ -1032,6 +1490,7 @@ function showResults() {
 }
 
 function startPodiumAnimation(ranked) {
+  SFX.victory();
   const pc = document.getElementById('podiumCanvas');
   pc.width = window.innerWidth; pc.height = window.innerHeight;
   const pctx = pc.getContext('2d');
