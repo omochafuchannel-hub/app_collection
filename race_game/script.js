@@ -68,17 +68,17 @@ const DEFAULT_COLORS = ['#ffb930', '#28f2ff', '#ff4fd8', '#63ff8a'];
    ゲームは問題なく動作します。
 
    用意してもらいたい画像（任意・GitHub Pages上の assets/ フォルダに配置）:
-     assets/crossbow_bolt.png   ... ボーガンの矢 1本分の画像
-     assets/missile_big.png     ... 大型ミサイル（1発）の画像
-     assets/missile_homing.png  ... 追跡ミサイル（1発分）の画像　※無ければ missile_big.png を代用
-     assets/trap.png            ... トラップ（地雷）の画像
+     assets/crossbow_bolt.PNG   ... ボーガンの矢 1本分の画像
+     assets/missile_big.PNG     ... 大型ミサイル（1発）の画像
+     assets/missile_homing.PNG  ... 追跡ミサイル（1発分）の画像　※無ければ missile_big.PNG を代用
+     assets/trap.PNG            ... トラップ（地雷）の画像
    推奨サイズ: 横長の乗り物系画像で 64x32px 前後（正方形でも自動調整されます）
    ================================================================================ */
 const ASSET_PATHS = {
-  crossbow: 'assets/crossbow_bolt.png',
-  missileBig: 'assets/missile_big.png',
-  missileHoming: 'assets/missile_homing.png',
-  trap: 'assets/trap.png',
+  crossbow: 'assets/crossbow_bolt.PNG',
+  missileBig: 'assets/missile_big.PNG',
+  missileHoming: 'assets/missile_homing.PNG',
+  trap: 'assets/trap.PNG',
 };
 const assetImages = {};
 function loadAssetImage(key, path) {
