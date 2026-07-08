@@ -234,6 +234,42 @@ html, body{
 }
 .result-list .pos{ color:var(--amber); width:28px; font-family:var(--font-display); font-size:12px; }
 
+/* ------------------------------------------------------------------
+   縦向き警告オーバーレイ（本ゲームは横向き専用）
+   ------------------------------------------------------------------ */
+.rotate-overlay{
+  display:none;
+  position:fixed; inset:0; z-index:9999;
+  background: var(--bg-deep);
+  color: var(--text-main);
+  align-items:center; justify-content:center;
+  text-align:center;
+}
+.rotate-msg{
+  font-family: var(--font-display);
+  font-size: 15px; line-height: 2.2;
+  color: var(--amber);
+  padding: 24px;
+}
+.rotate-icon{
+  font-size: 42px;
+  animation: rotateHint 1.6s ease-in-out infinite;
+  margin-bottom: 6px;
+}
+.rotate-sub{
+  font-family: var(--font-body);
+  font-size: 12px;
+  color: var(--text-dim);
+  letter-spacing: 1px;
+}
+@keyframes rotateHint{
+  0%, 100% { transform: rotate(0deg); }
+  50% { transform: rotate(90deg); }
+}
+@media (orientation: portrait){
+  .rotate-overlay{ display:flex; }
+}
+
 @media (max-width:600px){
   .hud-box{ min-width:52px; padding:4px 6px; }
   .hud-box span:last-child{ font-size:12px; }
