@@ -54,6 +54,7 @@ const CONFIG = {
   HIT_STOP_TIME: 0.12,          // 被弾時のヒットストップ秒数
   STUN_TIME: 1.6,               // 通常の被弾/転倒スタン秒数
   CRATER_STUN_TIME: 2.2,
+  INVINCIBLE_TIME: 1.3,         // 被弾後、再度ダメージを受けない無敵時間（秒。スタン終了後からのグレース期間）
 
   CANVAS_BG_LIST: ['sea', 'city', 'grass', 'mountain'],
 };
@@ -410,6 +411,7 @@ class Racer {
 
     this.z = 0; this.vz = 0; this.jumping = false;
     this.stunTimer = 0;
+    this.invincibleTimer = 0;
     this.spinTimer = 0;
     this.hitFlashTimer = 0;
 
@@ -436,8 +438,9 @@ function doJump(racer, velocity) {
   if (racer.isPlayer) SFX.jump();
 }
 function stunRacer(racer, time, kind) {
-  if (racer.stunTimer > 0) return; // 既にスタン中は重複させない
+  if (racer.stunTimer > 0 || racer.invincibleTimer > 0) return; // スタン中・無敵中は再ダメージを受けない
   racer.stunTimer = time;
+  racer.invincibleTimer = time + CONFIG.INVINCIBLE_TIME; // スタン終了後もしばらく無敵が続く
   racer.speedMult = 0;
   racer.hitFlashTimer = 0.5;
   spawnExplosion(racer.x, racer.lane, kind === 'fall' ? 'small' : 'medium');
@@ -652,6 +655,7 @@ function updateRacerCommon(r, dt) {
 
   // スタン／スピン タイマー
   if (r.stunTimer > 0) { r.stunTimer -= dt; if (r.stunTimer < 0) r.stunTimer = 0; }
+  if (r.invincibleTimer > 0) { r.invincibleTimer -= dt; if (r.invincibleTimer < 0) r.invincibleTimer = 0; }
   if (r.spinTimer > 0) { r.spinTimer -= dt; }
   if (r.hitFlashTimer > 0) { r.hitFlashTimer -= dt; }
 
@@ -763,9 +767,15 @@ function applyObstacles(r) {
     if (r.x > o.x - halfW && r.x < o.x + halfW) {
       const overJump = r.jumping && r.z > 18;
       if (o.type.needsJump && overJump) continue; // ジャンプで回避成功
-      if (o.type.needsJump === false || o.type.zone || o.type.auto || !overJump) {
+      if (o.type.auto || o.type.zone) {
+        // ジャンプ台・坂・草むら・壊れた道路は「衝突ダメージ」ではないので無敵時間に関係なく毎回適用
         o.type.effect(r);
+        continue;
       }
+      // ここから下は 岩・クレーター・オイル・段差・バリケード等の「衝突ダメージ系」障害物。
+      // 無敵時間中は同じ障害物に触れ続けても連続でダメージを受けないようにする。
+      if (r.invincibleTimer > 0) continue;
+      o.type.effect(r);
     }
   }
 }
@@ -789,6 +799,7 @@ function applyItemBoxPickup(r) {
 function applyTraps(r) {
   for (const t of state.traps) {
     if (t.triggered || t.lane !== r.lane || t.owner === r) continue;
+    if (r.invincibleTimer > 0) continue; // 無敵中はトラップも反応しない
     if (Math.abs(r.x - t.x) < 26) {
       t.triggered = true;
       stunRacer(r, CONFIG.STUN_TIME, 'fall');
@@ -872,6 +883,7 @@ function updateProjectiles(dt) {
     // 命中判定（自分以外のレーサーと衝突していないかチェック）
     for (const o of state.racers) {
       if (o === p.owner || p.hit) continue;
+      if (o.invincibleTimer > 0) continue; // 無敵中はダメージ無視（すり抜ける）
       const effectiveLane = p.lane + (p.laneOffset || 0);
       if (Math.abs(effectiveLane - o.lane) < 0.5 && Math.abs(p.x - o.x) < (p.big ? 70 : 34)) {
         p.hit = true; p.life = 0;
@@ -895,22 +907,27 @@ function updateProjectiles(dt) {
 
 /* ============================== パーティクル（爆発・煙・花火・紙吹雪） ============================== */
 function spawnExplosion(x, lane, size) {
-  const n = size === 'large' ? 26 : size === 'medium' ? 16 : 8;
+  const n = size === 'large' ? 46 : size === 'medium' ? 30 : 16;
   for (let i = 0; i < n; i++) {
     state.particles.push({
       kind: 'spark', x, lane, y0: 0,
-      vx: rand(-140, 140), vy: rand(-220, -40), life: rand(0.3, 0.7),
-      color: choice(['#ffb930', '#ff3b57', '#fff2c2']),
+      vx: rand(-220, 220), vy: rand(-320, -60), life: rand(0.35, 0.85),
+      color: choice(['#ffb930', '#ff3b57', '#fff2c2', '#28f2ff', '#ff4fd8']),
     });
   }
   for (let i = 0; i < n / 2; i++) {
     state.particles.push({
       kind: 'smoke', x, lane, y0: 0,
-      vx: rand(-30, 30), vy: rand(-60, -20), life: rand(0.6, 1.1),
-      color: 'rgba(120,120,130,0.6)',
+      vx: rand(-40, 40), vy: rand(-80, -20), life: rand(0.6, 1.3),
+      color: 'rgba(120,120,130,0.65)',
     });
   }
-  shakeScreen(size === 'large' ? 10 : size === 'medium' ? 6 : 3);
+  // 中心に一瞬だけ広がる閃光リング（派手な爆発演出）
+  state.particles.push({ kind: 'flash', x, lane, vx: 0, vy: 0, life: size === 'large' ? 0.4 : 0.25, maxLife: size === 'large' ? 0.4 : 0.25, color: size === 'large' ? '#fff2c2' : '#ffffff' });
+  if (size === 'large') {
+    state.particles.push({ kind: 'flash', x, lane, vx: 0, vy: 0, life: 0.55, maxLife: 0.55, color: '#ff3b57' });
+  }
+  shakeScreen(size === 'large' ? 16 : size === 'medium' ? 9 : 4);
 }
 function spawnSmoke(x, lane) {
   state.particles.push({ kind: 'smoke', x, lane, vx: rand(-10, 10), vy: rand(-20, -5), life: 0.4, color: 'rgba(200,200,210,0.5)' });
@@ -926,7 +943,7 @@ function spawnItemSparkle(x, lane) {
 /* アイテム取得時の派手な閃光バースト */
 function spawnItemSparkleBurst(x, lane) {
   for (let i = 0; i < 18; i++) spawnItemSparkle(x, lane);
-  state.particles.push({ kind: 'flash', x, lane, vx: 0, vy: 0, life: 0.25, color: '#ffffff' });
+  state.particles.push({ kind: 'flash', x, lane, vx: 0, vy: 0, life: 0.25, maxLife: 0.25, color: '#ffffff' });
 }
 function updateParticles(dt) {
   for (const p of state.particles) {
@@ -1263,15 +1280,37 @@ function drawItemBoxesAndTraps(w, h) {
   for (const box of state.itemBoxes) {
     if (box.taken) continue;
     const sx = worldToScreenX(box.x);
-    if (sx < -80 || sx > w + 80) continue;
+    if (sx < -100 || sx > w + 100) continue;
     const sy = laneY(box.lane, h);
-    const pulse = 1 + Math.sin(now / 160 + box.x) * 0.14;
-    const size = 20 * pulse;
+    const pulse = 1 + Math.sin(now / 160 + box.x) * 0.18;
+    const size = 34 * pulse; // アイテムボックスを大きく強調
 
-    // 周囲に虹色のグロー（派手さ強調）
     ctx.save();
     ctx.translate(sx, sy);
-    ctx.shadowBlur = 26;
+
+    // 背後に回転する光の放射（ド派手な後光演出）
+    ctx.save();
+    ctx.rotate(-(now / 300) % (Math.PI * 2));
+    for (let i = 0; i < 8; i++) {
+      const ang = (i / 8) * Math.PI * 2;
+      ctx.save();
+      ctx.rotate(ang);
+      const rayGrad = ctx.createLinearGradient(0, 0, 0, -size * 2.2);
+      rayGrad.addColorStop(0, `hsla(${(now / 3 + i * 45) % 360},100%,65%,0.55)`);
+      rayGrad.addColorStop(1, 'rgba(255,255,255,0)');
+      ctx.fillStyle = rayGrad;
+      ctx.fillRect(-4, -size * 2.2, 8, size * 2.2);
+      ctx.restore();
+    }
+    ctx.restore();
+
+    // 外周のパルスリング
+    ctx.strokeStyle = `hsl(${(now / 4) % 360}, 100%, 65%)`;
+    ctx.lineWidth = 3;
+    ctx.beginPath(); ctx.arc(0, 0, size * 1.35, 0, Math.PI * 2); ctx.stroke();
+
+    // 本体（虹色グラデーション回転キューブ）
+    ctx.shadowBlur = 34;
     ctx.shadowColor = `hsl(${(now / 4) % 360}, 100%, 60%)`;
     ctx.rotate((now / 500) % (Math.PI * 2));
     const grad = ctx.createLinearGradient(-size, -size, size, size);
@@ -1281,17 +1320,17 @@ function drawItemBoxesAndTraps(w, h) {
     grad.addColorStop(1, '#ff4fd8');
     ctx.fillStyle = grad;
     ctx.fillRect(-size, -size, size * 2, size * 2);
-    ctx.strokeStyle = '#fff'; ctx.lineWidth = 2;
+    ctx.strokeStyle = '#fff'; ctx.lineWidth = 3;
     ctx.strokeRect(-size, -size, size * 2, size * 2);
     ctx.restore();
 
     ctx.fillStyle = '#fff';
-    ctx.font = 'bold 18px monospace';
+    ctx.font = `bold ${Math.round(size * 0.9)}px monospace`;
     ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
     ctx.fillText('?', sx, sy + 1);
 
-    // ときどきキラキラ粒子を放出して目立たせる
-    if (Math.random() < 0.15) spawnItemSparkle(box.x, box.lane);
+    // キラキラ粒子を頻繁に放出して目立たせる
+    if (Math.random() < 0.35) spawnItemSparkle(box.x, box.lane);
   }
   ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
 
@@ -1404,8 +1443,9 @@ function drawParticles(w, h) {
     const sy = laneY(p.lane, h) + (p.laneOffsetPx || 0);
     ctx.globalAlpha = clamp(p.life, 0, 1);
     if (p.kind === 'flash') {
-      const r = (1 - p.life / 0.25) * 60;
-      ctx.strokeStyle = p.color; ctx.lineWidth = 3;
+      const maxLife = p.maxLife || 0.25;
+      const r = (1 - p.life / maxLife) * 70;
+      ctx.strokeStyle = p.color; ctx.lineWidth = 4;
       ctx.beginPath(); ctx.arc(sx, sy, r, 0, Math.PI * 2); ctx.stroke();
       ctx.globalAlpha = 1;
       continue;
@@ -1437,16 +1477,37 @@ function drawRacers(w, h) {
     if (sx < -80 || sx > w + 80) continue;
     const sy = laneY(r.laneVisual, h) - r.z * 0.35;
 
-    // 影
-    ctx.fillStyle = 'rgba(0,0,0,0.35)';
-    ctx.beginPath();
-    ctx.ellipse(sx, laneY(r.laneVisual, h) + 22, 22, 7, 0, 0, Math.PI * 2);
-    ctx.fill();
+    // ターボ中は後方に派手な炎とスピードラインを表示
+    if (r.turboActive && !r.overheated && r.stunTimer <= 0) {
+      const flameLen = 26 + Math.sin(performance.now() / 40) * 8;
+      const grad = ctx.createLinearGradient(sx - 20, sy, sx - 20 - flameLen, sy);
+      grad.addColorStop(0, 'rgba(255,185,48,0.9)');
+      grad.addColorStop(0.5, 'rgba(255,80,60,0.7)');
+      grad.addColorStop(1, 'rgba(255,80,60,0)');
+      ctx.fillStyle = grad;
+      ctx.beginPath();
+      ctx.moveTo(sx - 18, sy - 10);
+      ctx.lineTo(sx - 18 - flameLen, sy);
+      ctx.lineTo(sx - 18, sy + 10);
+      ctx.closePath(); ctx.fill();
+      for (let i = 0; i < 3; i++) {
+        ctx.strokeStyle = `rgba(40,242,255,${0.5 - i * 0.15})`;
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(sx - 24 - i * 10, sy - 14 + i * 10);
+        ctx.lineTo(sx - 40 - i * 10, sy - 14 + i * 10);
+        ctx.stroke();
+      }
+    }
 
     // ヒットフラッシュ演出（被弾時に明滅）
     ctx.save();
     if (r.hitFlashTimer > 0 && Math.floor(r.hitFlashTimer * 20) % 2 === 0) {
       ctx.filter = 'brightness(2) saturate(0)';
+    }
+    // 無敵時間中は半透明で点滅させ、連続ダメージを受けない状態だと分かるようにする
+    if (r.invincibleTimer > 0 && r.stunTimer <= 0) {
+      ctx.globalAlpha = (Math.floor(performance.now() / 90) % 2 === 0) ? 0.4 : 0.85;
     }
 
     const img = r.img;
