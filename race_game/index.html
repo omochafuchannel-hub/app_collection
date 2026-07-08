@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>ROBO RUSH -- Retro Robot Race</title>
+<!-- レトロ風の見出し用ピクセルフォント（読み込めない場合は monospace にフォールバック） -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=Share+Tech+Mono&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<!-- ============================================================ -->
+<!-- 1. レース設定画面（ゲーム開始前に必ず表示される）                    -->
+<!-- ============================================================ -->
+<div id="settingsScreen" class="screen">
+  <div class="scanlines"></div>
+  <header class="title-block">
+    <h1 class="game-title">ROBO<span class="accent">RUSH</span></h1>
+    <p class="game-sub">// RETRO ROBOT RACING SETUP //</p>
+  </header>
+
+  <div id="entryList" class="entry-list"><!-- JSでカード4枚(PLAYER, CPU1-3)を生成 --></div>
+
+  <div class="start-row">
+    <button id="startBtn" class="btn-start">GAME START</button>
+    <p class="hint">画像は自由に差し替えできます。未設定の場合は既定のロボットが使用されます。</p>
+  </div>
+</div>
+
+<!-- ============================================================ -->
+<!-- 2. ゲーム本体（キャンバス + HUD + タッチ操作）                      -->
+<!-- ============================================================ -->
+<div id="gameContainer" class="screen hidden">
+  <canvas id="gameCanvas"></canvas>
+
+  <!-- 画面上部HUD：順位・ラップ・ターボゲージ・速度・所持アイテム -->
+  <div id="hud">
+    <div class="hud-box hud-rank"><span class="hud-label">RANK</span><span id="hudRank">1/4</span></div>
+    <div class="hud-box hud-lap"><span class="hud-label">LAP</span><span id="hudLap">1/3</span></div>
+    <div class="hud-box hud-speed"><span class="hud-label">SPEED</span><span id="hudSpeed">000</span></div>
+    <div class="hud-box hud-item"><span class="hud-label">ITEM</span><span id="hudItem">--</span></div>
+  </div>
+  <div id="turboGaugeWrap" class="turbo-wrap">
+    <span class="hud-label">TURBO</span>
+    <div class="turbo-bar"><div id="turboFill" class="turbo-fill"></div></div>
+  </div>
+
+  <!-- カウントダウン表示 -->
+  <div id="countdown" class="countdown hidden">3</div>
+
+  <!-- タッチ操作（スマホ用） -->
+  <div id="touchControls" class="touch-controls">
+    <div class="touch-left">
+      <button id="btnUp" class="touch-btn round">▲</button>
+      <button id="btnDown" class="touch-btn round">▼</button>
+    </div>
+    <div class="touch-right">
+      <button id="btnAttack" class="touch-btn square">FIRE</button>
+      <button id="btnJump" class="touch-btn round jump-btn">JUMP</button>
+      <button id="btnTurbo" class="touch-btn square turbo-btn">TURBO</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============================================================ -->
+<!-- 3. リザルト／表彰式画面                                            -->
+<!-- ============================================================ -->
+<div id="resultScreen" class="screen hidden">
+  <canvas id="podiumCanvas"></canvas>
+  <div class="result-panel">
+    <h2 class="result-title">RACE RESULT</h2>
+    <ol id="resultList" class="result-list"></ol>
+    <button id="restartBtn" class="btn-start">RACE AGAIN</button>
+  </div>
+</div>
+
+<script src="script.js"></script>
+</body>
+</html>

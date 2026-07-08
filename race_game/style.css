@@ -1,0 +1,242 @@
+/* ==================================================================
+   ROBO RUSH - style.css
+   デザイントークン（配色・タイポグラフィ）
+   背景：ほぼ黒のアーケード筐体風 (#0b0d14)
+   アクセント：ネオンシアン(#28f2ff) / ネオンアンバー(#ffb930) / 警告レッド(#ff3b57)
+   見出しフォント：Press Start 2P（ピクセル風） / 本文：Share Tech Mono
+   ================================================================== */
+
+:root{
+  --bg-deep:      #0b0d14;
+  --bg-panel:     #14182a;
+  --line:         #2a3350;
+  --cyan:         #28f2ff;
+  --amber:        #ffb930;
+  --magenta:      #ff4fd8;
+  --danger:       #ff3b57;
+  --text-main:    #d7e6ff;
+  --text-dim:     #7d8bb5;
+  --font-display: 'Press Start 2P', 'MS Gothic', monospace;
+  --font-body:    'Share Tech Mono', 'Courier New', monospace;
+}
+
+*{ box-sizing: border-box; }
+
+html, body{
+  margin:0; padding:0; width:100%; height:100%;
+  background: var(--bg-deep);
+  color: var(--text-main);
+  font-family: var(--font-body);
+  overflow: hidden;
+  -webkit-tap-highlight-color: transparent;
+  user-select: none;
+}
+
+.hidden{ display:none !important; }
+
+.screen{
+  position: fixed; inset:0;
+  width:100%; height:100%;
+}
+
+/* ------------------------------------------------------------------
+   1. 設定画面
+   ------------------------------------------------------------------ */
+#settingsScreen{
+  overflow-y: auto;
+  background:
+    radial-gradient(ellipse at 50% -10%, #1c2440 0%, var(--bg-deep) 60%);
+  padding: 24px 16px 60px;
+  display:flex; flex-direction:column; align-items:center;
+}
+
+.scanlines{
+  pointer-events:none;
+  position:fixed; inset:0;
+  background: repeating-linear-gradient(
+    to bottom, rgba(255,255,255,0.025) 0px, rgba(255,255,255,0.025) 1px,
+    transparent 2px, transparent 4px);
+  mix-blend-mode: overlay;
+}
+
+.title-block{ text-align:center; margin-bottom: 20px; }
+
+.game-title{
+  font-family: var(--font-display);
+  font-size: clamp(28px, 7vw, 48px);
+  letter-spacing: 4px;
+  color: var(--cyan);
+  text-shadow: 0 0 8px rgba(40,242,255,0.7), 0 0 20px rgba(40,242,255,0.35);
+  margin: 0;
+}
+.game-title .accent{ color: var(--amber); text-shadow: 0 0 8px rgba(255,185,48,0.8); }
+.game-sub{
+  font-family: var(--font-body);
+  color: var(--text-dim);
+  letter-spacing: 2px;
+  margin: 8px 0 0;
+  font-size: 12px;
+}
+
+.entry-list{
+  width:100%; max-width: 920px;
+  display:grid;
+  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+  gap: 16px;
+}
+
+.entry-card{
+  background: linear-gradient(180deg, var(--bg-panel), #0f1220);
+  border: 2px solid var(--line);
+  border-radius: 10px;
+  padding: 14px;
+  position: relative;
+  box-shadow: 0 0 0 1px rgba(40,242,255,0.05) inset;
+}
+.entry-card.player{ border-color: var(--amber); box-shadow: 0 0 14px rgba(255,185,48,0.25); }
+.entry-card .entry-label{
+  font-family: var(--font-display);
+  font-size: 10px;
+  color: var(--amber);
+  letter-spacing: 1px;
+  margin-bottom: 10px;
+  display:block;
+}
+.entry-card.cpu .entry-label{ color: var(--cyan); }
+
+.drop-zone{
+  height: 120px;
+  border: 2px dashed var(--line);
+  border-radius: 8px;
+  display:flex; align-items:center; justify-content:center;
+  cursor:pointer;
+  background: #05060b;
+  overflow:hidden;
+  position:relative;
+  transition: border-color .15s;
+}
+.drop-zone.dragover{ border-color: var(--cyan); }
+.drop-zone img{
+  max-width:100%; max-height:100%; object-fit:contain;
+  image-rendering: pixelated;
+}
+.drop-zone .dz-placeholder{
+  font-size: 11px; color: var(--text-dim); text-align:center; padding: 8px;
+  font-family: var(--font-body);
+}
+.drop-zone input[type=file]{ display:none; }
+
+.name-input{
+  width:100%; margin-top:10px;
+  background:#05060b; border:1px solid var(--line); border-radius:6px;
+  color: var(--text-main); font-family: var(--font-body);
+  padding:8px 10px; font-size:14px; letter-spacing:1px;
+}
+.name-input:focus{ outline:none; border-color: var(--cyan); }
+
+.start-row{ margin-top: 26px; text-align:center; }
+.hint{ color: var(--text-dim); font-size: 11px; margin-top: 10px; }
+
+.btn-start{
+  font-family: var(--font-display);
+  font-size: 16px;
+  letter-spacing: 2px;
+  color: var(--bg-deep);
+  background: linear-gradient(180deg, var(--amber), #d98d00);
+  border: none;
+  padding: 16px 34px;
+  border-radius: 8px;
+  cursor:pointer;
+  box-shadow: 0 0 20px rgba(255,185,48,0.55), 0 4px 0 #a5670a;
+  transition: transform .08s;
+}
+.btn-start:active{ transform: translateY(3px); box-shadow: 0 0 14px rgba(255,185,48,0.4), 0 1px 0 #a5670a; }
+
+/* ------------------------------------------------------------------
+   2. ゲーム画面
+   ------------------------------------------------------------------ */
+#gameContainer{ background: #000; }
+#gameCanvas{ position:absolute; inset:0; width:100%; height:100%; display:block; }
+
+#hud{
+  position:absolute; top:0; left:0; right:0;
+  display:flex; gap:8px; padding:10px;
+  pointer-events:none;
+  flex-wrap:wrap;
+}
+.hud-box{
+  background: rgba(11,13,20,0.72);
+  border:1px solid var(--line);
+  border-radius:6px;
+  padding:5px 10px;
+  display:flex; flex-direction:column; align-items:center;
+  min-width:64px;
+}
+.hud-label{ font-size:9px; color:var(--text-dim); letter-spacing:1px; }
+.hud-box span:last-child{ font-size:15px; color:var(--cyan); font-family:var(--font-display); margin-top:2px; }
+.hud-rank span:last-child{ color: var(--amber); }
+
+.turbo-wrap{
+  position:absolute; top:10px; right:10px; width:150px;
+  background: rgba(11,13,20,0.72); border:1px solid var(--line); border-radius:6px;
+  padding:6px 10px; pointer-events:none;
+}
+.turbo-bar{ height:10px; background:#05060b; border-radius:5px; overflow:hidden; margin-top:4px; border:1px solid var(--line); }
+.turbo-fill{ height:100%; width:0%; background: linear-gradient(90deg, var(--cyan), var(--magenta)); transition: width .05s linear; }
+.turbo-fill.overheat{ background: repeating-linear-gradient(45deg, var(--danger), var(--danger) 6px, #7a0f1e 6px, #7a0f1e 12px); }
+
+.countdown{
+  position:absolute; top:40%; left:50%; transform:translate(-50%,-50%);
+  font-family: var(--font-display); font-size: 72px; color: var(--amber);
+  text-shadow: 0 0 24px rgba(255,185,48,0.8);
+  pointer-events:none;
+}
+
+.touch-controls{
+  position:absolute; bottom:0; left:0; right:0;
+  display:flex; justify-content:space-between; align-items:flex-end;
+  padding: 16px; pointer-events:none;
+}
+.touch-left, .touch-right{ display:flex; gap:12px; pointer-events:auto; align-items:flex-end; }
+.touch-left{ flex-direction:column; }
+.touch-btn{
+  font-family: var(--font-display); font-size:11px; color:#fff;
+  background: rgba(20,24,42,0.75); border:2px solid var(--cyan);
+  box-shadow: 0 0 10px rgba(40,242,255,0.4);
+  border-radius: 50%; width:58px; height:58px;
+  display:flex; align-items:center; justify-content:center;
+  touch-action:none; cursor:pointer;
+}
+.touch-btn.square{ border-radius:14px; border-color: var(--amber); box-shadow:0 0 10px rgba(255,185,48,0.4); width:70px; height:58px; }
+.touch-btn.turbo-btn{ border-color: var(--magenta); box-shadow:0 0 10px rgba(255,79,216,0.5); }
+.touch-btn:active{ background: rgba(40,242,255,0.35); }
+
+/* ------------------------------------------------------------------
+   3. リザルト画面
+   ------------------------------------------------------------------ */
+#resultScreen{ background:#000; }
+#podiumCanvas{ position:absolute; inset:0; width:100%; height:100%; }
+.result-panel{
+  position:absolute; left:50%; bottom:26px; transform:translateX(-50%);
+  background: rgba(11,13,20,0.85); border:2px solid var(--cyan);
+  border-radius:10px; padding: 16px 26px; text-align:center;
+  box-shadow: 0 0 24px rgba(40,242,255,0.35);
+  max-width: 92vw;
+}
+.result-title{
+  font-family: var(--font-display); font-size:18px; color:var(--amber);
+  letter-spacing:2px; margin: 0 0 10px;
+}
+.result-list{ list-style:none; margin:0; padding:0; text-align:left; }
+.result-list li{
+  font-size:14px; padding:4px 0; display:flex; gap:10px; align-items:center;
+  border-bottom: 1px solid var(--line);
+}
+.result-list .pos{ color:var(--amber); width:28px; font-family:var(--font-display); font-size:12px; }
+
+@media (max-width:600px){
+  .hud-box{ min-width:52px; padding:4px 6px; }
+  .hud-box span:last-child{ font-size:12px; }
+  .touch-btn{ width:50px; height:50px; }
+  .touch-btn.square{ width:60px; height:50px; }
+}
