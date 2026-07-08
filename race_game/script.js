@@ -505,6 +505,7 @@ function initRace() {
   state.projectiles = [];
   state.particles = [];
   state.traps = [];
+  state.screenFlashes = [];
   state.raceStarted = false;
   state.raceFinished = false;
   state.countdownValue = 3;
@@ -602,6 +603,12 @@ function gameLoop(now) {
 
   if (state.raceStarted && !state.raceFinished) {
     update(dt);
+  } else if (state.racers.length) {
+    // レース開始前（カウントダウン中）もカメラ位置だけは正しく保つ。
+    // これをしないと「スタート時は画面端にいたのに、GO!の瞬間に中央付近へ
+    // ワープする」という見た目のバグが発生する。
+    const player = state.racers.find(r => r.isPlayer);
+    updateCamera(0, player);
   }
   render();
 
@@ -823,6 +830,18 @@ function useItem(r) {
   }
 }
 
+/* 武器発射の瞬間に出す派手なマズルフラッシュ（発射位置から前方に飛び散る火花） */
+function spawnMuzzleBurst(x, lane, color, count = 20) {
+  for (let i = 0; i < count; i++) {
+    state.particles.push({
+      kind: 'spark', x: x + rand(0, 20), lane,
+      vx: rand(80, 320), vy: rand(-160, 160), life: rand(0.25, 0.55),
+      color,
+    });
+  }
+  state.particles.push({ kind: 'flash', x, lane, vx: 0, vy: 0, life: 0.3, maxLife: 0.3, color: '#ffffff' });
+}
+
 function fireCrossbow(r) {
   const count = 9;
   for (let i = 0; i < count; i++) {
@@ -832,12 +851,20 @@ function fireCrossbow(r) {
       speed: 900 + rand(-40, 40), life: 0.9, color: '#28f2ff',
     });
   }
+  spawnMuzzleBurst(r.x, r.lane, '#28f2ff', 24);
+  triggerScreenFlash('#28f2ff', 0.22, 1.4);
+  shakeScreen(5);
 }
 function fireBigMissile(r) {
   state.projectiles.push({
     type: 'big_missile', owner: r, x: r.x, lane: r.lane, laneOffset: 0,
     speed: 560, life: 3.0, color: '#ff3b57', big: true,
   });
+  spawnMuzzleBurst(r.x, r.lane, '#ffb930', 30);
+  for (let i = 0; i < 14; i++) spawnSmoke(r.x - rand(0, 30), r.lane);
+  triggerScreenFlash('#ff3b57', 0.3, 1.1);
+  shakeScreen(9);
+  triggerHitStop();
 }
 function fireHomingMissiles(r) {
   const targets = state.racers.filter(o => o !== r);
@@ -848,6 +875,9 @@ function fireHomingMissiles(r) {
       target: targets[i % targets.length], smokeTimer: 0,
     });
   }
+  spawnMuzzleBurst(r.x, r.lane, '#ffb930', 40);
+  triggerScreenFlash('#ffb930', 0.28, 1.2);
+  shakeScreen(10);
 }
 function fireLaser(r) {
   state.projectiles.push({
@@ -861,10 +891,16 @@ function fireLaser(r) {
       stunRacer(o, CONFIG.STUN_TIME, 'fall');
     }
   }
-  shakeScreen(6);
+  spawnMuzzleBurst(r.x, r.lane, '#ffffff', 26);
+  triggerScreenFlash('#ffffff', 0.4, 1.6);
+  shakeScreen(14);
+  triggerHitStop();
 }
 function placeTrap(r) {
   state.traps.push({ x: r.x - 60, lane: r.lane, owner: r, triggered: false });
+  // 設置時にも小さな砂煙と閃光を出す
+  for (let i = 0; i < 10; i++) spawnSmoke(r.x - 60 + rand(-10, 10), r.lane);
+  state.particles.push({ kind: 'flash', x: r.x - 60, lane: r.lane, vx: 0, vy: 0, life: 0.2, maxLife: 0.2, color: '#ff3b57' });
 }
 
 /* ============================== 発射物の更新 ============================== */
@@ -1027,6 +1063,30 @@ function render() {
   drawParticles(w, h);
 
   ctx.restore();
+
+  drawScreenFlash(w, h);
+}
+
+/* ============================== 画面フラッシュ（アイテム使用時の派手な演出用） ==============================
+   武器発動の瞬間に画面全体を一瞬だけ発光させて「使った！」という手応えを強く出す。
+   カメラのシェイクとは独立して、常に画面座標（スクリーン全体）に対して描画する。
+   ================================================================================================ */
+function triggerScreenFlash(color, alpha, decay) {
+  state.screenFlashes = state.screenFlashes || [];
+  state.screenFlashes.push({ color, alpha, decay, t: 0 });
+}
+function drawScreenFlash(w, h) {
+  if (!state.screenFlashes || !state.screenFlashes.length) return;
+  for (const f of state.screenFlashes) {
+    f.t += 1 / 60;
+    const a = Math.max(0, f.alpha - f.t * f.decay);
+    if (a <= 0) continue;
+    ctx.globalAlpha = a;
+    ctx.fillStyle = f.color;
+    ctx.fillRect(0, 0, w, h);
+    ctx.globalAlpha = 1;
+  }
+  state.screenFlashes = state.screenFlashes.filter(f => f.alpha - f.t * f.decay > 0);
 }
 
 function drawBackground(w, h) {
@@ -1201,21 +1261,21 @@ const OBSTACLE_DRAWERS = {
   },
   crater(sx, gy) {
     ctx.fillStyle = '#4a3a28';
-    ctx.beginPath(); ctx.ellipse(sx, gy, 34, 13, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.ellipse(sx, gy, 34, 10, 0, 0, Math.PI * 2); ctx.fill();
     ctx.fillStyle = '#0e0a06';
-    ctx.beginPath(); ctx.ellipse(sx, gy + 1, 24, 9, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.ellipse(sx, gy, 24, 7, 0, 0, Math.PI * 2); ctx.fill();
     ctx.strokeStyle = 'rgba(255,140,60,0.25)'; ctx.lineWidth = 2;
-    ctx.beginPath(); ctx.ellipse(sx, gy, 30, 11.5, 0, 0, Math.PI * 2); ctx.stroke();
+    ctx.beginPath(); ctx.ellipse(sx, gy, 30, 9, 0, 0, Math.PI * 2); ctx.stroke();
   },
   oil(sx, gy) {
     ctx.fillStyle = 'rgba(10,10,18,0.85)';
-    ctx.beginPath(); ctx.ellipse(sx, gy, 34, 13, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.ellipse(sx, gy, 34, 10, 0, 0, Math.PI * 2); ctx.fill();
     const t = performance.now() / 500;
     const colors = ['rgba(255,80,150,0.35)', 'rgba(80,180,255,0.35)', 'rgba(120,255,150,0.3)'];
     colors.forEach((c, i) => {
       ctx.strokeStyle = c; ctx.lineWidth = 2;
       ctx.beginPath();
-      ctx.ellipse(sx + Math.sin(t + i) * 4, gy, 24 - i * 6, 7 - i, 0, 0, Math.PI * 2);
+      ctx.ellipse(sx + Math.sin(t + i) * 4, gy, 24 - i * 6, 6 - i * 0.7, 0, 0, Math.PI * 2);
       ctx.stroke();
     });
   },
@@ -1269,10 +1329,30 @@ function drawObstacles(w, h) {
   for (const o of state.obstacles) {
     const sx = worldToScreenX(o.x);
     if (sx < -100 || sx > w + 100) continue;
-    const gy = laneY(o.lane, h) + 16; // 接地面（レーン床）の高さ
+
+    const laneTop = laneY(o.lane, h) - (h * 0.46 / CONFIG.LANES) / 2;
+    const laneBottom = laneY(o.lane, h) + (h * 0.46 / CONFIG.LANES) / 2;
+    const highlightW = Math.max(50, o.type.width * 0.45);
+
+    // どのレーンの障害物かひと目で分かるよう、そのレーンの床全体を
+    // 障害物の色でうっすら照らすハイライト帯を先に描く
+    ctx.fillStyle = hexToRgba(o.type.color, 0.16);
+    ctx.fillRect(sx - highlightW / 2, laneTop + 2, highlightW, laneBottom - laneTop - 4);
+
+    // 接地面は「レーン下端寄りだが、隣のレーンとの境界線には掛からない」高さに固定
+    const gy = laneBottom - 9;
     const drawer = OBSTACLE_DRAWERS[o.type.key];
     if (drawer) drawer(sx, gy);
   }
+}
+
+/* '#rrggbb' 形式の色を rgba(...) 文字列に変換するヘルパー（レーンハイライト用） */
+function hexToRgba(hex, alpha) {
+  const h6 = hex.replace('#', '');
+  const r = parseInt(h6.substring(0, 2), 16);
+  const g = parseInt(h6.substring(2, 4), 16);
+  const b = parseInt(h6.substring(4, 6), 16);
+  return `rgba(${r},${g},${b},${alpha})`;
 }
 
 function drawItemBoxesAndTraps(w, h) {
@@ -1283,7 +1363,7 @@ function drawItemBoxesAndTraps(w, h) {
     if (sx < -100 || sx > w + 100) continue;
     const sy = laneY(box.lane, h);
     const pulse = 1 + Math.sin(now / 160 + box.x) * 0.18;
-    const size = 34 * pulse; // アイテムボックスを大きく強調
+    const size = 21 * pulse; // サイズは元の大きさに戻す（派手さは使用時のアクション側で表現）
 
     ctx.save();
     ctx.translate(sx, sy);
