@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ゲームコレクション</title>
+
+    <style>
+        body{
+            margin:0;
+            background:#1b1b1b;
+            color:white;
+            font-family:sans-serif;
+            text-align:center;
+        }
+
+        h1{
+            margin-top:40px;
+            font-size:42px;
+        }
+
+        p{
+            color:#bbb;
+            margin-bottom:40px;
+        }
+
+        .container{
+            display:flex;
+            justify-content:center;
+            gap:30px;
+            flex-wrap:wrap;
+            padding:20px;
+        }
+
+        .card{
+            width:280px;
+            background:#2d2d2d;
+            border-radius:15px;
+            padding:25px;
+            transition:.2s;
+            text-decoration:none;
+            color:white;
+            box-shadow:0 8px 20px rgba(0,0,0,.3);
+        }
+
+        .card:hover{
+            transform:translateY(-8px);
+            background:#3d3d3d;
+        }
+
+        .emoji{
+            font-size:60px;
+            margin-bottom:15px;
+        }
+
+        h2{
+            margin:10px 0;
+        }
+
+        .desc{
+            color:#ccc;
+            font-size:15px;
+            line-height:1.6;
+        }
+    </style>
+</head>
+
+<body>
+
+<h1>🎮 ゲームコレクション</h1>
+
+<p>遊びたいゲームを選んでください</p>
+
+<div class="container">
+
+    <a class="card" href="ar_action/ar_action.html">
+        <div class="emoji">🤖</div>
+        <h2>ARアクション</h2>
+        <div class="desc">
+            インカメラを使ったARアクションゲーム
+        </div>
+    </a>
+
+    <a class="card" href="race_game/index.html">
+        <div class="emoji">🏁</div>
+        <h2>ロボットレース</h2>
+        <div class="desc">
+            エキサイトバイク風ロボットレースゲーム
+        </div>
+    </a>
+
+</div>
+
+</body>
+</html>
