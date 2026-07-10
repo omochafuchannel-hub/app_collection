@@ -1,16 +1,86 @@
 <!DOCTYPE html>
 <html lang="ja">
 <head>
-  <meta charset="UTF-8">
-  <title>App Collection</title>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<title>PIXEL TOWN — 街を歩いて、行き先を選ぼう。</title>
+<meta name="description" content="街そのものがメニューになっているゲーム風ホームページ。街を歩いて、行きたい建物のドアをノックしよう。">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=DotGothic16&family=Press+Start+2P&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
 </head>
 <body>
 
-  <h1>アプリ一覧</h1>
+  <div id="game-root">
 
-  <a href="ar_action/ar_action.html">
-    AR Actionへ
-  </a>
+    <!-- Canvas: the entire town is rendered here -->
+    <canvas id="game-canvas"></canvas>
 
+    <!-- Loading veil -->
+    <div id="loading-veil">
+      <div class="loading-box">
+        <div class="loading-title">PIXEL TOWN</div>
+        <div class="loading-bar"><div class="loading-bar-fill" id="loading-bar-fill"></div></div>
+        <div class="loading-label" id="loading-label">NOW LOADING...</div>
+      </div>
+    </div>
+
+    <!-- Top-left HUD: quest-log style hint -->
+    <div id="hud-hint" class="pixel-panel hidden">
+      <span id="hud-hint-text">近くの建物にちかづいて、ドアをクリック</span>
+    </div>
+
+    <!-- Mobile virtual joystick -->
+    <div id="joystick-zone" class="hidden" aria-hidden="true">
+      <div id="joystick-base">
+        <div id="joystick-stick"></div>
+      </div>
+    </div>
+
+    <!-- Mobile action hint (tap door) -->
+    <div id="mobile-tap-hint" class="pixel-panel hidden">ドアをタップ</div>
+
+    <!-- Title screen overlay (logo + press start prompt) -->
+    <div id="title-overlay" class="hidden">
+      <div id="title-logo">PIXEL TOWN</div>
+      <div id="title-sub">— 街を歩いて、行き先を選ぼう —</div>
+      <div id="title-prompt">PRESS START</div>
+    </div>
+
+    <!-- Game-style confirm dialog (JRPG message window) -->
+    <div id="dialog-overlay" class="hidden" role="dialog" aria-modal="true" aria-labelledby="dialog-message">
+      <div id="dialog-box">
+        <div id="dialog-header"><span id="dialog-title"></span></div>
+        <p id="dialog-message"></p>
+        <ul id="dialog-choices">
+          <li data-choice="yes"><span class="cursor">▶</span> はい</li>
+          <li data-choice="no"><span class="cursor">▶</span> いいえ</li>
+        </ul>
+      </div>
+    </div>
+
+    <!-- Footer credit / a11y skip links -->
+    <div id="footer-credits">
+      <a href="#building-links" class="visually-hidden">建物リンク一覧へスキップ</a>
+    </div>
+
+    <!-- Fallback / accessible link list (visually hidden, screen-reader + no-js fallback) -->
+    <nav id="building-links" aria-label="街の建物リンク一覧">
+      <a data-role="link-software" href="#">ソフトウェアエンジニアリング</a>
+      <a data-role="link-music" href="#">音楽</a>
+      <a data-role="link-toy" href="#">ブロック（おもちゃ）</a>
+      <a data-role="link-podcast" href="#">ポッドキャスト</a>
+      <a data-role="link-game" href="#">ゲーム</a>
+    </nav>
+
+    <noscript>
+      <div class="noscript-box">
+        このページはJavaScriptを使用したゲーム風ホームページです。閲覧にはJavaScriptを有効にしてください。
+      </div>
+    </noscript>
+
+  </div>
+
+  <script src="script.js"></script>
 </body>
 </html>
