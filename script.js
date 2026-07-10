@@ -9,7 +9,7 @@ const softwareURL = "https://example.com/software";
 const musicURL    = "https://example.com/music";
 const toyURL      = "https://example.com/toys";
 const podcastURL  = "https://example.com/podcast";
-const gameURL     = "https://example.com/games";
+const gameURL     = "https://omochafuchannel-hub.github.io/app_collection/game/";
 
 /* =====================================================================================
    0. 定数・ユーティリティ
