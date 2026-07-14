@@ -30,6 +30,15 @@ html, body{
   overflow: hidden;
   -webkit-tap-highlight-color: transparent;
   user-select: none;
+  /* iOS(特にホーム画面追加後のスタンドアロン表示)でページ全体が
+     ゴムのように伸び縮み(ラバーバンドスクロール)すると、見た目の位置と
+     実際のタップ判定位置がズレる原因になるため、ページ自体を完全に
+     固定してスクロール・バウンスを起こさないようにする */
+  position: fixed;
+  inset: 0;
+  touch-action: none;
+  overscroll-behavior: none;
+  -webkit-text-size-adjust: 100%;
 }
 
 .hidden{ display:none !important; }
@@ -44,6 +53,7 @@ html, body{
    ------------------------------------------------------------------ */
 #settingsScreen{
   overflow-y: auto;
+  touch-action: pan-y; /* 設定画面だけは縦スクロールを許可する */
   background:
     radial-gradient(ellipse at 50% -10%, #1c2440 0%, var(--bg-deep) 60%);
   padding: 24px 16px 60px;
@@ -195,7 +205,13 @@ html, body{
 .touch-controls{
   position:absolute; bottom:0; left:0; right:0;
   display:flex; justify-content:space-between; align-items:flex-end;
-  padding: 16px; pointer-events:none;
+  padding: 16px;
+  /* 横向きのノッチ・ホームインジケーター部分にボタンが被って
+     タップ判定がズレて見えることがあるため、セーフエリア分だけ余白を足す */
+  padding-left: max(16px, env(safe-area-inset-left));
+  padding-right: max(16px, env(safe-area-inset-right));
+  padding-bottom: max(16px, env(safe-area-inset-bottom));
+  pointer-events:none;
 }
 .touch-left, .touch-right{ display:flex; gap:12px; pointer-events:auto; align-items:flex-end; }
 .touch-left{ flex-direction:column; }
