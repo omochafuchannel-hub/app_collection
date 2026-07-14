@@ -577,10 +577,54 @@ function readPlayerInput() {
 const canvas = document.getElementById('gameCanvas');
 const ctx = canvas.getContext('2d');
 function resizeCanvas() {
-  canvas.width = window.innerWidth;
-  canvas.height = window.innerHeight;
+  // iOS の visualViewport（実際に見えている領域）を優先的に使う。
+  // window.innerWidth/Height だけに頼ると、ホーム画面追加後のスタンドアロン
+  // 表示でアドレスバー分の高さがズレて計算され、タップ位置と描画位置が
+  // 微妙にズレて見える原因になることがあるため。
+  const vv = window.visualViewport;
+  canvas.width = vv ? Math.round(vv.width) : window.innerWidth;
+  canvas.height = vv ? Math.round(vv.height) : window.innerHeight;
 }
 window.addEventListener('resize', resizeCanvas);
+if (window.visualViewport) {
+  window.visualViewport.addEventListener('resize', resizeCanvas);
+}
+
+/* ----------------------------------------------------------------------
+   iOSのホーム画面追加(スタンドアロンPWA)モードで発生しやすい
+   「実際にタップした位置より少し上(または下)が反応する」ズレ対策。
+
+   主な原因は、ページがゴムのように伸び縮みする"ラバーバンドスクロール"や
+   Safariのアドレスバーの出し引きによって、ページ自体が数十px単位で
+   スクロールしてしまい、その状態で座標計算がズレることにある。
+   そのため、ゲーム画面(タッチ操作エリア)では意図しないスクロール・
+   ズームインタラクションを徹底的に無効化し、万一スクロールしてしまっても
+   毎回 (0,0) に戻すようにしている。
+   ---------------------------------------------------------------------- */
+function lockScrollPosition() {
+  window.scrollTo(0, 0);
+}
+window.addEventListener('load', lockScrollPosition);
+window.addEventListener('orientationchange', () => {
+  setTimeout(() => { lockScrollPosition(); resizeCanvas(); }, 300);
+});
+window.addEventListener('resize', lockScrollPosition);
+document.addEventListener('scroll', lockScrollPosition, { passive: true });
+
+// ゲーム画面・リザルト画面上でのピンチズーム／二本指操作／意図しないスクロールを抑止
+// (設定画面は #settingsScreen 側で touch-action: pan-y を許可しているのでここでは除外する)
+document.addEventListener('touchmove', (e) => {
+  if (e.target.closest('#settingsScreen')) return;
+  e.preventDefault();
+}, { passive: false });
+
+// ダブルタップによるズームも誤タップ判定の原因になるため防止する
+let _lastTouchEnd = 0;
+document.addEventListener('touchend', (e) => {
+  const now = Date.now();
+  if (now - _lastTouchEnd <= 350) e.preventDefault();
+  _lastTouchEnd = now;
+}, { passive: false });
 
 /* レーンのY座標を計算（トラックは画面の中央帯に描画） */
 function laneY(laneIndex, h) {
@@ -1633,7 +1677,9 @@ function showResults() {
 function startPodiumAnimation(ranked) {
   SFX.victory();
   const pc = document.getElementById('podiumCanvas');
-  pc.width = window.innerWidth; pc.height = window.innerHeight;
+  const vv = window.visualViewport;
+  pc.width = vv ? Math.round(vv.width) : window.innerWidth;
+  pc.height = vv ? Math.round(vv.height) : window.innerHeight;
   const pctx = pc.getContext('2d');
   const top3 = ranked.slice(0, 3);
   const confetti = [];
