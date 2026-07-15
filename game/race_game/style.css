@@ -185,6 +185,8 @@ html, body{
 .hud-label{ font-size:9px; color:var(--text-dim); letter-spacing:1px; }
 .hud-box span:last-child{ font-size:15px; color:var(--cyan); font-family:var(--font-display); margin-top:2px; }
 .hud-rank span:last-child{ color: var(--amber); }
+.hud-item{ min-width: 128px; }
+.hud-item span:last-child{ font-size: 10px; font-family: var(--font-body); white-space: nowrap; }
 
 .turbo-wrap{
   position:absolute; top:10px; right:10px; width:150px;
