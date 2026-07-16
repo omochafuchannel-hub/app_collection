@@ -27,20 +27,46 @@
 </div>
 
 <!-- ============================================================ -->
-<!-- 1. レース設定画面（ゲーム開始前に必ず表示される）                    -->
+<!-- 0. オープニング画面（タイトルロゴ・背景はJS側でPNGを指定）              -->
 <!-- ============================================================ -->
-<div id="settingsScreen" class="screen">
+<div id="openingScreen" class="screen">
+  <div id="openingBg" class="opening-bg"></div>
+  <div class="opening-overlay">
+    <img id="openingLogo" class="opening-logo hidden" alt="ROBO RUSH">
+    <div id="openingLogoFallback" class="game-title opening-logo-fallback">ROBO<span class="accent">RUSH</span></div>
+    <button id="openingStartBtn" class="opening-tap">TAP TO START</button>
+  </div>
+</div>
+
+<!-- ============================================================ -->
+<!-- 1. キャラクター選択画面（ゲーム開始前に必ず表示される）                 -->
+<!-- ============================================================ -->
+<div id="settingsScreen" class="screen hidden">
   <div class="scanlines"></div>
   <header class="title-block">
-    <h1 class="game-title">ROBO<span class="accent">RUSH</span></h1>
-    <p class="game-sub">// RETRO ROBOT RACING SETUP //</p>
+    <h1 class="game-title">CHARACTER<span class="accent">SELECT</span></h1>
+    <p class="game-sub">// CHOOSE YOUR ROBOT //</p>
   </header>
 
-  <div id="entryList" class="entry-list"><!-- JSでカード4枚(PLAYER, CPU1-3)を生成 --></div>
+  <!-- 10体のロボット + カスタム画像枠 をJSで生成 -->
+  <div id="rosterGrid" class="roster-grid"></div>
+
+  <!-- 選んだロボットのプレビューと名前入力 -->
+  <div class="player-preview-row">
+    <div id="playerPreview" class="drop-zone player-preview">
+      <div class="dz-placeholder">ロボットを選択してください</div>
+      <img id="playerPreviewImg" style="display:none;">
+    </div>
+    <div class="player-preview-fields">
+      <label class="field-label">PLAYER NAME</label>
+      <input id="playerNameInput" class="name-input" maxlength="14" value="PLAYER">
+      <p class="hint">上のリストから選択、または「CUSTOM」から自分の画像をアップロードできます。</p>
+    </div>
+  </div>
 
   <div class="start-row">
     <button id="startBtn" class="btn-start">GAME START</button>
-    <p class="hint">画像は自由に差し替えできます。未設定の場合は既定のロボットが使用されます。</p>
+    <p class="hint">対戦相手の3体はこの中からランダムで選ばれます。</p>
   </div>
 </div>
 
@@ -80,15 +106,11 @@
 </div>
 
 <!-- ============================================================ -->
-<!-- 3. リザルト／表彰式画面                                            -->
+<!-- 3. 表彰式画面（結果一覧は表示せず、表彰台の見た目だけで順位を伝える）      -->
 <!-- ============================================================ -->
 <div id="resultScreen" class="screen hidden">
   <canvas id="podiumCanvas"></canvas>
-  <div class="result-panel">
-    <h2 class="result-title">RACE RESULT</h2>
-    <ol id="resultList" class="result-list"></ol>
-    <button id="restartBtn" class="btn-start">RACE AGAIN</button>
-  </div>
+  <button id="restartBtn" class="btn-start podium-restart">RACE AGAIN</button>
 </div>
 
 <script src="script.js"></script>
