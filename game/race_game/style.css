@@ -49,7 +49,49 @@ html, body{
 }
 
 /* ------------------------------------------------------------------
-   1. 設定画面
+   0. オープニング画面
+   ------------------------------------------------------------------ */
+#openingScreen{
+  background:#000;
+  display:flex; align-items:center; justify-content:center;
+  cursor:pointer;
+}
+.opening-bg{
+  position:absolute; inset:0;
+  background-size:cover; background-position:center;
+  background-color:#0b0d14;
+}
+.opening-bg::after{
+  content:'';
+  position:absolute; inset:0;
+  background: linear-gradient(180deg, rgba(0,0,0,0.15) 0%, rgba(5,6,11,0.75) 100%);
+}
+.opening-overlay{
+  position:relative; z-index:2;
+  display:flex; flex-direction:column; align-items:center; gap:34px;
+}
+.opening-logo{
+  max-width: min(70vw, 560px);
+  max-height: 42vh;
+  filter: drop-shadow(0 0 22px rgba(40,242,255,0.5));
+}
+.opening-logo-fallback{ font-size: clamp(32px, 8vw, 56px); }
+.opening-tap{
+  font-family: var(--font-display);
+  font-size: 14px; letter-spacing:2px;
+  color: var(--amber);
+  background:none; border:2px solid var(--amber);
+  padding: 12px 28px; border-radius: 8px;
+  animation: tapPulse 1.4s ease-in-out infinite;
+  cursor:pointer;
+}
+@keyframes tapPulse{
+  0%, 100%{ opacity:1; box-shadow:0 0 6px rgba(255,185,48,0.4); }
+  50%{ opacity:0.55; box-shadow:0 0 20px rgba(255,185,48,0.8); }
+}
+
+/* ------------------------------------------------------------------
+   1. キャラクター選択画面
    ------------------------------------------------------------------ */
 #settingsScreen{
   overflow-y: auto;
@@ -88,31 +130,54 @@ html, body{
   font-size: 12px;
 }
 
-.entry-list{
-  width:100%; max-width: 920px;
+.roster-grid{
+  width:100%; max-width: 980px;
   display:grid;
-  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
-  gap: 16px;
+  grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
+  gap: 10px;
+  margin-bottom: 22px;
 }
-
-.entry-card{
+.roster-tile{
   background: linear-gradient(180deg, var(--bg-panel), #0f1220);
   border: 2px solid var(--line);
   border-radius: 10px;
-  padding: 14px;
-  position: relative;
-  box-shadow: 0 0 0 1px rgba(40,242,255,0.05) inset;
+  padding: 8px;
+  cursor:pointer;
+  text-align:center;
+  transition: border-color .15s, transform .1s, box-shadow .15s;
 }
-.entry-card.player{ border-color: var(--amber); box-shadow: 0 0 14px rgba(255,185,48,0.25); }
-.entry-card .entry-label{
-  font-family: var(--font-display);
-  font-size: 10px;
-  color: var(--amber);
-  letter-spacing: 1px;
+.roster-tile:active{ transform: scale(0.96); }
+.roster-tile.selected{
+  border-color: var(--amber);
+  box-shadow: 0 0 16px rgba(255,185,48,0.5);
+}
+.roster-tile img{
+  width:100%; height:64px; object-fit:contain;
+  image-rendering: pixelated;
+  margin-bottom:6px;
+}
+.roster-tile .roster-name{
+  font-size: 10px; color: var(--text-main); letter-spacing:0.5px;
+  white-space: nowrap; overflow:hidden; text-overflow:ellipsis;
+}
+.roster-tile.custom-tile{ border-style:dashed; }
+.roster-tile.custom-tile .roster-name{ color: var(--cyan); }
+
+.player-preview-row{
+  width:100%; max-width: 640px;
+  display:flex; gap:16px; align-items:stretch;
   margin-bottom: 10px;
-  display:block;
+  flex-wrap: wrap;
+  justify-content:center;
 }
-.entry-card.cpu .entry-label{ color: var(--cyan); }
+.player-preview{
+  width:120px; height:110px; flex-shrink:0;
+}
+.player-preview-fields{ flex:1; min-width:200px; text-align:left; }
+.field-label{
+  display:block; font-family: var(--font-display); font-size:9px;
+  color: var(--amber); letter-spacing:1px; margin-bottom:6px;
+}
 
 .drop-zone{
   height: 120px;
@@ -230,27 +295,14 @@ html, body{
 .touch-btn:active{ background: rgba(40,242,255,0.35); }
 
 /* ------------------------------------------------------------------
-   3. リザルト画面
+   3. 表彰式画面
    ------------------------------------------------------------------ */
 #resultScreen{ background:#000; }
 #podiumCanvas{ position:absolute; inset:0; width:100%; height:100%; }
-.result-panel{
-  position:absolute; left:50%; bottom:26px; transform:translateX(-50%);
-  background: rgba(11,13,20,0.85); border:2px solid var(--cyan);
-  border-radius:10px; padding: 16px 26px; text-align:center;
-  box-shadow: 0 0 24px rgba(40,242,255,0.35);
-  max-width: 92vw;
+.podium-restart{
+  position:absolute; left:50%; bottom:22px; transform:translateX(-50%);
+  padding: 12px 26px; font-size:13px;
 }
-.result-title{
-  font-family: var(--font-display); font-size:18px; color:var(--amber);
-  letter-spacing:2px; margin: 0 0 10px;
-}
-.result-list{ list-style:none; margin:0; padding:0; text-align:left; }
-.result-list li{
-  font-size:14px; padding:4px 0; display:flex; gap:10px; align-items:center;
-  border-bottom: 1px solid var(--line);
-}
-.result-list .pos{ color:var(--amber); width:28px; font-family:var(--font-display); font-size:12px; }
 
 /* ------------------------------------------------------------------
    縦向き警告オーバーレイ（本ゲームは横向き専用）
