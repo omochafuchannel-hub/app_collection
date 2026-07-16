@@ -62,6 +62,8 @@ const CONFIG = {
 
 /* 4色のロボットIDに対応する既定カラー（画像未設定時のプレースホルダー用） */
 const DEFAULT_COLORS = ['#ffb930', '#28f2ff', '#ff4fd8', '#63ff8a'];
+/* ROSTER(10体)用の既定カラー（プレースホルダー画像やCPUの色分けに使用） */
+const ROSTER_COLORS = ['#ffb930', '#28f2ff', '#ff4fd8', '#63ff8a', '#ff3b57', '#a685ff', '#ffe14d', '#4de0c0', '#ff8a4d', '#8dff4d'];
 
 /* ============================== 外部アセット画像 ==============================
    ここに指定したパスの画像が用意されていれば、ボーガンの矢／ミサイル／トラップの
@@ -75,6 +77,8 @@ const DEFAULT_COLORS = ['#ffb930', '#28f2ff', '#ff4fd8', '#63ff8a'];
      assets/missile_homing.PNG  ... 追跡ミサイル（1発分）の画像　※無ければ missile_big.PNG を代用
      assets/trap.PNG            ... トラップ（地雷）の画像
      assets/laser_orb.PNG       ... レーザー武器に使う「円形の光の玉」の画像（例：発光する球体）
+     assets/title_logo.PNG      ... オープニング画面のタイトルロゴ
+     assets/title_bg.PNG        ... オープニング画面の背景画像
    推奨サイズ: 横長の乗り物系画像で 64x32px 前後（正方形でも自動調整されます）
    ================================================================================ */
 const ASSET_PATHS = {
@@ -83,6 +87,8 @@ const ASSET_PATHS = {
   missileHoming: 'assets/missile_homing.PNG',
   trap: 'assets/trap.PNG',
   laserOrb: 'assets/laser_orb.PNG',
+  titleLogo: 'assets/title_logo.PNG',
+  titleBg: 'assets/title_bg.PNG',
 };
 const assetImages = {};
 function loadAssetImage(key, path) {
@@ -96,6 +102,38 @@ function loadAssetImage(key, path) {
 Object.entries(ASSET_PATHS).forEach(([k, p]) => loadAssetImage(k, p));
 function assetReady(key) {
   const img = assetImages[key];
+  return img && img._ready && img.naturalWidth > 0;
+}
+
+/* ============================== キャラクター選択用ロボット図鑑（10体） ==============================
+   キャラクター選択画面に並ぶ10体のプリセットロボット。
+   画像ファイル名・ロボット名はここで自由に編集できます。
+   画像は assets/robot1.PNG 〜 assets/robot10.PNG を用意してください
+   （未用意の場合はこれまで通り自動生成のプレースホルダー画像で表示されます）。
+   ================================================================================================ */
+const ROSTER = [
+  { file: 'assets/robot1.PNG', name: 'IRON-01' },
+  { file: 'assets/robot2.PNG', name: 'HELL DOG' },
+  { file: 'assets/robot3.PNG', name: 'MECHA KING' },
+  { file: 'assets/robot4.PNG', name: 'BAIKIN-X' },
+  { file: 'assets/robot5.PNG', name: 'METAL REX' },
+  { file: 'assets/robot6.PNG', name: 'SPHINX' },
+  { file: 'assets/robot7.PNG', name: 'VOLT GEAR' },
+  { file: 'assets/robot8.PNG', name: 'CRIMSON FANG' },
+  { file: 'assets/robot9.PNG', name: 'BLUE FALCON' },
+  { file: 'assets/robot10.PNG', name: 'TITANOSAUR' },
+];
+/* ROSTER 各体の画像を読み込んでおく。用意されていなければ generatePlaceholderRobot() に自動フォールバックする */
+const ROSTER_IMAGES = ROSTER.map((entry, i) => {
+  const img = new Image();
+  img._ready = false;
+  img.onload = () => { img._ready = true; };
+  img.onerror = () => { img._ready = false; };
+  img.src = entry.file;
+  return img;
+});
+function rosterImageReady(i) {
+  const img = ROSTER_IMAGES[i];
   return img && img._ready && img.naturalWidth > 0;
 }
 /* homing 用画像が無ければ missileBig を代用できるようにするヘルパー */
@@ -294,81 +332,39 @@ const state = {
   lastTime: 0,
   hitStopTimer: 0,
   keys: {},
+  // プレイヤーがキャラクター選択画面で選んだ内容
+  playerSelection: { rosterIndex: null, customImg: null },
 };
 
-/* ============================== 設定画面構築 ============================== */
-function buildSettingsUI() {
-  const list = document.getElementById('entryList');
-  list.innerHTML = '';
-  state.entries.forEach((entry, idx) => {
-    const card = document.createElement('div');
-    card.className = 'entry-card ' + (entry.role === 'player' ? 'player' : 'cpu');
+/* ============================== 0. オープニング画面 ============================== */
+(function setupOpeningScreen() {
+  // タイトルロゴ・背景はJSでファイル名を指定（アセットが無ければ自動でテキストロゴにフォールバック）
+  const bgEl = document.getElementById('openingBg');
+  bgEl.style.backgroundImage = `url('${ASSET_PATHS.titleBg}')`;
 
-    const label = document.createElement('span');
-    label.className = 'entry-label';
-    label.textContent = entry.role === 'player' ? 'PLAYER' : `CPU ${idx}`;
-    card.appendChild(label);
-
-    // 画像ドロップゾーン（クリックでファイル選択、ドラッグ&ドロップにも対応）
-    const dz = document.createElement('div');
-    dz.className = 'drop-zone';
-    const placeholder = document.createElement('div');
-    placeholder.className = 'dz-placeholder';
-    placeholder.textContent = 'クリック または 画像をドラッグ＆ドロップ';
-    dz.appendChild(placeholder);
-
-    const previewImg = document.createElement('img');
-    previewImg.style.display = 'none';
-    dz.appendChild(previewImg);
-
-    const fileInput = document.createElement('input');
-    fileInput.type = 'file';
-    fileInput.accept = 'image/*';
-    dz.appendChild(fileInput);
-
-    function applyFile(file) {
-      if (!file || !file.type.startsWith('image/')) return;
-      const reader = new FileReader();
-      reader.onload = (e) => {
-        entry.img = new Image();
-        entry.img.src = e.target.result;
-        previewImg.src = e.target.result;
-        previewImg.style.display = 'block';
-        placeholder.style.display = 'none';
-      };
-      reader.readAsDataURL(file);
+  const logoImg = document.getElementById('openingLogo');
+  const logoFallback = document.getElementById('openingLogoFallback');
+  logoImg.src = ASSET_PATHS.titleLogo;
+  logoImg.addEventListener('load', () => {
+    if (logoImg.naturalWidth > 0) {
+      logoImg.classList.remove('hidden');
+      logoFallback.classList.add('hidden');
     }
-
-    dz.addEventListener('click', () => fileInput.click());
-    fileInput.addEventListener('change', (e) => applyFile(e.target.files[0]));
-    dz.addEventListener('dragover', (e) => { e.preventDefault(); dz.classList.add('dragover'); });
-    dz.addEventListener('dragleave', () => dz.classList.remove('dragover'));
-    dz.addEventListener('drop', (e) => {
-      e.preventDefault(); dz.classList.remove('dragover');
-      if (e.dataTransfer.files && e.dataTransfer.files[0]) applyFile(e.dataTransfer.files[0]);
-    });
-
-    card.appendChild(dz);
-
-    // 名前入力
-    const nameInput = document.createElement('input');
-    nameInput.className = 'name-input';
-    nameInput.maxLength = 14;
-    nameInput.value = entry.name;
-    nameInput.addEventListener('input', () => { entry.name = nameInput.value || entry.name; });
-    card.appendChild(nameInput);
-
-    list.appendChild(card);
   });
-}
+  logoImg.addEventListener('error', () => {
+    logoImg.classList.add('hidden');
+    logoFallback.classList.remove('hidden');
+  });
 
-document.getElementById('startBtn').addEventListener('click', () => {
-  SFX.ensureAudio(); // ユーザー操作のタイミングでAudioContextを起動（自動再生制限対策）
-  tryLockLandscape();
-  document.getElementById('settingsScreen').classList.add('hidden');
-  document.getElementById('gameContainer').classList.remove('hidden');
-  initRace();
-});
+  function goToCharacterSelect() {
+    SFX.ensureAudio(); // 最初のユーザー操作のタイミングでAudioContextを起動（自動再生制限対策）
+    tryLockLandscape();
+    document.getElementById('openingScreen').classList.add('hidden');
+    document.getElementById('settingsScreen').classList.remove('hidden');
+  }
+  document.getElementById('openingStartBtn').addEventListener('click', goToCharacterSelect);
+  document.getElementById('openingScreen').addEventListener('click', goToCharacterSelect);
+})();
 
 /* 横向き固定のベストエフォート処理。対応ブラウザ・PWA以外では失敗しても無視する */
 function tryLockLandscape() {
@@ -385,6 +381,133 @@ function tryLockLandscape() {
     }
   } catch (e) { /* ロックできない環境では無視。CSSのローテート案内で対応 */ }
 }
+
+/* ============================== 1. キャラクター選択画面構築 ============================== */
+function buildCharacterSelectUI() {
+  const grid = document.getElementById('rosterGrid');
+  grid.innerHTML = '';
+  const previewImg = document.getElementById('playerPreviewImg');
+  const previewPlaceholder = document.querySelector('#playerPreview .dz-placeholder');
+  const nameInput = document.getElementById('playerNameInput');
+
+  function updatePreview(src) {
+    previewImg.src = src;
+    previewImg.style.display = 'block';
+    previewPlaceholder.style.display = 'none';
+  }
+
+  function selectTile(tileEl) {
+    grid.querySelectorAll('.roster-tile').forEach(t => t.classList.remove('selected'));
+    tileEl.classList.add('selected');
+  }
+
+  // 10体のプリセットロボット
+  ROSTER.forEach((entry, i) => {
+    const tile = document.createElement('div');
+    tile.className = 'roster-tile';
+
+    const img = document.createElement('img');
+    img.src = entry.file;
+    img.alt = entry.name;
+    // 画像が未用意の場合はプレースホルダー画像に自動で差し替える
+    img.addEventListener('error', () => { img.src = generatePlaceholderRobot(ROSTER_COLORS[i % ROSTER_COLORS.length]); });
+    tile.appendChild(img);
+
+    const nameEl = document.createElement('div');
+    nameEl.className = 'roster-name';
+    nameEl.textContent = entry.name;
+    tile.appendChild(nameEl);
+
+    tile.addEventListener('click', () => {
+      state.playerSelection = { rosterIndex: i, customImg: null };
+      selectTile(tile);
+      updatePreview(img.src);
+      nameInput.value = entry.name;
+    });
+    grid.appendChild(tile);
+  });
+
+  // カスタム画像アップロード用タイル
+  const customTile = document.createElement('div');
+  customTile.className = 'roster-tile custom-tile';
+  customTile.innerHTML = `<div style="height:64px;display:flex;align-items:center;justify-content:center;font-size:26px;color:var(--cyan);">+</div><div class="roster-name">CUSTOM</div>`;
+  const customFileInput = document.createElement('input');
+  customFileInput.type = 'file';
+  customFileInput.accept = 'image/*';
+  customFileInput.style.display = 'none';
+  customTile.appendChild(customFileInput);
+
+  function applyCustomFile(file) {
+    if (!file || !file.type.startsWith('image/')) return;
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const img = new Image();
+      img.src = e.target.result;
+      state.playerSelection = { rosterIndex: null, customImg: img };
+      selectTile(customTile);
+      updatePreview(e.target.result);
+    };
+    reader.readAsDataURL(file);
+  }
+
+  customTile.addEventListener('click', () => customFileInput.click());
+  customFileInput.addEventListener('change', (e) => applyCustomFile(e.target.files[0]));
+  grid.appendChild(customTile);
+
+  // プレビュー枠自体もクリック／ドラッグ＆ドロップでカスタム画像をアップロードできるようにする
+  const previewZone = document.getElementById('playerPreview');
+  previewZone.addEventListener('click', () => customFileInput.click());
+  previewZone.addEventListener('dragover', (e) => { e.preventDefault(); previewZone.classList.add('dragover'); });
+  previewZone.addEventListener('dragleave', () => previewZone.classList.remove('dragover'));
+  previewZone.addEventListener('drop', (e) => {
+    e.preventDefault(); previewZone.classList.remove('dragover');
+    if (e.dataTransfer.files && e.dataTransfer.files[0]) applyCustomFile(e.dataTransfer.files[0]);
+  });
+
+  // デフォルトで1体目を選択状態にしておく
+  grid.querySelector('.roster-tile').click();
+}
+
+document.getElementById('startBtn').addEventListener('click', () => {
+  SFX.ensureAudio();
+  tryLockLandscape();
+
+  // ---- プレイヤーの選択内容を確定 ----
+  const nameInput = document.getElementById('playerNameInput');
+  const playerName = (nameInput.value || '').trim() || 'PLAYER';
+  const sel = state.playerSelection;
+  let playerImg = null, playerColor = DEFAULT_COLORS[0];
+  if (sel.customImg) {
+    playerImg = sel.customImg;
+    playerColor = DEFAULT_COLORS[0];
+  } else {
+    const idx = sel.rosterIndex !== null ? sel.rosterIndex : 0;
+    playerImg = rosterImageReady(idx) ? ROSTER_IMAGES[idx] : null;
+    playerColor = ROSTER_COLORS[idx % ROSTER_COLORS.length];
+  }
+
+  // ---- 対戦相手3体はロボット図鑑からランダムに選出（プレイヤーが選んだ機体は除外） ----
+  const pool = ROSTER.map((_, i) => i).filter(i => i !== sel.rosterIndex);
+  for (let i = pool.length - 1; i > 0; i--) {
+    const j = randInt(0, i);
+    [pool[i], pool[j]] = [pool[j], pool[i]];
+  }
+  const cpuIndices = pool.slice(0, 3);
+
+  state.entries = [
+    { role: 'player', name: playerName, color: playerColor, img: playerImg },
+    ...cpuIndices.map(idx => ({
+      role: 'cpu',
+      name: ROSTER[idx].name,
+      color: ROSTER_COLORS[idx % ROSTER_COLORS.length],
+      img: rosterImageReady(idx) ? ROSTER_IMAGES[idx] : null,
+    })),
+  ];
+
+  document.getElementById('settingsScreen').classList.add('hidden');
+  document.getElementById('gameContainer').classList.remove('hidden');
+  initRace();
+});
 
 document.getElementById('restartBtn').addEventListener('click', () => {
   document.getElementById('resultScreen').classList.add('hidden');
@@ -420,6 +543,7 @@ class Racer {
 
     this.heldItems = [];           // 所持アイテム（最大2個・'crossbow' 等の配列）
     this.cpuItemUseAt = 0;         // CPU用: このタイマーが0になったら使用
+    this.cpuTurboTimer = 0;        // CPU用: まとまってターボを吹かす残り時間
 
     this.finished = false;
     this.finishOrder = null;
@@ -791,11 +915,22 @@ function updateCpuControl(r, dt) {
     }
   }
 
-  // ターボ判断：ゲージに余裕があり、たまに使う
-  if (!r.overheated && r.turboGauge < CONFIG.TURBO_GAUGE_MAX * 0.7) {
-    r.turboActive = Math.random() < CONFIG.CPU_TURBO_CHANCE * dt * 2;
+  // ターボ判断：以前は毎フレーム独立の確率判定だったため、オンになっても
+  // 1フレーム(約16ms)だけで終わってしまいゲージがほとんど溜まらず、
+  // 実質的にターボを使っていないように見えるバグがあった。
+  // そのため「ターボを吹かす時間(cpuTurboTimer)」を持たせ、
+  // 発動したら一定時間まとまって加速するようにする。
+  if (r.cpuTurboTimer > 0) {
+    r.cpuTurboTimer -= dt;
+    r.turboActive = !r.overheated;
   } else {
     r.turboActive = false;
+    if (!r.overheated && r.turboGauge < CONFIG.TURBO_GAUGE_MAX * 0.7) {
+      // 毎秒 CPU_TURBO_CHANCE の確率でまとまったターボ区間を開始する
+      if (Math.random() < CONFIG.CPU_TURBO_CHANCE * dt) {
+        r.cpuTurboTimer = rand(1.2, 2.6);
+      }
+    }
   }
 
   // アイテム使用判断
@@ -1761,15 +1896,7 @@ function showResults() {
   const resultScreen = document.getElementById('resultScreen');
   resultScreen.classList.remove('hidden');
 
-  const list = document.getElementById('resultList');
-  list.innerHTML = '';
   const ranked = state.racers.slice().sort((a, b) => a.rank - b.rank);
-  ranked.forEach((r) => {
-    const li = document.createElement('li');
-    li.innerHTML = `<span class="pos">${r.rank}</span><span>${r.name}</span>`;
-    list.appendChild(li);
-  });
-
   startPodiumAnimation(ranked);
 }
 
@@ -1781,6 +1908,7 @@ function startPodiumAnimation(ranked) {
   pc.height = vv ? Math.round(vv.height) : window.innerHeight;
   const pctx = pc.getContext('2d');
   const top3 = ranked.slice(0, 3);
+  const fourth = ranked[3]; // 4位も表彰台の横に表示する
   const confetti = [];
   for (let i = 0; i < 140; i++) {
     confetti.push({
@@ -1808,6 +1936,26 @@ function startPodiumAnimation(ranked) {
   const podiumHeights = { 1: 130, 2: 90, 3: 60 };
   const podiumOrderX = { 1: 0.5, 2: 0.28, 3: 0.72 }; // 1位中央、2位左、3位右
 
+  // ロボット画像＋名前ラベルを描画する共通ヘルパー（表彰台の上にも、4位の地面にも使う）
+  function drawRacerWithLabel(r, px, standY, boxSize, jumpOffset) {
+    const img = r.img;
+    const drawY = standY - (jumpOffset || 0);
+    if (img && img.complete && img.naturalWidth > 0) {
+      const scale = Math.min(boxSize / img.naturalWidth, boxSize / img.naturalHeight);
+      const dw = img.naturalWidth * scale, dh = img.naturalHeight * scale;
+      pctx.drawImage(img, px - dw / 2, drawY - dh, dw, dh);
+    }
+    // 名前がロボットに隠れて見えないことがないよう、背景プレートを敷いてから文字を描く
+    const labelY = drawY - boxSize - 14;
+    pctx.font = 'bold 13px monospace';
+    pctx.textAlign = 'center';
+    const labelW = pctx.measureText(r.name).width + 16;
+    pctx.fillStyle = 'rgba(11,13,20,0.75)';
+    pctx.fillRect(px - labelW / 2, labelY - 14, labelW, 20);
+    pctx.fillStyle = '#28f2ff';
+    pctx.fillText(r.name, px, labelY);
+  }
+
   function loop(now) {
     const dt = Math.min((now - last) / 1000, 0.05);
     last = now;
@@ -1832,8 +1980,9 @@ function startPodiumAnimation(ranked) {
     pctx.globalAlpha = 1;
     fireworks.forEach(fw => { fw.parts = fw.parts.filter(p => p.life > 0); });
 
-    // 表彰台
+    // 表彰台（1〜3位）
     const baseY = pc.height * 0.78;
+    const boxSize = 70;
     top3.forEach((r) => {
       const px = pc.width * podiumOrderX[r.rank];
       const ph = podiumHeights[r.rank];
@@ -1844,18 +1993,22 @@ function startPodiumAnimation(ranked) {
       pctx.textAlign = 'center';
       pctx.fillText(String(r.rank), px, baseY - ph / 2 + 8);
 
-      // ロボット画像
-      const img = r.img;
-      const boxSize = 70;
-      if (img && img.complete && img.naturalWidth > 0) {
-        const scale = Math.min(boxSize / img.naturalWidth, boxSize / img.naturalHeight);
-        const dw = img.naturalWidth * scale, dh = img.naturalHeight * scale;
-        pctx.drawImage(img, px - dw / 2, baseY - ph - dh, dw, dh);
-      }
-      pctx.fillStyle = '#28f2ff';
-      pctx.font = 'bold 13px monospace';
-      pctx.fillText(r.name, px, baseY - ph - boxSize - 10);
+      // 1位のロボットだけぴょんぴょん跳ねさせて目立たせる
+      const jumpOffset = r.rank === 1 ? Math.abs(Math.sin(now / 260)) * 20 : 0;
+      drawRacerWithLabel(r, px, baseY - ph, boxSize, jumpOffset);
     });
+
+    // 4位は表彰台の横（台の無い地面）に並べて表示する
+    if (fourth) {
+      const px = pc.width * 0.92;
+      pctx.fillStyle = 'rgba(255,255,255,0.15)';
+      pctx.beginPath(); pctx.ellipse(px, baseY + 6, 34, 8, 0, 0, Math.PI * 2); pctx.fill();
+      pctx.fillStyle = '#0b0d14';
+      pctx.font = 'bold 13px monospace';
+      pctx.textAlign = 'center';
+      pctx.fillText('4', px, baseY + 22);
+      drawRacerWithLabel(fourth, px, baseY, boxSize * 0.85, 0);
+    }
 
     // 紙吹雪
     for (const c of confetti) {
@@ -1876,5 +2029,5 @@ function startPodiumAnimation(ranked) {
 }
 
 /* ============================== 初期化 ============================== */
-buildSettingsUI();
+buildCharacterSelectUI();
 resizeCanvas();
