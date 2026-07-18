@@ -252,6 +252,62 @@ const SFX = (() => {
   };
 })();
 
+/* ============================== BGM（背景音楽） ==============================
+   3つの場面（オープニング／レース／表彰台）でそれぞれ別のBGM(mp3)をループ再生する。
+   用意してもらいたいファイル（GitHub Pages上の assets/ フォルダに配置。無くても
+   ゲーム自体は問題なく動作し、単にその場面の音楽が鳴らないだけになる）:
+     assets/bgm_opening.mp3   ... オープニング／キャラクター選択画面のBGM
+     assets/bgm_race.mp3      ... レース本編のBGM（カウントダウン中は鳴らさず、GO!の瞬間から再生する）
+     assets/bgm_podium.mp3    ... 表彰式・リザルト画面のBGM
+
+   ブラウザの自動再生制限により、ページを開いた直後は音が鳴らないことがある。
+   その場合でも、最初にユーザーが画面をタップした瞬間に自動的に再生を試みるので、
+   実質的には「最初のタップ以降は問題なく鳴る」形になる。
+   ================================================================================ */
+const BGM_PATHS = {
+  opening: 'assets/bgm_opening.mp3',
+  race: 'assets/bgm_race.mp3',
+  podium: 'assets/bgm_podium.mp3',
+};
+const BGM = (() => {
+  const tracks = {};
+  Object.entries(BGM_PATHS).forEach(([key, path]) => {
+    const a = new Audio(path);
+    a.loop = true;
+    a.volume = 0.45;
+    a.preload = 'auto';
+    tracks[key] = a;
+  });
+  let currentKey = null;
+
+  function play(key) {
+    currentKey = key;
+    Object.entries(tracks).forEach(([k, a]) => {
+      if (k !== key) { a.pause(); a.currentTime = 0; }
+    });
+    const a = tracks[key];
+    if (!a) return;
+    if (a.paused) {
+      const p = a.play();
+      if (p && p.catch) p.catch(() => { /* 自動再生ブロック時は後続のタップで再試行される */ });
+    }
+  }
+  function stopAll() {
+    currentKey = null;
+    Object.values(tracks).forEach(a => { a.pause(); a.currentTime = 0; });
+  }
+  // 自動再生がブロックされていた場合、最初のユーザー操作（タップ／クリック）で再試行する
+  function retryOnGesture() {
+    if (currentKey && tracks[currentKey] && tracks[currentKey].paused) {
+      tracks[currentKey].play().catch(() => {});
+    }
+  }
+  document.addEventListener('pointerdown', retryOnGesture);
+  document.addEventListener('touchstart', retryOnGesture, { passive: true });
+
+  return { play, stopAll };
+})();
+
 /* ============================== 障害物定義 ============================== */
 /*
   各障害物タイプは以下を持つ:
@@ -358,6 +414,7 @@ const state = {
 
   function goToCharacterSelect() {
     SFX.ensureAudio(); // 最初のユーザー操作のタイミングでAudioContextを起動（自動再生制限対策）
+    BGM.play('opening'); // 自動再生がブロックされていた場合、ここで確実に再生を試みる
     tryLockLandscape();
     document.getElementById('openingScreen').classList.add('hidden');
     document.getElementById('settingsScreen').classList.remove('hidden');
@@ -504,6 +561,7 @@ document.getElementById('startBtn').addEventListener('click', () => {
     })),
   ];
 
+  BGM.stopAll(); // カウントダウン(3,2,1)の間は音楽を鳴らさない。GO!の瞬間に runCountdown() 側でレースBGMを開始する
   document.getElementById('settingsScreen').classList.add('hidden');
   document.getElementById('gameContainer').classList.remove('hidden');
   initRace();
@@ -512,6 +570,7 @@ document.getElementById('startBtn').addEventListener('click', () => {
 document.getElementById('restartBtn').addEventListener('click', () => {
   document.getElementById('resultScreen').classList.add('hidden');
   document.getElementById('settingsScreen').classList.remove('hidden');
+  BGM.play('opening'); // キャラクター選択に戻るのでオープニングBGMを再開
 });
 
 /* ============================== Racer クラス ============================== */
@@ -664,6 +723,7 @@ function runCountdown() {
     if (state.countdownValue <= 0) {
       state.countdownEl.textContent = 'GO!';
       SFX.go();
+      BGM.play('race'); // カウントダウン中は無音、GO!と同時にレースBGMを開始する
       setTimeout(() => { state.countdownEl.classList.add('hidden'); }, 500);
       state.raceStarted = true;
       clearInterval(iv);
@@ -1895,6 +1955,7 @@ function showResults() {
   document.getElementById('gameContainer').classList.add('hidden');
   const resultScreen = document.getElementById('resultScreen');
   resultScreen.classList.remove('hidden');
+  BGM.play('podium'); // レースBGMから表彰式BGMへ切り替え
 
   const ranked = state.racers.slice().sort((a, b) => a.rank - b.rank);
   startPodiumAnimation(ranked);
@@ -2031,3 +2092,4 @@ function startPodiumAnimation(ranked) {
 /* ============================== 初期化 ============================== */
 buildCharacterSelectUI();
 resizeCanvas();
+BGM.play('opening'); // ブラウザの自動再生制限で鳴らないことがあるが、その場合も最初のタップで自動的に再生される
