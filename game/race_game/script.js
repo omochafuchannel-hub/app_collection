@@ -76,7 +76,7 @@ const ROSTER_COLORS = ['#ffb930', '#28f2ff', '#ff4fd8', '#63ff8a', '#ff3b57', '#
      assets/missile_big.PNG     ... 大型ミサイル（1発）の画像
      assets/missile_homing.PNG  ... 追跡ミサイル（1発分）の画像　※無ければ missile_big.PNG を代用
      assets/trap.PNG            ... トラップ（地雷）の画像
-     assets/laser_orb.PNG       ... レーザー武器に使う「円形の光の玉」の画像（例：発光する球体）
+     assets/laser_orb.PNG       ... エネルギー弾（旧レーザー）に使う「円形の光の玉」の画像（例：発光する球体）
      assets/title_logo.PNG      ... オープニング画面のタイトルロゴ
      assets/title_bg.PNG        ... オープニング画面の背景画像
    推奨サイズ: 横長の乗り物系画像で 64x32px 前後（正方形でも自動調整されます）
@@ -240,7 +240,7 @@ const SFX = (() => {
     fireCrossbow() { for (let i = 0; i < 3; i++) beep(900 - i * 120, 0.06, 'square', 0.08, i * 0.03); },
     fireMissile() { noiseBurst(0.4, 0.2, 300); beep(90, 0.4, 'sawtooth', 0.15, 0, 40); },
     fireHoming() { beep(500, 0.5, 'sawtooth', 0.1, 0, 1400); noiseBurst(0.3, 0.12, 600); },
-    fireLaser() { beep(1400, 0.35, 'sawtooth', 0.16, 0, 220); },
+    fireEnergy() { beep(1400, 0.35, 'sawtooth', 0.16, 0, 220); },
     fireTrap() { beep(300, 0.15, 'square', 0.1); },
     explosion(big) { noiseBurst(big ? 0.6 : 0.35, big ? 0.35 : 0.22); beep(80, big ? 0.5 : 0.3, 'sawtooth', 0.2, 0, 30); },
     countdownTick() { beep(440, 0.14, 'square', 0.15); },
@@ -392,7 +392,7 @@ const OBSTACLE_TYPES = [
 ];
 
 /* ============================== アイテム(武器)定義 ============================== */
-const WEAPON_TYPES = ['crossbow', 'big_missile', 'homing', 'laser', 'trap'];
+const WEAPON_TYPES = ['crossbow', 'big_missile', 'homing', 'energy', 'trap'];
 
 /* ============================== グローバル状態 ============================== */
 const state = {
@@ -1106,7 +1106,7 @@ function useItem(r) {
     case 'crossbow': fireCrossbow(r); if (r.isPlayer) SFX.fireCrossbow(); break;
     case 'big_missile': fireBigMissile(r); if (r.isPlayer) SFX.fireMissile(); break;
     case 'homing': fireHomingMissiles(r); if (r.isPlayer) SFX.fireHoming(); break;
-    case 'laser': fireLaser(r); if (r.isPlayer) SFX.fireLaser(); break;
+    case 'energy': fireEnergyBall(r); if (r.isPlayer) SFX.fireEnergy(); break;
     case 'trap': placeTrap(r); if (r.isPlayer) SFX.fireTrap(); break;
   }
 }
@@ -1160,23 +1160,21 @@ function fireHomingMissiles(r) {
   triggerScreenFlash('#ffb930', 0.28, 1.2);
   shakeScreen(10);
 }
-function fireLaser(r) {
+function fireEnergyBall(r) {
+  // 360度ランダムな方向へ発射する自由飛行のエネルギー弾。
+  // トラック上下の壁・画面の左右端で跳ね返り(最大5回)、ロボットに当たるか
+  // 跳ね返り回数の上限に達すると消える。
+  const angle = rand(0, Math.PI * 2);
+  const speed = 560;
+  const startY = laneY(r.laneVisual, canvas.height);
   state.projectiles.push({
-    type: 'laser', owner: r, x: r.x, lane: r.lane, life: 0.35, color: '#28f2ff', width: 5000,
+    type: 'energy', owner: r, x: r.x, y: startY,
+    vx: Math.cos(angle) * speed, vy: Math.sin(angle) * speed,
+    bounces: 0, maxBounces: 5, life: 9, color: '#28f2ff',
   });
-  // レーザーは即時判定：同レーン + 隣接レーン（反射想定）にいる前方の敵を全てヒット
-  for (const o of state.racers) {
-    if (o === r || o.invincibleTimer > 0) continue;
-    const laneDiff = Math.abs(o.lane - r.lane);
-    if (laneDiff <= 1 && o.x > r.x - 40 && o.x < r.x + 2200) {
-      stunRacer(o, CONFIG.STUN_TIME, 'fall');
-      spawnExplosion(o.x, o.lane, 'large'); // 攻撃命中は必ずはっきり爆発させる
-      if (o.isPlayer || r.isPlayer) SFX.explosion(true);
-    }
-  }
   spawnMuzzleBurst(r.x, r.lane, '#ffffff', 26);
-  triggerScreenFlash('#ffffff', 0.4, 1.6);
-  shakeScreen(14);
+  triggerScreenFlash('#ffffff', 0.35, 1.6);
+  shakeScreen(12);
   triggerHitStop();
 }
 function placeTrap(r) {
@@ -1187,9 +1185,56 @@ function placeTrap(r) {
 }
 
 /* ============================== 発射物の更新 ============================== */
+/* トラック上下の壁のスクリーン座標(Y)を返す（跳弾判定に使用） */
+function getTrackWallsScreen() {
+  const h = canvas.height;
+  const top = h * 0.30;
+  return { top, bottom: top + h * 0.46 };
+}
+
+/* エネルギー弾（旧レーザー）専用の更新処理：
+   360度ランダムな方向へ飛び、トラック上下の壁と画面の左右端で跳ね返り、
+   ロボットに命中するか、5回跳ね返ったら消える。 */
+function updateEnergyBall(p, dt) {
+  p.x += p.vx * dt;
+  p.y += p.vy * dt;
+
+  const walls = getTrackWallsScreen();
+  const screenX = worldToScreenX(p.x);
+  const w = canvas.width;
+
+  if (p.y < walls.top) {
+    p.y = walls.top + (walls.top - p.y); p.vy = -p.vy; p.bounces++;
+    state.particles.push({ kind: 'smoke', x: p.x, lane: 0, laneOffsetPx: walls.top - laneY(0, canvas.height), vx: rand(-20, 20), vy: -20, life: 0.4, color: 'rgba(200,200,210,0.5)' });
+  } else if (p.y > walls.bottom) {
+    p.y = walls.bottom - (p.y - walls.bottom); p.vy = -p.vy; p.bounces++;
+    state.particles.push({ kind: 'smoke', x: p.x, lane: 0, laneOffsetPx: walls.bottom - laneY(0, canvas.height), vx: rand(-20, 20), vy: -20, life: 0.4, color: 'rgba(200,200,210,0.5)' });
+  }
+
+  if (screenX < 0) { p.x = 2 * state.camera.x - p.x; p.vx = -p.vx; p.bounces++; }
+  else if (screenX > w) { p.x = 2 * state.camera.x + 2 * w - p.x; p.vx = -p.vx; p.bounces++; }
+
+  if (p.bounces >= p.maxBounces) { p.life = 0; return; }
+
+  // 命中判定（画面座標ベースのシンプルな距離判定。レーンに縛られず自由に飛ぶため）
+  for (const o of state.racers) {
+    if (o === p.owner || p.hit || o.invincibleTimer > 0) continue;
+    const oy = laneY(o.laneVisual, canvas.height);
+    const dx = p.x - o.x;
+    const dy = p.y - oy;
+    if (dx * dx + dy * dy < 40 * 40) {
+      p.hit = true; p.life = 0;
+      stunRacer(o, CONFIG.STUN_TIME, 'fall');
+      spawnExplosion(o.x, o.lane, 'large');
+      if (o.isPlayer || p.owner.isPlayer) SFX.explosion(true);
+    }
+  }
+}
+
 function updateProjectiles(dt) {
   for (const p of state.projectiles) {
     p.life -= dt;
+    if (p.type === 'energy') { updateEnergyBall(p, dt); continue; }
     if (p.type === 'homing' && p.target) {
       // 目標のレーン・X位置に緩やかに寄っていく
       const desiredLane = p.target.lane;
@@ -1326,7 +1371,7 @@ function updateHud(player) {
   fill.classList.toggle('overheat', player.overheated);
 }
 function itemLabel(k) {
-  return { crossbow: 'ボーガン', big_missile: 'ミサイル', homing: '追跡弾', laser: 'レーザー', trap: 'トラップ' }[k] || k;
+  return { crossbow: 'ボーガン', big_missile: 'ミサイル', homing: '追跡弾', energy: 'エネルギー弾', trap: 'トラップ' }[k] || k;
 }
 
 /* ============================== 描画 ============================== */
@@ -1682,8 +1727,8 @@ function drawObstacles(w, h) {
     ctx.fillStyle = hexToRgba(o.type.color, 0.16);
     ctx.fillRect(sx - highlightW / 2, laneTop + 2, highlightW, laneBottom - laneTop - 4);
 
-    // 接地面は「レーン下端寄りだが、隣のレーンとの境界線には掛からない」高さに固定
-    const gy = laneBottom - 12; // 下のレーンにはみ出さないよう余白を広めに取る
+    // 接地面はロボットの足元の高さ（レーン中央）に合わせて少し上へ調整
+    const gy = laneY(o.lane, h) + 2;
     const drawer = OBSTACLE_DRAWERS[o.type.key];
     if (drawer) drawer(sx, gy);
   }
@@ -1704,7 +1749,7 @@ function drawItemBoxesAndTraps(w, h) {
     if (box.taken) continue;
     const sx = worldToScreenX(box.x);
     if (sx < -100 || sx > w + 100) continue;
-    const sy = laneY(box.lane, h);
+    const sy = laneY(box.lane, h) - 16; // ロボットの高さに合わせて少し上へ
     const pulse = 1 + Math.sin(now / 160 + box.x) * 0.18;
     const size = 21 * pulse; // サイズは元の大きさに戻す（派手さは使用時のアクション側で表現）
 
@@ -1792,48 +1837,42 @@ function drawProjectiles(w, h) {
   for (const p of state.projectiles) {
     const sx = worldToScreenX(p.x);
     if (sx < -80 || sx > w + 80) continue;
-    const sy = laneY(p.lane + (p.laneOffset || 0), h);
 
-    if (p.type === 'laser') {
-      const laserImg = assetReady('laserOrb') ? assetImages.laserOrb : null;
-      const laneList = [p.lane - 1, p.lane, p.lane + 1].filter(l => l >= 0 && l < CONFIG.LANES);
-      if (laserImg) {
-        // 「円形の光の玉」を連ねてレーザーのように見せる（用意されたPNGを使用）
-        const flow = (now / 8) % 50;
-        laneList.forEach((l) => {
-          const isMain = l === p.lane;
-          const orbSize = (isMain ? 66 : 42); // 通常の2倍サイズで迫力を出す
-          const spacing = 50;
-          const oy = laneY(l, h);
-          for (let ox = sx - 20 + flow; ox < w + 60; ox += spacing) {
-            if (ox < -60) continue;
-            const pulse = 1 + Math.sin(now / 60 + ox) * 0.15;
-            ctx.save();
-            ctx.globalAlpha = isMain ? 0.95 : 0.5;
-            ctx.shadowBlur = 22;
-            ctx.shadowColor = `hsl(${(now / 3) % 360}, 100%, 65%)`;
-            drawAssetImage(laserImg, ox, oy + (orbSize * pulse) / 2, orbSize * pulse);
-            ctx.restore();
-          }
-        });
-        ctx.globalAlpha = 1;
+    if (p.type === 'energy') {
+      // エネルギー弾：360度自由に飛び回る「光の玉」。画像そのものを軌道に沿って動かして表現する。
+      const orbImg = assetReady('laserOrb') ? assetImages.laserOrb : null;
+      const orbAngle = Math.atan2(p.vy, p.vx);
+      const orbSize = 60;
+      const pulse = 1 + Math.sin(now / 70) * 0.12;
+      ctx.save();
+      ctx.translate(sx, p.y);
+      ctx.rotate(orbAngle);
+      ctx.shadowBlur = 26;
+      ctx.shadowColor = `hsl(${(now / 3) % 360}, 100%, 65%)`;
+      if (orbImg) {
+        const s = orbSize * pulse;
+        ctx.drawImage(orbImg, -s / 2, -s / 2, s, s);
       } else {
-        // 画像未用意の場合の代替描画：色が高速で明滅する極太レーザー + グロー
-        const hue = (now / 2) % 360;
-        ctx.save();
-        ctx.shadowBlur = 40;
-        ctx.shadowColor = `hsl(${hue}, 100%, 60%)`;
-        const beamW = 26 + Math.sin(now / 20) * 10;
-        const grad = ctx.createLinearGradient(0, laneY(0, h) - 20, 0, laneY(CONFIG.LANES - 1, h) + 20);
-        grad.addColorStop(0, `hsl(${hue}, 100%, 70%)`);
-        grad.addColorStop(0.5, '#ffffff');
-        grad.addColorStop(1, `hsl(${(hue + 60) % 360}, 100%, 70%)`);
+        // 画像未用意の場合の代替描画：発光する光の玉
+        const grad = ctx.createRadialGradient(0, 0, 2, 0, 0, orbSize * 0.5 * pulse);
+        grad.addColorStop(0, '#ffffff');
+        grad.addColorStop(0.5, `hsl(${(now / 3) % 360}, 100%, 65%)`);
+        grad.addColorStop(1, 'rgba(40,242,255,0)');
         ctx.fillStyle = grad;
-        ctx.fillRect(sx - beamW / 2, laneY(0, h) - 20, beamW, laneY(CONFIG.LANES - 1, h) - laneY(0, h) + 40);
-        ctx.restore();
+        ctx.beginPath(); ctx.arc(0, 0, orbSize * 0.5 * pulse, 0, Math.PI * 2); ctx.fill();
+      }
+      ctx.restore();
+      // 尾を引く軌跡の粒子（たまに）
+      if (Math.random() < 0.5) {
+        state.particles.push({
+          kind: 'sparkle', x: p.x, lane: 0, laneOffsetPx: p.y - laneY(0, h),
+          vx: 0, vy: 0, life: 0.25, color: `hsl(${(now / 3) % 360}, 100%, 70%)`,
+        });
       }
       continue;
     }
+
+    const sy = laneY(p.lane + (p.laneOffset || 0), h);
 
     // 進行方向に応じて画像を少し傾ける（レーンオフセットの変化速度から角度を推定）
     const angle = Math.atan2((p._prevLaneOffset !== undefined ? (p.laneOffset - p._prevLaneOffset) : 0) * 40, 12);
