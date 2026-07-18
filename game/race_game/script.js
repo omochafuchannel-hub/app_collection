@@ -230,6 +230,8 @@ const SFX = (() => {
 
   return {
     ensureAudio,
+    suspend() { if (actx && actx.state === 'running') actx.suspend().catch(() => {}); },
+    resume() { if (actx && actx.state === 'suspended') actx.resume().catch(() => {}); },
     jump() { beep(500, 0.1, 'square', 0.1, 0, 700); },
     hit() { noiseBurst(0.28, 0.3); beep(110, 0.22, 'sawtooth', 0.18, 0, 60); },
     turboStart() { beep(220, 0.35, 'sawtooth', 0.12, 0, 900); },
@@ -304,6 +306,33 @@ const BGM = (() => {
   }
   document.addEventListener('pointerdown', retryOnGesture);
   document.addEventListener('touchstart', retryOnGesture, { passive: true });
+
+  /* ----------------------------------------------------------------------
+     iPhoneでホーム画面に追加(PWA/スタンドアロン)して遊んでいる時、他のAppに
+     切り替えても音楽が鳴り続けてしまう問題への対策。
+     Page Visibility API でアプリがバックグラウンドに回ったことを検知したら
+     曲を一時停止し、フォアグラウンドに戻ってきたら続きから再生を再開する。
+     ---------------------------------------------------------------------- */
+  function pauseForBackground() {
+    if (currentKey && tracks[currentKey] && !tracks[currentKey].paused) {
+      tracks[currentKey]._resumeAfter = true;
+      tracks[currentKey].pause();
+    }
+    SFX.suspend();
+  }
+  function resumeForForeground() {
+    if (currentKey && tracks[currentKey] && tracks[currentKey]._resumeAfter) {
+      tracks[currentKey].play().catch(() => {});
+      tracks[currentKey]._resumeAfter = false;
+    }
+    SFX.resume();
+  }
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden) pauseForBackground(); else resumeForForeground();
+  });
+  // iOSの一部バージョンではvisibilitychangeが遅れる/発火しないことがあるための保険
+  window.addEventListener('pagehide', pauseForBackground);
+  window.addEventListener('pageshow', resumeForForeground);
 
   return { play, stopAll };
 })();
