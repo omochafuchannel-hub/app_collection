@@ -57,6 +57,16 @@ const CONFIG = {
   CRATER_STUN_TIME: 2.2,
   INVINCIBLE_TIME: 1.3,         // 被弾後、再度ダメージを受けない無敵時間（秒。スタン終了後からのグレース期間）
 
+  // ---- キャラクターごとのステータス配分システム ----
+  // speed/turbo/jump/recovery の4項目の割合（合計100になるよう自動正規化される）で
+  // キャラごとの個性を出す。STAT_SPREAD は「極端に振った時にどれだけ差が出るか」の
+  // 強さで、0であれば全キャラ横並び（差が出ない）になる。
+  STAT_SPREAD: 0.28,
+  STAT_MULT_MIN: 0.45,           // 倍率の下限（0や極端な値でも壊れないようにクランプ）
+  STAT_MULT_MAX: 1.9,            // 倍率の上限
+  MASH_RECOVERY_REDUCTION: 0.12, // スタン/オーバーヒート中にターボボタンを押すたびに短縮される秒数
+  MASH_RECOVERY_MIN_LEFT: 0,     // 連打で短縮できる残り時間の下限
+
   CANVAS_BG_LIST: ['sea', 'city', 'grass', 'mountain'],
 };
 
@@ -107,21 +117,41 @@ function assetReady(key) {
 
 /* ============================== キャラクター選択用ロボット図鑑（10体） ==============================
    キャラクター選択画面に並ぶ10体のプリセットロボット。
-   画像ファイル名・ロボット名はここで自由に編集できます。
    画像は assets/robot1.PNG 〜 assets/robot10.PNG を用意してください
    （未用意の場合はこれまで通り自動生成のプレースホルダー画像で表示されます）。
+
+   ロボット名・ステータス配分は assets/robot1_param.txt 〜 assets/robot10_param.txt
+   というテキストファイルに書き込む形に変更しました。書式は以下の通り（1行1項目）:
+
+     name=IRON-01
+     speed=25
+     turbo=25
+     jump=25
+     recovery=25
+
+   speed/turbo/jump/recovery の4つは「割合」で、合計がいくつであっても
+   自動的に合計100になるよう正規化されるので、キャラごとの合計値が
+   ズレて有利不利が出てしまうことはありません（比率だけが反映されます）。
+   ファイルが無い場合や書式が不正な場合は、名前もステータスも既定値
+   （全ステータス均等＝25ずつ）にフォールバックします。
+
+   各ステータスの意味:
+     speed    ... 走行スピード
+     turbo    ... ターボが使える時間の長さ（オーバーヒートまでの粘り強さ）
+     jump     ... ジャンプ力
+     recovery ... 被弾・オーバーヒート後の復帰の速さ
    ================================================================================================ */
 const ROSTER = [
-  { file: 'assets/robot1.PNG', name: 'IRON-01' },
-  { file: 'assets/robot2.PNG', name: 'HELL DOG' },
-  { file: 'assets/robot3.PNG', name: 'MECHA KING' },
-  { file: 'assets/robot4.PNG', name: 'BAIKIN-X' },
-  { file: 'assets/robot5.PNG', name: 'METAL REX' },
-  { file: 'assets/robot6.PNG', name: 'SPHINX' },
-  { file: 'assets/robot7.PNG', name: 'VOLT GEAR' },
-  { file: 'assets/robot8.PNG', name: 'CRIMSON FANG' },
-  { file: 'assets/robot9.PNG', name: 'BLUE FALCON' },
-  { file: 'assets/robot10.PNG', name: 'TITANOSAUR' },
+  { file: 'assets/robot1.PNG', paramFile: 'assets/robot1_param.txt' },
+  { file: 'assets/robot2.PNG', paramFile: 'assets/robot2_param.txt' },
+  { file: 'assets/robot3.PNG', paramFile: 'assets/robot3_param.txt' },
+  { file: 'assets/robot4.PNG', paramFile: 'assets/robot4_param.txt' },
+  { file: 'assets/robot5.PNG', paramFile: 'assets/robot5_param.txt' },
+  { file: 'assets/robot6.PNG', paramFile: 'assets/robot6_param.txt' },
+  { file: 'assets/robot7.PNG', paramFile: 'assets/robot7_param.txt' },
+  { file: 'assets/robot8.PNG', paramFile: 'assets/robot8_param.txt' },
+  { file: 'assets/robot9.PNG', paramFile: 'assets/robot9_param.txt' },
+  { file: 'assets/robot10.PNG', paramFile: 'assets/robot10_param.txt' },
 ];
 /* ROSTER 各体の画像を読み込んでおく。用意されていなければ generatePlaceholderRobot() に自動フォールバックする */
 const ROSTER_IMAGES = ROSTER.map((entry, i) => {
@@ -136,6 +166,61 @@ function rosterImageReady(i) {
   const img = ROSTER_IMAGES[i];
   return img && img._ready && img.naturalWidth > 0;
 }
+
+/* 既定のステータス（均等配分）。パラメータファイルが無い/読めない場合はこれが使われる */
+function defaultRobotParams(i) {
+  return { name: `ROBOT-${i + 1}`, speed: 25, turbo: 25, jump: 25, recovery: 25 };
+}
+/* パラメータテキストを解析し、4項目の合計が必ず100になるよう正規化する */
+function parseRobotParamText(text, i) {
+  const result = defaultRobotParams(i);
+  const lines = text.split('\n');
+  for (const line of lines) {
+    const idx = line.indexOf('=');
+    if (idx < 0) continue;
+    const key = line.slice(0, idx).trim().toLowerCase();
+    const value = line.slice(idx + 1).trim();
+    if (key === 'name' && value) result.name = value;
+    else if (['speed', 'turbo', 'jump', 'recovery'].includes(key)) {
+      const n = parseFloat(value);
+      if (!isNaN(n) && n >= 0) result[key] = n;
+    }
+  }
+  // 合計値を必ず100に正規化する（＝比率だけが反映され、キャラごとの有利不利が出ない）
+  const sum = result.speed + result.turbo + result.jump + result.recovery;
+  if (sum > 0) {
+    result.speed = (result.speed / sum) * 100;
+    result.turbo = (result.turbo / sum) * 100;
+    result.jump = (result.jump / sum) * 100;
+    result.recovery = (result.recovery / sum) * 100;
+  } else {
+    Object.assign(result, defaultRobotParams(i));
+  }
+  return result;
+}
+/* 全ロボットの既定パラメータ（ファイル読み込みが終わるまではこれが使われる） */
+const ROSTER_PARAMS = ROSTER.map((_, i) => defaultRobotParams(i));
+/* assets/robotN_param.txt を非同期で読み込み、読み込めたものから順にROSTER_PARAMSへ反映する */
+function loadRosterParams() {
+  ROSTER.forEach((entry, i) => {
+    fetch(entry.paramFile)
+      .then(res => (res.ok ? res.text() : Promise.reject()))
+      .then(text => {
+        ROSTER_PARAMS[i] = parseRobotParamText(text, i);
+        refreshRosterTileDisplay(i);
+      })
+      .catch(() => { /* ファイルが無い場合は既定値のまま（何もしない） */ });
+  });
+}
+
+/* ステータス割合(0〜100、既定値25が基準)を実際のゲーム内倍率に変換する。
+   inverse=true の場合は「値が大きいほど数値が小さくなる」項目
+   （復帰時間やターボのゲージ上昇速度など）に使う。 */
+function statMultiplier(pct, inverse) {
+  const diff = ((pct - 25) / 25) * CONFIG.STAT_SPREAD * (inverse ? -1 : 1);
+  return clamp(1 + diff, CONFIG.STAT_MULT_MIN, CONFIG.STAT_MULT_MAX);
+}
+
 /* homing 用画像が無ければ missileBig を代用できるようにするヘルパー */
 function homingAssetImage() {
   if (assetReady('missileHoming')) return assetImages.missileHoming;
@@ -397,10 +482,10 @@ const WEAPON_TYPES = ['crossbow', 'big_missile', 'homing', 'energy', 'trap'];
 /* ============================== グローバル状態 ============================== */
 const state = {
   entries: [
-    { role: 'player', name: 'PLAYER', color: DEFAULT_COLORS[0], img: null },
-    { role: 'cpu', name: 'IRON-01', color: DEFAULT_COLORS[1], img: null },
-    { role: 'cpu', name: 'HELL DOG', color: DEFAULT_COLORS[2], img: null },
-    { role: 'cpu', name: 'MECHA KING', color: DEFAULT_COLORS[3], img: null },
+    { role: 'player', name: 'PLAYER', color: DEFAULT_COLORS[0], img: null, params: { speed: 25, turbo: 25, jump: 25, recovery: 25 } },
+    { role: 'cpu', name: 'IRON-01', color: DEFAULT_COLORS[1], img: null, params: { speed: 25, turbo: 25, jump: 25, recovery: 25 } },
+    { role: 'cpu', name: 'HELL DOG', color: DEFAULT_COLORS[2], img: null, params: { speed: 25, turbo: 25, jump: 25, recovery: 25 } },
+    { role: 'cpu', name: 'MECHA KING', color: DEFAULT_COLORS[3], img: null, params: { speed: 25, turbo: 25, jump: 25, recovery: 25 } },
   ],
   racers: [],
   obstacles: [],
@@ -469,6 +554,11 @@ function tryLockLandscape() {
 }
 
 /* ============================== 1. キャラクター選択画面構築 ============================== */
+const rosterTileNameEls = []; // 各タイルの名前表示要素（パラメータファイル読み込み後に更新するため）
+function refreshRosterTileDisplay(i) {
+  if (rosterTileNameEls[i]) rosterTileNameEls[i].textContent = ROSTER_PARAMS[i].name;
+}
+
 function buildCharacterSelectUI() {
   const grid = document.getElementById('rosterGrid');
   grid.innerHTML = '';
@@ -494,21 +584,22 @@ function buildCharacterSelectUI() {
 
     const img = document.createElement('img');
     img.src = entry.file;
-    img.alt = entry.name;
+    img.alt = ROSTER_PARAMS[i].name;
     // 画像が未用意の場合はプレースホルダー画像に自動で差し替える
     img.addEventListener('error', () => { img.src = generatePlaceholderRobot(ROSTER_COLORS[i % ROSTER_COLORS.length]); });
     tile.appendChild(img);
 
     const nameEl = document.createElement('div');
     nameEl.className = 'roster-name';
-    nameEl.textContent = entry.name;
+    nameEl.textContent = ROSTER_PARAMS[i].name;
     tile.appendChild(nameEl);
+    rosterTileNameEls[i] = nameEl;
 
     tile.addEventListener('click', () => {
       state.playerSelection = { rosterIndex: i, customImg: null };
       selectTile(tile);
       updatePreview(img.src);
-      nameInput.value = entry.name;
+      nameInput.value = ROSTER_PARAMS[i].name;
     });
     grid.appendChild(tile);
   });
@@ -562,14 +653,17 @@ document.getElementById('startBtn').addEventListener('click', () => {
   const nameInput = document.getElementById('playerNameInput');
   const playerName = (nameInput.value || '').trim() || 'PLAYER';
   const sel = state.playerSelection;
-  let playerImg = null, playerColor = DEFAULT_COLORS[0];
+  let playerImg = null, playerColor = DEFAULT_COLORS[0], playerParams = defaultRobotParams(0);
   if (sel.customImg) {
     playerImg = sel.customImg;
     playerColor = DEFAULT_COLORS[0];
+    // カスタム画像の場合はステータス配分ファイルが無いため、公平な均等配分にする
+    playerParams = defaultRobotParams(0);
   } else {
     const idx = sel.rosterIndex !== null ? sel.rosterIndex : 0;
     playerImg = rosterImageReady(idx) ? ROSTER_IMAGES[idx] : null;
     playerColor = ROSTER_COLORS[idx % ROSTER_COLORS.length];
+    playerParams = ROSTER_PARAMS[idx];
   }
 
   // ---- 対戦相手3体はロボット図鑑からランダムに選出（プレイヤーが選んだ機体は除外） ----
@@ -581,12 +675,13 @@ document.getElementById('startBtn').addEventListener('click', () => {
   const cpuIndices = pool.slice(0, 3);
 
   state.entries = [
-    { role: 'player', name: playerName, color: playerColor, img: playerImg },
+    { role: 'player', name: playerName, color: playerColor, img: playerImg, params: playerParams },
     ...cpuIndices.map(idx => ({
       role: 'cpu',
-      name: ROSTER[idx].name,
+      name: ROSTER_PARAMS[idx].name,
       color: ROSTER_COLORS[idx % ROSTER_COLORS.length],
       img: rosterImageReady(idx) ? ROSTER_IMAGES[idx] : null,
+      params: ROSTER_PARAMS[idx],
     })),
   ];
 
@@ -616,12 +711,21 @@ class Racer {
     this.laneVisual = this.lane;   // 描画用（滑らかに補間される値）
     this.x = 0;                    // ワールド座標上の進行距離
     this.speedMult = 1;            // 毎フレームリセットされる速度倍率（障害物用）
-    this.baseSpeed = CONFIG.BASE_SPEED + (this.isPlayer ? 0 : rand(-CONFIG.MAX_SPEED_CPU_VARIANCE, CONFIG.MAX_SPEED_CPU_VARIANCE));
+
+    // ---- キャラクターごとのステータス配分（speed/turbo/jump/recovery、合計100）から倍率を算出 ----
+    const p = entry.params || { speed: 25, turbo: 25, jump: 25, recovery: 25 };
+    this.statSpeedMult = statMultiplier(p.speed, false);      // 高いほど速い
+    this.statTurboFillMult = statMultiplier(p.turbo, true);   // 高いほどゲージ上昇が緩やか＝長くターボを使える
+    this.statJumpMult = statMultiplier(p.jump, false);        // 高いほどジャンプが高い
+    this.statRecoveryMult = statMultiplier(p.recovery, true); // 高いほどスタン/オーバーヒートの復帰が早い
+
+    this.baseSpeed = CONFIG.BASE_SPEED * this.statSpeedMult + (this.isPlayer ? 0 : rand(-CONFIG.MAX_SPEED_CPU_VARIANCE, CONFIG.MAX_SPEED_CPU_VARIANCE) * 0.4);
     this.currentSpeed = 0;
 
     this.turboGauge = 0;
     this.overheated = false;
     this.turboActive = false;
+    this.smokeEmitTimer = 0;       // オーバーヒート中に煙を出す間隔タイマー
 
     this.z = 0; this.vz = 0; this.jumping = false;
     this.stunTimer = 0;
@@ -649,13 +753,14 @@ class Racer {
 function doJump(racer, velocity) {
   if (racer.jumping) return;
   racer.jumping = true;
-  racer.vz = velocity;
+  racer.vz = velocity * (racer.statJumpMult || 1);
   if (racer.isPlayer) SFX.jump();
 }
 function stunRacer(racer, time, kind) {
   if (racer.stunTimer > 0 || racer.invincibleTimer > 0) return; // スタン中・無敵中は再ダメージを受けない
-  racer.stunTimer = time;
-  racer.invincibleTimer = time + CONFIG.INVINCIBLE_TIME; // スタン終了後もしばらく無敵が続く
+  const actualTime = time * (racer.statRecoveryMult || 1); // 復帰の速さステータスを反映
+  racer.stunTimer = actualTime;
+  racer.invincibleTimer = actualTime + CONFIG.INVINCIBLE_TIME; // スタン終了後もしばらく無敵が続く
   racer.speedMult = 0;
   racer.hitFlashTimer = 0.5;
   spawnExplosion(racer.x, racer.lane, kind === 'fall' ? 'small' : 'medium');
@@ -907,10 +1012,10 @@ function updateRacerCommon(r, dt) {
   // ターボゲージ／オーバーヒート
   if (r.turboActive && !r.overheated && r.stunTimer <= 0) {
     if (!r._turboWasActive && r.isPlayer) SFX.turboStart();
-    r.turboGauge = clamp(r.turboGauge + CONFIG.TURBO_FILL_RATE * dt, 0, CONFIG.TURBO_GAUGE_MAX);
+    r.turboGauge = clamp(r.turboGauge + CONFIG.TURBO_FILL_RATE * r.statTurboFillMult * dt, 0, CONFIG.TURBO_GAUGE_MAX);
     if (r.turboGauge >= CONFIG.TURBO_GAUGE_MAX) {
       r.overheated = true;
-      r.stunTimer = Math.max(r.stunTimer, CONFIG.OVERHEAT_STUN_TIME);
+      r.stunTimer = Math.max(r.stunTimer, CONFIG.OVERHEAT_STUN_TIME * (r.statRecoveryMult || 1));
       if (r.isPlayer) SFX.overheat();
     }
   } else {
@@ -918,6 +1023,15 @@ function updateRacerCommon(r, dt) {
     if (r.turboGauge <= 0) r.overheated = false;
   }
   r._turboWasActive = r.turboActive && !r.overheated;
+
+  // オーバーヒートで止まっている間は煙を吹くようにする
+  if (r.overheated && r.stunTimer > 0) {
+    r.smokeEmitTimer -= dt;
+    if (r.smokeEmitTimer <= 0) {
+      spawnSmoke(r.x + rand(-10, 10), r.lane);
+      r.smokeEmitTimer = 0.12;
+    }
+  }
 
   // ジャンプ物理
   if (r.jumping) {
@@ -958,7 +1072,16 @@ function integrateMovement(r, dt) {
 
 /* ---- プレイヤー操作 ---- */
 function updatePlayerControl(r, input, dt) {
-  if (r.stunTimer > 0) { r.turboActive = false; return; }
+  if (r.stunTimer > 0) {
+    r.turboActive = false;
+    // ターボボタンを連打すると、スタン／オーバーヒートからの復帰がほんの少し早くなる
+    if (input.turbo && !r._turboMashLatch) {
+      r.stunTimer = Math.max(CONFIG.MASH_RECOVERY_MIN_LEFT, r.stunTimer - CONFIG.MASH_RECOVERY_REDUCTION);
+    }
+    r._turboMashLatch = input.turbo;
+    return;
+  }
+  r._turboMashLatch = input.turbo;
 
   if (r.spinTimer > 0) {
     // オイルでスピン中はレーンがランダムに揺れて操作しづらくなる
@@ -1185,11 +1308,9 @@ function placeTrap(r) {
 }
 
 /* ============================== 発射物の更新 ============================== */
-/* トラック上下の壁のスクリーン座標(Y)を返す（跳弾判定に使用） */
+/* 画面全体の上下端のスクリーン座標(Y)を返す（跳弾判定に使用。コースの帯ではなく画面全体の端） */
 function getTrackWallsScreen() {
-  const h = canvas.height;
-  const top = h * 0.30;
-  return { top, bottom: top + h * 0.46 };
+  return { top: 0, bottom: canvas.height };
 }
 
 /* エネルギー弾（旧レーザー）専用の更新処理：
@@ -2158,6 +2279,7 @@ function startPodiumAnimation(ranked) {
 }
 
 /* ============================== 初期化 ============================== */
+loadRosterParams(); // assets/robotN_param.txt を非同期で読み込み開始（未用意でも既定値で問題なく動作）
 buildCharacterSelectUI();
 resizeCanvas();
 BGM.play('opening'); // ブラウザの自動再生制限で鳴らないことがあるが、その場合も最初のタップで自動的に再生される
