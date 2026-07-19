@@ -1314,15 +1314,13 @@ function getTrackWallsScreen() {
 }
 
 /* エネルギー弾（旧レーザー）専用の更新処理：
-   360度ランダムな方向へ飛び、トラック上下の壁と画面の左右端で跳ね返り、
-   ロボットに命中するか、5回跳ね返ったら消える。 */
+   360度ランダムな方向へ飛び、画面の上下端で跳ね返り、
+   ロボットに命中するか、5回跳ね返ったら消える（左右では跳ね返らない）。 */
 function updateEnergyBall(p, dt) {
   p.x += p.vx * dt;
   p.y += p.vy * dt;
 
   const walls = getTrackWallsScreen();
-  const screenX = worldToScreenX(p.x);
-  const w = canvas.width;
 
   if (p.y < walls.top) {
     p.y = walls.top + (walls.top - p.y); p.vy = -p.vy; p.bounces++;
@@ -1331,9 +1329,6 @@ function updateEnergyBall(p, dt) {
     p.y = walls.bottom - (p.y - walls.bottom); p.vy = -p.vy; p.bounces++;
     state.particles.push({ kind: 'smoke', x: p.x, lane: 0, laneOffsetPx: walls.bottom - laneY(0, canvas.height), vx: rand(-20, 20), vy: -20, life: 0.4, color: 'rgba(200,200,210,0.5)' });
   }
-
-  if (screenX < 0) { p.x = 2 * state.camera.x - p.x; p.vx = -p.vx; p.bounces++; }
-  else if (screenX > w) { p.x = 2 * state.camera.x + 2 * w - p.x; p.vx = -p.vx; p.bounces++; }
 
   if (p.bounces >= p.maxBounces) { p.life = 0; return; }
 
