@@ -1,5 +1,5 @@
-name=IRON-01
-speed=25
-turbo=25
-jump=25
-recovery=25
+name=トリケラロボ
+speed=20
+turbo=20
+jump=20
+recovery=40
