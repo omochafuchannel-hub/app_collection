@@ -18,7 +18,7 @@
 const CONFIG = {
   LANES: 4,                     // レーン数
   LAPS: 3,                      // 周回数
-  LAP_LENGTH: 6000,             // 1周の距離（ワールド座標系のピクセル数）
+  LAP_LENGTH: 9000,             // 1周の距離（ワールド座標系のピクセル数。従来の1.5倍）
 
   // ---- 速度関連 ----
   BASE_SPEED: 260,              // 基本速度 (px/sec)
@@ -86,8 +86,11 @@ const CONFIG = {
   // ---- レベル／経験値システム ----
   // コース上の敵キャラにぶつかると倒せて経験値を獲得する。閾値を超えるとレベルアップし、
   // 各ステータス・アイテム効果が一律で強化される。
-  ENEMY_MIN_GAP: 1500,           // 敵キャラ同士の最小間隔（同レーン内、ワールド座標）
-  ENEMY_GAP_VARIANCE: 900,       // 間隔のランダム幅（MIN_GAP 〜 MIN_GAP+この値）
+  ENEMY_MIN_GAP: 650,            // 敵キャラ同士の最小間隔（同レーン内、ワールド座標。以前より大幅に密集）
+  ENEMY_GAP_VARIANCE: 500,       // 間隔のランダム幅（MIN_GAP 〜 MIN_GAP+この値）
+  ENEMY_ATTACK_RANGE: 650,       // この距離以内にロボットがいると敵がエネルギー弾で攻撃してくる
+  ENEMY_ATTACK_INTERVAL: [2.2, 4.0], // 敵の攻撃間隔（秒、ランダム）
+  ENEMY_ATTACK_SPEED_TIME: 1.1,  // 敵の弾がロボットの現在位置に届くまでの想定時間（狙いの精度に影響）
   ENEMY_HIT_RADIUS: 34,          // ぶつかったと判定する距離
   ENEMY_XP_REWARD: 12,           // 敵1体を倒した時にもらえる経験値
   ENEMY_KNOCKBACK_TIME: 1.1,     // 吹っ飛び演出の長さ（秒）
@@ -918,25 +921,75 @@ function gainXp(racer, amount) {
   }
 }
 
-/* ============================== 敵キャラ（コース上に配置・ぶつかると倒せる） ============================== */
+/* ============================== 敵キャラ（コース上に配置） ==============================
+   ・ターボ中の体当たり、またはボーガン／ミサイル／追跡ミサイル／エネルギー弾／トラップ
+     といった攻撃アイテムを当てることで倒せる（通常の体当たりだけでは倒せない）。
+   ・敵は一定間隔で近くのロボットに向けて小さなエネルギー弾を撃ってくる。当たると
+     障害物と同様に一定時間停止する。
+   ================================================================================ */
+
+/* 敵キャラを倒す共通処理（体当たり／各種攻撃アイテムから呼ばれる） */
+function defeatEnemy(e, attacker, knockSpeedBase) {
+  if (!e.alive) return;
+  e.alive = false;
+  e.knockedTimer = CONFIG.ENEMY_KNOCKBACK_TIME;
+  // 弾き飛ばされて吹っ飛ぶ（進行方向へ、少し上空へ舞う）
+  e.knockVx = 260 + (knockSpeedBase || 0) * 0.6;
+  e.knockZ = 0;
+  e.knockVz = rand(220, 380); // racerのジャンプ物理と同じ向き（正=上向き）
+  e.rotSpeed = rand(-14, 14);
+  if (attacker) gainXp(attacker, CONFIG.ENEMY_XP_REWARD);
+  spawnExplosion(e.x, e.lane, 'medium');
+  if (attacker && attacker.isPlayer) SFX.enemyDefeat();
+  shakeScreen(4);
+}
+
+/* ロボット本体との接触判定：ターボ中でなければ素通りするだけで倒せない */
 function applyEnemyCollisions(r) {
   for (const e of state.enemies) {
     if (!e.alive || e.lane !== r.lane) continue;
     if (Math.abs(r.x - e.x) < CONFIG.ENEMY_HIT_RADIUS) {
-      e.alive = false;
-      e.knockedTimer = CONFIG.ENEMY_KNOCKBACK_TIME;
-      // ロボットに弾き飛ばされて吹っ飛ぶ（進行方向へ、少し上空へ舞う）
-      e.knockVx = 260 + Math.abs(r.currentSpeed) * 0.6;
-      e.knockZ = 0;
-      e.knockVz = rand(220, 380); // racerのジャンプ物理と同じ向き（正=上向き）
-      e.rotSpeed = rand(-14, 14);
-      gainXp(r, CONFIG.ENEMY_XP_REWARD);
-      spawnExplosion(e.x, e.lane, 'medium');
-      if (r.isPlayer) SFX.enemyDefeat();
-      shakeScreen(4);
+      if (r.turboActive && !r.overheated) {
+        defeatEnemy(e, r, r.currentSpeed);
+      }
+      // ターボを使っていない時は当たっても何も起きない（すり抜ける）
     }
   }
 }
+
+/* 敵の攻撃：近くにロボットがいれば一定間隔で小さなエネルギー弾を撃つ */
+function updateEnemyAttacks(dt) {
+  if (!state.racers.length) return;
+  const h = canvas.height;
+  for (const e of state.enemies) {
+    if (!e.alive) continue;
+    e.attackTimer -= dt;
+    if (e.attackTimer > 0) continue;
+
+    // 射程内で最も近いロボットを狙う
+    let target = null, bestDist = CONFIG.ENEMY_ATTACK_RANGE;
+    for (const r of state.racers) {
+      const d = Math.abs(r.x - e.x);
+      if (d < bestDist) { bestDist = d; target = r; }
+    }
+    if (!target) {
+      e.attackTimer = 0.4; // 近くに誰もいなければ少し待って再チェック
+      continue;
+    }
+
+    const ex = e.x, ey = laneY(e.lane, h);
+    const tx = target.x, ty = laneY(target.laneVisual, h);
+    const T = CONFIG.ENEMY_ATTACK_SPEED_TIME;
+    state.projectiles.push({
+      type: 'enemy_energy', owner: null, x: ex, y: ey,
+      vx: (tx - ex) / T, vy: (ty - ey) / T,
+      life: T + 0.5, color: '#ff5d3a',
+    });
+    spawnMuzzleBurst(e.x, e.lane, '#ff5d3a', 12);
+    e.attackTimer = rand(CONFIG.ENEMY_ATTACK_INTERVAL[0], CONFIG.ENEMY_ATTACK_INTERVAL[1]);
+  }
+}
+
 function updateEnemies(dt) {
   for (const e of state.enemies) {
     if (e.knockedTimer > 0) {
@@ -947,6 +1000,7 @@ function updateEnemies(dt) {
       e.rot = (e.rot || 0) + e.rotSpeed * dt;
     }
   }
+  updateEnemyAttacks(dt);
   // 吹っ飛び演出が終わった敵キャラは配列から削除して負荷を抑える
   state.enemies = state.enemies.filter(e => e.alive || e.knockedTimer > 0);
 }
@@ -990,13 +1044,14 @@ function generateTrack() {
     ix += rand(CONFIG.ITEM_BOX_GAP * 0.6, CONFIG.ITEM_BOX_GAP * 1.4);
   }
 
-  // 敵キャラ配置（ぶつかると倒せて経験値がもらえる）
+  // 敵キャラ配置（ぶつかると倒せて経験値がもらえる。ターボ中の体当たりか攻撃アイテムで倒せる）
   state.enemies = [];
   let ex = rand(700, 1300);
   while (ex < totalLen - 400) {
     state.enemies.push({
       x: ex, lane: randInt(0, CONFIG.LANES - 1),
       alive: true, knockedTimer: 0, knockVx: 0, knockVy: 0, rot: 0, rotSpeed: 0,
+      attackTimer: rand(CONFIG.ENEMY_ATTACK_INTERVAL[0], CONFIG.ENEMY_ATTACK_INTERVAL[1]),
     });
     ex += rand(CONFIG.ENEMY_MIN_GAP, CONFIG.ENEMY_MIN_GAP + CONFIG.ENEMY_GAP_VARIANCE);
   }
@@ -1422,6 +1477,19 @@ function applyTraps(r) {
       spawnExplosion(t.x, t.lane, 'large');
     }
   }
+  // トラップは敵キャラも巻き込んで倒せる（攻撃アイテムの一種として扱う）
+  for (const t of state.traps) {
+    if (t.triggered) continue;
+    for (const e of state.enemies) {
+      if (!e.alive || e.lane !== t.lane) continue;
+      if (Math.abs(e.x - t.x) < 26 * (t.sizeMult || 1)) {
+        t.triggered = true;
+        defeatEnemy(e, t.owner, 300);
+        spawnExplosion(t.x, t.lane, 'large');
+        break;
+      }
+    }
+  }
   state.traps = state.traps.filter(t => !t.triggered || t.age < 0.6);
   state.traps.forEach(t => { if (t.triggered) t.age = (t.age || 0) + (1 / 60); });
 }
@@ -1554,12 +1622,45 @@ function updateEnergyBall(p, dt) {
       if (o.isPlayer || p.owner.isPlayer) SFX.explosion(true);
     }
   }
+  // 敵キャラにも命中すれば倒せる
+  if (!p.hit) {
+    for (const e of state.enemies) {
+      if (!e.alive) continue;
+      const ey = laneY(e.lane, canvas.height);
+      const dx = p.x - e.x, dy = p.y - ey;
+      if (dx * dx + dy * dy < 40 * 40) {
+        p.hit = true; p.life = 0;
+        defeatEnemy(e, p.owner, 400);
+        break;
+      }
+    }
+  }
 }
 
 function updateProjectiles(dt) {
   for (const p of state.projectiles) {
     p.life -= dt;
+
     if (p.type === 'energy') { updateEnergyBall(p, dt); continue; }
+
+    if (p.type === 'enemy_energy') {
+      // 敵が撃つ小さなエネルギー弾：狙った位置へ直線的に飛び、当たると障害物と同様に一定時間停止させる
+      p.x += p.vx * dt;
+      p.y += p.vy * dt;
+      for (const o of state.racers) {
+        if (p.hit || o.invincibleTimer > 0) continue;
+        const oy = laneY(o.laneVisual, canvas.height);
+        const dx = p.x - o.x, dy = p.y - oy;
+        if (dx * dx + dy * dy < 32 * 32) {
+          p.hit = true; p.life = 0;
+          stunRacer(o, CONFIG.STUN_TIME, 'fall');
+          spawnExplosion(o.x, o.lane, 'small');
+          if (o.isPlayer) SFX.explosion(false);
+        }
+      }
+      continue;
+    }
+
     if (p.type === 'homing' && p.target) {
       // 目標のレーン・X位置に緩やかに寄っていく
       const desiredLane = p.target.lane;
@@ -1589,6 +1690,19 @@ function updateProjectiles(dt) {
               stunRacer(near, CONFIG.STUN_TIME, 'fall');
             }
           }
+        }
+      }
+    }
+
+    // 攻撃アイテム（ボーガン／ミサイル／追跡ミサイル）は敵キャラも倒せる
+    if (!p.hit) {
+      for (const e of state.enemies) {
+        if (!e.alive || e.lane !== p.lane) continue;
+        const hitRadius = (p.big ? 70 : 34) * (p.sizeMult || 1);
+        if (Math.abs(p.x - e.x) < hitRadius) {
+          p.hit = true; p.life = 0;
+          defeatEnemy(e, p.owner, p.speed);
+          break;
         }
       }
     }
@@ -2246,6 +2360,26 @@ function drawProjectiles(w, h) {
           vx: 0, vy: 0, life: 0.25, color: `hsl(${(now / 3) % 360}, 100%, 70%)`,
         });
       }
+      continue;
+    }
+
+    if (p.type === 'enemy_energy') {
+      // 敵の攻撃：小さめでオレンジ〜赤系に光る、プレイヤーのエネルギー弾と区別しやすい色の弾
+      const orbAngle = Math.atan2(p.vy, p.vx);
+      const orbSize = 26;
+      const pulse = 1 + Math.sin(now / 60) * 0.15;
+      ctx.save();
+      ctx.translate(sx, p.y);
+      ctx.rotate(orbAngle);
+      ctx.shadowBlur = 18;
+      ctx.shadowColor = '#ff5d3a';
+      const grad = ctx.createRadialGradient(0, 0, 1, 0, 0, orbSize * 0.5 * pulse);
+      grad.addColorStop(0, '#fff2c2');
+      grad.addColorStop(0.5, '#ff5d3a');
+      grad.addColorStop(1, 'rgba(255,80,50,0)');
+      ctx.fillStyle = grad;
+      ctx.beginPath(); ctx.arc(0, 0, orbSize * 0.5 * pulse, 0, Math.PI * 2); ctx.fill();
+      ctx.restore();
       continue;
     }
 
