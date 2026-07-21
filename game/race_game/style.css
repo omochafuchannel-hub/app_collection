@@ -174,6 +174,44 @@ html, body{
   width:120px; height:110px; flex-shrink:0;
 }
 .player-preview-fields{ flex:1; min-width:200px; text-align:left; }
+
+.stats-panel{
+  width: 190px; flex-shrink:0;
+  background: linear-gradient(180deg, var(--bg-panel), #0f1220);
+  border: 2px solid var(--line);
+  border-radius: 10px;
+  padding: 10px 12px;
+  text-align:left;
+}
+.stats-panel-title{
+  font-family: var(--font-display); font-size: 10px;
+  color: var(--amber); letter-spacing:1px; margin-bottom: 8px;
+}
+.stat-row{
+  display:flex; align-items:center; gap:6px;
+  margin-bottom: 6px;
+}
+.stat-label{
+  font-family: var(--font-display); font-size: 8px;
+  color: var(--text-dim); width: 52px; flex-shrink:0; letter-spacing:0.5px;
+}
+.stat-bar{
+  flex:1; height:9px; background:#05060b; border-radius:5px;
+  overflow:hidden; border:1px solid var(--line);
+}
+.stat-bar-fill{
+  height:100%; width:25%;
+  transition: width .25s ease;
+  border-radius:5px;
+}
+.stat-bar-fill.speed{ background: linear-gradient(90deg, #ffb930, #ff8a4d); }
+.stat-bar-fill.turbo{ background: linear-gradient(90deg, #28f2ff, #4de0c0); }
+.stat-bar-fill.jump{ background: linear-gradient(90deg, #63ff8a, #8dff4d); }
+.stat-bar-fill.recovery{ background: linear-gradient(90deg, #ff4fd8, #a685ff); }
+.stat-val{
+  font-family: var(--font-body); font-size: 10px; color: var(--text-main);
+  width: 26px; text-align:right; flex-shrink:0;
+}
 .field-label{
   display:block; font-family: var(--font-display); font-size:9px;
   color: var(--amber); letter-spacing:1px; margin-bottom:6px;
@@ -250,6 +288,8 @@ html, body{
 .hud-label{ font-size:9px; color:var(--text-dim); letter-spacing:1px; }
 .hud-box span:last-child{ font-size:15px; color:var(--cyan); font-family:var(--font-display); margin-top:2px; }
 .hud-rank span:last-child{ color: var(--amber); }
+.hud-lv{ min-width: 44px; }
+.hud-lv span:last-child{ color: #8dff4d; }
 .hud-item{ min-width: 128px; }
 .hud-item span:last-child{ font-size: 10px; font-family: var(--font-body); white-space: nowrap; }
 
