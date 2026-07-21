@@ -39,8 +39,11 @@ const CONFIG = {
   LANE_CHANGE_SPEED: 9,         // レーン変更の補間速度（大きいほど速い）
 
   // ---- 障害物・アイテム生成 ----
-  OBSTACLE_MIN_GAP: 420,        // 障害物同士の最小間隔（同レーン内）
+  OBSTACLE_MIN_GAP: 420,        // 障害物同士の最小間隔（同レーン内。これは3周目＝最終的な密度の基準値）
   OBSTACLE_DENSITY: 1 / 260,    // 1pxあたりの障害物発生確率の目安
+  // 周回ごとに障害物の間隔を何倍にするか（値が大きいほど間隔が広い＝出現頻度が低い）。
+  // 1周目は少なめ、2周目はやや少なめ、3周目で従来通りの密度になるよう徐々に増やす。
+  OBSTACLE_LAP_GAP_MULT: [2.4, 1.5, 1.0],
   ITEM_BOX_GAP: 900,           // アイテムボックスの平均間隔
   MAX_ITEMS: 2,                 // 同時に持てるアイテムの最大数
   SAFE_LANE_GUARANTEE: true,    // 各X位置で必ず1レーンは安全にする
@@ -1013,10 +1016,13 @@ function generateTrack() {
 
   const totalLen = state.totalDistance;
   // 各レーンごとに、最小間隔を空けながら障害物をランダム配置
+  // （周回が進むごとに間隔を狭めていき、出現頻度を徐々に上げる）
   for (let lane = 0; lane < CONFIG.LANES; lane++) {
     let x = rand(500, 900); // スタート直後は少し猶予を持たせる
     while (x < totalLen - 400) {
-      x += rand(CONFIG.OBSTACLE_MIN_GAP, CONFIG.OBSTACLE_MIN_GAP * 2.2);
+      const lapIndex = Math.min(CONFIG.LAPS - 1, Math.floor(x / CONFIG.LAP_LENGTH));
+      const gapMult = CONFIG.OBSTACLE_LAP_GAP_MULT[lapIndex] ?? 1;
+      x += rand(CONFIG.OBSTACLE_MIN_GAP * gapMult, CONFIG.OBSTACLE_MIN_GAP * 2.2 * gapMult);
       if (x >= totalLen - 400) break;
       const type = choice(OBSTACLE_TYPES);
       state.obstacles.push({ x, lane, type, cleared: new Set() });
