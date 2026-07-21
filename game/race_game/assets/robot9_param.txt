@@ -1,5 +1,5 @@
-name=IRON-01
-speed=25
-turbo=25
-jump=25
-recovery=25
+name=ダンクヘッド
+speed=30
+turbo=15
+jump=40
+recovery=15
