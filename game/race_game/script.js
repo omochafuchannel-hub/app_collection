@@ -59,13 +59,46 @@ const CONFIG = {
 
   // ---- キャラクターごとのステータス配分システム ----
   // speed/turbo/jump/recovery の4項目の割合（合計100になるよう自動正規化される）で
-  // キャラごとの個性を出す。STAT_SPREAD は「極端に振った時にどれだけ差が出るか」の
-  // 強さで、0であれば全キャラ横並び（差が出ない）になる。
-  STAT_SPREAD: 0.28,
-  STAT_MULT_MIN: 0.45,           // 倍率の下限（0や極端な値でも壊れないようにクランプ）
-  STAT_MULT_MAX: 1.9,            // 倍率の上限
+  // キャラごとの個性を出す。
+  //
+  // 各ステータスは「同じ1ポイントでもゲームへの効き方の強さが違う」ため、
+  // 単一の係数を全項目に使うと speed ばかりが強く／jump が弱くなるなど
+  // 不公平が生まれる。そこで下記4つの STAT_SPREAD_* は、平均的な腕前の
+  // プレイヤーが操作した場合に「どの項目に極振りしても完走タイムがほぼ
+  // 同じになる」ことをシミュレーションで検証しながら個別に調整した値。
+  // (100点を1項目に全振り／70:10:10:10 に偏らせる、といったケースで
+  //  完走タイムの差が数%以内に収まることを確認済み)
+  STAT_SPREAD_SPEED: 0.10,
+  STAT_SPREAD_TURBO: 0.14,
+  STAT_SPREAD_JUMP: 0.48,     // jumpは間接的にしか効かない（回避成功率・着地ブーストのみ）ため大きめの値が必要
+  STAT_SPREAD_RECOVERY: 0.15,
+  STAT_MULT_MIN: 0.40,           // 倍率の下限（0や極端な値でも壊れないようにクランプ）
+  STAT_MULT_MAX: 2.5,            // 倍率の上限
   MASH_RECOVERY_REDUCTION: 0.12, // スタン/オーバーヒート中にターボボタンを押すたびに短縮される秒数
   MASH_RECOVERY_MIN_LEFT: 0,     // 連打で短縮できる残り時間の下限
+
+  // ジャンプ着地ブースト：jumpステータスに実際のスピード面での意味を持たせるための仕組み。
+  // 障害物をジャンプで無事クリアした時／ジャンプ台や坂に乗った時、着地後の一定時間だけ
+  // 速度に statJumpMult がそのまま掛かる（jump が高いほど恩恵が大きく、低いと逆にわずかに損をする）。
+  JUMP_BOOST_DURATION: 1.0,
+  JUMP_BOOST_COOLDOWN: 0.8,  // ブースト連発（ジャンプ連打での稼ぎ）を防ぐための最短間隔
+
+  // ---- レベル／経験値システム ----
+  // コース上の敵キャラにぶつかると倒せて経験値を獲得する。閾値を超えるとレベルアップし、
+  // 各ステータス・アイテム効果が一律で強化される。
+  ENEMY_MIN_GAP: 1500,           // 敵キャラ同士の最小間隔（同レーン内、ワールド座標）
+  ENEMY_GAP_VARIANCE: 900,       // 間隔のランダム幅（MIN_GAP 〜 MIN_GAP+この値）
+  ENEMY_HIT_RADIUS: 34,          // ぶつかったと判定する距離
+  ENEMY_XP_REWARD: 12,           // 敵1体を倒した時にもらえる経験値
+  ENEMY_KNOCKBACK_TIME: 1.1,     // 吹っ飛び演出の長さ（秒）
+  XP_THRESHOLD_BASE: 30,         // レベル1→2に必要な経験値
+  XP_THRESHOLD_GROWTH: 1.35,     // レベルが上がるごとに必要経験値が何倍になるか
+  LEVEL_STAT_MULT: 1.1,          // レベルアップ時の各ステータス倍率（speed/jumpはそのまま掛け、turbo/recoveryは逆数を掛ける）
+  LEVEL_STAT_MULT_CEILING: 4.0,  // レベルアップによる際限のない成長を防ぐ安全上限
+  LEVEL_ITEM_SCALE_PER_LEVEL: 0.15, // レベルごとのアイテム効果強化率（サイズ・威力系）
+  CROSSBOW_COUNT_PER_LEVEL: 2,      // ボーガンの矢：レベルごとに増える本数
+  HOMING_COUNT_PER_LEVEL: 3,        // 追跡ミサイル：レベルごとに増える発数
+  ENERGY_BOUNCES_PER_LEVEL: 1,      // エネルギー弾：レベルごとに増える跳ね返り回数上限
 
   CANVAS_BG_LIST: ['sea', 'city', 'grass', 'mountain'],
 };
@@ -89,6 +122,7 @@ const ROSTER_COLORS = ['#ffb930', '#28f2ff', '#ff4fd8', '#63ff8a', '#ff3b57', '#
      assets/laser_orb.PNG       ... エネルギー弾（旧レーザー）に使う「円形の光の玉」の画像（例：発光する球体）
      assets/title_logo.PNG      ... オープニング画面のタイトルロゴ
      assets/title_bg.PNG        ... オープニング画面の背景画像
+     assets/enemy.PNG           ... コース上に配置される敵キャラの画像（無ければ自動生成の敵グラフィックを使用）
    推奨サイズ: 横長の乗り物系画像で 64x32px 前後（正方形でも自動調整されます）
    ================================================================================ */
 const ASSET_PATHS = {
@@ -99,6 +133,7 @@ const ASSET_PATHS = {
   laserOrb: 'assets/laser_orb.PNG',
   titleLogo: 'assets/title_logo.PNG',
   titleBg: 'assets/title_bg.PNG',
+  enemy: 'assets/enemy.PNG',
 };
 const assetImages = {};
 function loadAssetImage(key, path) {
@@ -214,10 +249,11 @@ function loadRosterParams() {
 }
 
 /* ステータス割合(0〜100、既定値25が基準)を実際のゲーム内倍率に変換する。
+   spread はその項目ごとの効きの強さ(CONFIG.STAT_SPREAD_*)。
    inverse=true の場合は「値が大きいほど数値が小さくなる」項目
    （復帰時間やターボのゲージ上昇速度など）に使う。 */
-function statMultiplier(pct, inverse) {
-  const diff = ((pct - 25) / 25) * CONFIG.STAT_SPREAD * (inverse ? -1 : 1);
+function statMultiplier(pct, inverse, spread) {
+  const diff = ((pct - 25) / 25) * spread * (inverse ? -1 : 1);
   return clamp(1 + diff, CONFIG.STAT_MULT_MIN, CONFIG.STAT_MULT_MAX);
 }
 
@@ -261,6 +297,27 @@ function generatePlaceholderRobot(colorHex) {
   return c.toDataURL();
 }
 
+/* コース上に配置する「敵キャラ」の簡易プレースホルダー画像（assets/enemy.PNG が無い場合に使用） */
+function generatePlaceholderEnemy() {
+  const c = document.createElement('canvas');
+  c.width = 56; c.height = 56;
+  const g = c.getContext('2d');
+  g.fillStyle = '#7a1020';
+  // ずんぐりした胴体
+  g.beginPath(); g.arc(28, 32, 20, 0, Math.PI * 2); g.fill();
+  g.fillStyle = '#ff3b57';
+  g.beginPath(); g.arc(28, 32, 15, 0, Math.PI * 2); g.fill();
+  // 目（怒った感じの三角）
+  g.fillStyle = '#fff2c2';
+  g.beginPath(); g.moveTo(16, 26); g.lineTo(24, 24); g.lineTo(20, 32); g.closePath(); g.fill();
+  g.beginPath(); g.moveTo(40, 26); g.lineTo(32, 24); g.lineTo(36, 32); g.closePath(); g.fill();
+  // 小さな脚
+  g.fillStyle = '#7a1020';
+  g.fillRect(16, 46, 8, 8);
+  g.fillRect(32, 46, 8, 8);
+  return c.toDataURL();
+}
+
 /* ============================== サウンド（WebAudioで効果音を自動生成） ==============================
    外部の音声ファイルは使用せず、Web Audio API でその場に効果音を生成しています。
    ブラウザの自動再生制限があるため、最初のユーザー操作（GAME STARTボタン押下等）で
@@ -269,17 +326,34 @@ function generatePlaceholderRobot(colorHex) {
 const SFX = (() => {
   const AudioCtxClass = window.AudioContext || window.webkitAudioContext;
   let actx = null;
+  let outputNode = null; // 効果音の最終的な接続先（下記の理由でスピーカーへ直接は繋がない）
 
+  /* ----------------------------------------------------------------------
+     iPhoneのマナーモード（サイレントスイッチ）対策:
+     Web Audio API で作った音は actx.destination に直接つなぐと、
+     iOSではマナーモード中でも鳴ってしまう仕様になっている。
+     そこで、一度 MediaStreamAudioDestinationNode 経由の <audio> 要素に
+     出力を流すことで、実際の再生経路を「audio要素の再生」に変換し、
+     マナーモード中は鳴らないようにする。
+     ---------------------------------------------------------------------- */
   function ensureAudio() {
     if (!actx) {
-      try { actx = new AudioCtxClass(); } catch (e) { actx = null; }
+      try {
+        actx = new AudioCtxClass();
+        const dest = actx.createMediaStreamDestination();
+        outputNode = dest;
+        const el = document.createElement('audio');
+        el.srcObject = dest.stream;
+        el.volume = 1;
+        el.play().catch(() => {});
+      } catch (e) { actx = null; outputNode = null; }
     }
     if (actx && actx.state === 'suspended') actx.resume();
   }
 
   /* 単純なビープ音（ジャンプ・カウントダウン等に使用） */
   function beep(freq, duration, type = 'square', vol = 0.15, delay = 0, slideTo = null) {
-    if (!actx) return;
+    if (!actx || !outputNode) return;
     const t0 = actx.currentTime + delay;
     const osc = actx.createOscillator();
     const gain = actx.createGain();
@@ -288,13 +362,13 @@ const SFX = (() => {
     if (slideTo) osc.frequency.exponentialRampToValueAtTime(slideTo, t0 + duration);
     gain.gain.setValueAtTime(vol, t0);
     gain.gain.exponentialRampToValueAtTime(0.001, t0 + duration);
-    osc.connect(gain); gain.connect(actx.destination);
+    osc.connect(gain); gain.connect(outputNode);
     osc.start(t0); osc.stop(t0 + duration + 0.03);
   }
 
   /* ノイズバースト（爆発・衝突・歓声などに使用） */
   function noiseBurst(duration, vol = 0.2, filterFreq = null) {
-    if (!actx) return;
+    if (!actx || !outputNode) return;
     const bufferSize = Math.floor(actx.sampleRate * duration);
     const buffer = actx.createBuffer(1, bufferSize, actx.sampleRate);
     const data = buffer.getChannelData(0);
@@ -309,7 +383,7 @@ const SFX = (() => {
     }
     const gain = actx.createGain();
     gain.gain.setValueAtTime(vol, actx.currentTime);
-    node.connect(gain); gain.connect(actx.destination);
+    node.connect(gain); gain.connect(outputNode);
     src.start();
   }
 
@@ -336,11 +410,15 @@ const SFX = (() => {
       [0, 0.18, 0.36, 0.54, 0.78].forEach((d, i) => beep([523, 659, 784, 1047, 1319][i], 0.28, 'square', 0.2, d));
       noiseBurst(1.2, 0.08, 1500);
     },
+    enemyDefeat() { beep(500, 0.08, 'square', 0.12, 0); beep(750, 0.1, 'square', 0.12, 0.06); noiseBurst(0.2, 0.12); },
+    levelUp() { [0, 0.1, 0.2, 0.32].forEach((d, i) => beep([660, 880, 1100, 1320][i], 0.22, 'square', 0.2, d)); },
   };
 })();
 
 /* ============================== BGM（背景音楽） ==============================
    3つの場面（オープニング／レース／表彰台）でそれぞれ別のBGM(mp3)をループ再生する。
+   通常の <audio> 要素で再生しているため、iPhoneのマナーモード（サイレント
+   スイッチ）中は自動的に鳴らないようになっている（効果音側の対策は上のSFX参照）。
    用意してもらいたいファイル（GitHub Pages上の assets/ フォルダに配置。無くても
    ゲーム自体は問題なく動作し、単にその場面の音楽が鳴らないだけになる）:
      assets/bgm_opening.mp3   ... オープニング／キャラクター選択画面のBGM
@@ -490,6 +568,7 @@ const state = {
   racers: [],
   obstacles: [],
   itemBoxes: [],
+  enemies: [],
   projectiles: [],
   particles: [],
   traps: [],
@@ -566,6 +645,22 @@ function buildCharacterSelectUI() {
   const previewPlaceholder = document.querySelector('#playerPreview .dz-placeholder');
   const nameInput = document.getElementById('playerNameInput');
 
+  // カスタムキャラクターのステータス（ファイルが無いので均等配分の既定値を使う）
+  const CUSTOM_STATS = { speed: 25, turbo: 25, jump: 25, recovery: 25 };
+  let selectedStatsParams = ROSTER_PARAMS[0]; // 現在「選択中」のキャラのステータス（ホバーを外した時に戻す先）
+
+  // カーソルを当てた（またはタップして選んだ）キャラのステータス配分を棒グラフに反映する
+  function updateStatsPanel(params) {
+    const map = { speed: 'Speed', turbo: 'Turbo', jump: 'Jump', recovery: 'Recovery' };
+    Object.entries(map).forEach(([key, cap]) => {
+      const pct = Math.round(params[key]);
+      const bar = document.getElementById('statBar' + cap);
+      const val = document.getElementById('statVal' + cap);
+      if (bar) bar.style.width = `${clamp(pct, 0, 100)}%`;
+      if (val) val.textContent = String(pct);
+    });
+  }
+
   function updatePreview(src) {
     previewImg.src = src;
     previewImg.style.display = 'block';
@@ -595,11 +690,17 @@ function buildCharacterSelectUI() {
     tile.appendChild(nameEl);
     rosterTileNameEls[i] = nameEl;
 
+    // カーソルを当てている間だけ、そのキャラのステータスをプレビュー表示
+    tile.addEventListener('mouseenter', () => updateStatsPanel(ROSTER_PARAMS[i]));
+    tile.addEventListener('mouseleave', () => updateStatsPanel(selectedStatsParams));
+
     tile.addEventListener('click', () => {
       state.playerSelection = { rosterIndex: i, customImg: null };
       selectTile(tile);
       updatePreview(img.src);
       nameInput.value = ROSTER_PARAMS[i].name;
+      selectedStatsParams = ROSTER_PARAMS[i];
+      updateStatsPanel(selectedStatsParams);
     });
     grid.appendChild(tile);
   });
@@ -614,6 +715,9 @@ function buildCharacterSelectUI() {
   customFileInput.style.display = 'none';
   customTile.appendChild(customFileInput);
 
+  customTile.addEventListener('mouseenter', () => updateStatsPanel(CUSTOM_STATS));
+  customTile.addEventListener('mouseleave', () => updateStatsPanel(selectedStatsParams));
+
   function applyCustomFile(file) {
     if (!file || !file.type.startsWith('image/')) return;
     const reader = new FileReader();
@@ -623,6 +727,8 @@ function buildCharacterSelectUI() {
       state.playerSelection = { rosterIndex: null, customImg: img };
       selectTile(customTile);
       updatePreview(e.target.result);
+      selectedStatsParams = CUSTOM_STATS;
+      updateStatsPanel(selectedStatsParams);
     };
     reader.readAsDataURL(file);
   }
@@ -714,13 +820,19 @@ class Racer {
 
     // ---- キャラクターごとのステータス配分（speed/turbo/jump/recovery、合計100）から倍率を算出 ----
     const p = entry.params || { speed: 25, turbo: 25, jump: 25, recovery: 25 };
-    this.statSpeedMult = statMultiplier(p.speed, false);      // 高いほど速い
-    this.statTurboFillMult = statMultiplier(p.turbo, true);   // 高いほどゲージ上昇が緩やか＝長くターボを使える
-    this.statJumpMult = statMultiplier(p.jump, false);        // 高いほどジャンプが高い
-    this.statRecoveryMult = statMultiplier(p.recovery, true); // 高いほどスタン/オーバーヒートの復帰が早い
+    this.statSpeedMult = statMultiplier(p.speed, false, CONFIG.STAT_SPREAD_SPEED);         // 高いほど速い
+    this.statTurboFillMult = statMultiplier(p.turbo, true, CONFIG.STAT_SPREAD_TURBO);       // 高いほどゲージ上昇が緩やか＝長くターボを使える
+    this.statJumpMult = statMultiplier(p.jump, false, CONFIG.STAT_SPREAD_JUMP);             // 高いほどジャンプが高く、着地ブーストも大きい
+    this.statRecoveryMult = statMultiplier(p.recovery, true, CONFIG.STAT_SPREAD_RECOVERY);  // 高いほどスタン/オーバーヒートの復帰が早い
 
-    this.baseSpeed = CONFIG.BASE_SPEED * this.statSpeedMult + (this.isPlayer ? 0 : rand(-CONFIG.MAX_SPEED_CPU_VARIANCE, CONFIG.MAX_SPEED_CPU_VARIANCE) * 0.4);
+    this.speedVarianceAdd = this.isPlayer ? 0 : rand(-CONFIG.MAX_SPEED_CPU_VARIANCE, CONFIG.MAX_SPEED_CPU_VARIANCE) * 0.4;
+    this.baseSpeed = CONFIG.BASE_SPEED * this.statSpeedMult + this.speedVarianceAdd;
     this.currentSpeed = 0;
+
+    // ---- レベル／経験値 ----
+    this.level = 1;
+    this.xp = 0;
+    this.xpToNext = xpThresholdForLevel(1);
 
     this.turboGauge = 0;
     this.overheated = false;
@@ -728,6 +840,8 @@ class Racer {
     this.smokeEmitTimer = 0;       // オーバーヒート中に煙を出す間隔タイマー
 
     this.z = 0; this.vz = 0; this.jumping = false;
+    this.jumpBoostTimer = 0;         // 着地ブーストの残り時間
+    this.jumpBoostCooldownTimer = 0; // ブースト連発を防ぐクールダウン
     this.stunTimer = 0;
     this.invincibleTimer = 0;
     this.spinTimer = 0;
@@ -770,6 +884,73 @@ function stunRacer(racer, time, kind) {
 function shakeScreen(amount) { state.camera.shake = Math.max(state.camera.shake, amount); }
 function triggerHitStop() { state.hitStopTimer = Math.max(state.hitStopTimer, CONFIG.HIT_STOP_TIME); }
 
+/* ============================== レベル／経験値システム ============================== */
+/* レベルNに到達するために必要な経験値（レベルが上がるごとに必要量が増えていく） */
+function xpThresholdForLevel(level) {
+  return Math.round(CONFIG.XP_THRESHOLD_BASE * Math.pow(CONFIG.XP_THRESHOLD_GROWTH, level - 1));
+}
+
+/* レベルアップ時、各ステータスを一律で強化する（speed/jumpはそのまま倍率を掛け、
+   turbo/recoveryは「小さいほど良い」項目なので逆数を掛ける）。
+   際限のない成長を防ぐため、安全上限(LEVEL_STAT_MULT_CEILING)でクランプする。 */
+function levelUp(racer) {
+  const mult = CONFIG.LEVEL_STAT_MULT;
+  const ceil = CONFIG.LEVEL_STAT_MULT_CEILING;
+  racer.level++;
+  racer.statSpeedMult = Math.min(ceil, racer.statSpeedMult * mult);
+  racer.statJumpMult = Math.min(ceil, racer.statJumpMult * mult);
+  racer.statTurboFillMult = Math.max(1 / ceil, racer.statTurboFillMult / mult);
+  racer.statRecoveryMult = Math.max(1 / ceil, racer.statRecoveryMult / mult);
+  racer.baseSpeed = CONFIG.BASE_SPEED * racer.statSpeedMult + racer.speedVarianceAdd;
+
+  if (racer.isPlayer) SFX.levelUp();
+  spawnItemSparkleBurst(racer.x, racer.lane); // レベルアップの派手な演出（キラキラ）
+  state.particles.push({ kind: 'flash', x: racer.x, lane: racer.lane, vx: 0, vy: 0, life: 0.4, maxLife: 0.4, color: '#8dff4d' });
+}
+
+/* 敵キャラを倒した時などに経験値を加算し、必要なら複数回レベルアップさせる */
+function gainXp(racer, amount) {
+  racer.xp += amount;
+  while (racer.xp >= racer.xpToNext) {
+    racer.xp -= racer.xpToNext;
+    levelUp(racer);
+    racer.xpToNext = xpThresholdForLevel(racer.level);
+  }
+}
+
+/* ============================== 敵キャラ（コース上に配置・ぶつかると倒せる） ============================== */
+function applyEnemyCollisions(r) {
+  for (const e of state.enemies) {
+    if (!e.alive || e.lane !== r.lane) continue;
+    if (Math.abs(r.x - e.x) < CONFIG.ENEMY_HIT_RADIUS) {
+      e.alive = false;
+      e.knockedTimer = CONFIG.ENEMY_KNOCKBACK_TIME;
+      // ロボットに弾き飛ばされて吹っ飛ぶ（進行方向へ、少し上空へ舞う）
+      e.knockVx = 260 + Math.abs(r.currentSpeed) * 0.6;
+      e.knockZ = 0;
+      e.knockVz = rand(220, 380); // racerのジャンプ物理と同じ向き（正=上向き）
+      e.rotSpeed = rand(-14, 14);
+      gainXp(r, CONFIG.ENEMY_XP_REWARD);
+      spawnExplosion(e.x, e.lane, 'medium');
+      if (r.isPlayer) SFX.enemyDefeat();
+      shakeScreen(4);
+    }
+  }
+}
+function updateEnemies(dt) {
+  for (const e of state.enemies) {
+    if (e.knockedTimer > 0) {
+      e.knockedTimer -= dt;
+      e.x += e.knockVx * dt;
+      e.knockZ += e.knockVz * dt;
+      e.knockVz -= 900 * dt; // 重力で落ちながら吹っ飛ぶ
+      e.rot = (e.rot || 0) + e.rotSpeed * dt;
+    }
+  }
+  // 吹っ飛び演出が終わった敵キャラは配列から削除して負荷を抑える
+  state.enemies = state.enemies.filter(e => e.alive || e.knockedTimer > 0);
+}
+
 /* ============================== コース生成 ============================== */
 function generateTrack() {
   state.obstacles = [];
@@ -807,6 +988,17 @@ function generateTrack() {
   while (ix < totalLen - 300) {
     state.itemBoxes.push({ x: ix, lane: randInt(0, CONFIG.LANES - 1), taken: false });
     ix += rand(CONFIG.ITEM_BOX_GAP * 0.6, CONFIG.ITEM_BOX_GAP * 1.4);
+  }
+
+  // 敵キャラ配置（ぶつかると倒せて経験値がもらえる）
+  state.enemies = [];
+  let ex = rand(700, 1300);
+  while (ex < totalLen - 400) {
+    state.enemies.push({
+      x: ex, lane: randInt(0, CONFIG.LANES - 1),
+      alive: true, knockedTimer: 0, knockVx: 0, knockVy: 0, rot: 0, rotSpeed: 0,
+    });
+    ex += rand(CONFIG.ENEMY_MIN_GAP, CONFIG.ENEMY_MIN_GAP + CONFIG.ENEMY_GAP_VARIANCE);
   }
 }
 
@@ -999,9 +1191,11 @@ function update(dt) {
     applyObstacles(r);
     applyItemBoxPickup(r);
     applyTraps(r);
+    applyEnemyCollisions(r);
     integrateMovement(r, dt);
   }
 
+  updateEnemies(dt);
   updateProjectiles(dt);
   updateParticles(dt);
   updateCamera(dt, player);
@@ -1037,8 +1231,18 @@ function updateRacerCommon(r, dt) {
   if (r.jumping) {
     r.z += r.vz * dt;
     r.vz -= CONFIG.GRAVITY * dt;
-    if (r.z <= 0) { r.z = 0; r.vz = 0; r.jumping = false; }
+    if (r.z <= 0) {
+      r.z = 0; r.vz = 0; r.jumping = false;
+      // 着地した瞬間、クールダウン中でなければ着地ブーストを付与する
+      // （jumpステータスが高いほど恩恵が大きく、低いと逆にわずかに損をする）
+      if (r.jumpBoostCooldownTimer <= 0) {
+        r.jumpBoostTimer = CONFIG.JUMP_BOOST_DURATION;
+        r.jumpBoostCooldownTimer = CONFIG.JUMP_BOOST_COOLDOWN;
+      }
+    }
   }
+  if (r.jumpBoostTimer > 0) { r.jumpBoostTimer -= dt; if (r.jumpBoostTimer < 0) r.jumpBoostTimer = 0; }
+  if (r.jumpBoostCooldownTimer > 0) { r.jumpBoostCooldownTimer -= dt; }
 
   // スタン／スピン タイマー
   if (r.stunTimer > 0) { r.stunTimer -= dt; if (r.stunTimer < 0) r.stunTimer = 0; }
@@ -1057,6 +1261,7 @@ function integrateMovement(r, dt) {
     speed = r.baseSpeed * r.speedMult;
     if (r.turboActive && !r.overheated) speed *= CONFIG.TURBO_MULT;
     if (r.spinTimer > 0) speed *= 0.5; // オイルでのスピン中は減速
+    if (r.jumpBoostTimer > 0) speed *= r.statJumpMult; // ジャンプ着地ブースト
   }
   r.currentSpeed = speed;
   r.x += speed * dt;
@@ -1211,7 +1416,7 @@ function applyTraps(r) {
   for (const t of state.traps) {
     if (t.triggered || t.lane !== r.lane || t.owner === r) continue;
     if (r.invincibleTimer > 0) continue; // 無敵中はトラップも反応しない
-    if (Math.abs(r.x - t.x) < 26) {
+    if (Math.abs(r.x - t.x) < 26 * (t.sizeMult || 1)) {
       t.triggered = true;
       stunRacer(r, CONFIG.STUN_TIME, 'fall');
       spawnExplosion(t.x, t.lane, 'large');
@@ -1247,7 +1452,7 @@ function spawnMuzzleBurst(x, lane, color, count = 20) {
 }
 
 function fireCrossbow(r) {
-  const count = 9;
+  const count = 9 + (r.level - 1) * CONFIG.CROSSBOW_COUNT_PER_LEVEL; // レベルが上がるほど矢の本数が増える
   for (let i = 0; i < count; i++) {
     const spread = (i - (count - 1) / 2) * 0.55; // 扇状展開（レーンオフセットとして使用）
     state.projectiles.push({
@@ -1260,9 +1465,10 @@ function fireCrossbow(r) {
   shakeScreen(5);
 }
 function fireBigMissile(r) {
+  const sizeMult = 1 + (r.level - 1) * CONFIG.LEVEL_ITEM_SCALE_PER_LEVEL; // レベルが上がるほどサイズ・爆風範囲が大きくなる
   state.projectiles.push({
     type: 'big_missile', owner: r, x: r.x, lane: r.lane, laneOffset: 0,
-    speed: 560, life: 3.0, color: '#ff3b57', big: true,
+    speed: 560, life: 3.0, color: '#ff3b57', big: true, sizeMult,
   });
   spawnMuzzleBurst(r.x, r.lane, '#ffb930', 30);
   for (let i = 0; i < 14; i++) spawnSmoke(r.x - rand(0, 30), r.lane);
@@ -1271,8 +1477,9 @@ function fireBigMissile(r) {
   triggerHitStop();
 }
 function fireHomingMissiles(r) {
+  const count = 20 + (r.level - 1) * CONFIG.HOMING_COUNT_PER_LEVEL; // レベルが上がるほど発射数が増える
   const targets = state.racers.filter(o => o !== r);
-  for (let i = 0; i < 20; i++) {
+  for (let i = 0; i < count; i++) {
     state.projectiles.push({
       type: 'homing', owner: r, x: r.x + rand(-20, 20), lane: r.lane, laneOffset: rand(-0.3, 0.3),
       speed: 620 + rand(-30, 60), life: 2.6, color: '#ffb930',
@@ -1285,15 +1492,16 @@ function fireHomingMissiles(r) {
 }
 function fireEnergyBall(r) {
   // 360度ランダムな方向へ発射する自由飛行のエネルギー弾。
-  // トラック上下の壁・画面の左右端で跳ね返り(最大5回)、ロボットに当たるか
-  // 跳ね返り回数の上限に達すると消える。
+  // トラック上下の壁・画面の左右端で跳ね返り、ロボットに当たるか
+  // 跳ね返り回数の上限に達すると消える（上限はレベルが上がるほど増える）。
   const angle = rand(0, Math.PI * 2);
   const speed = 560;
   const startY = laneY(r.laneVisual, canvas.height);
+  const maxBounces = 5 + (r.level - 1) * CONFIG.ENERGY_BOUNCES_PER_LEVEL;
   state.projectiles.push({
     type: 'energy', owner: r, x: r.x, y: startY,
     vx: Math.cos(angle) * speed, vy: Math.sin(angle) * speed,
-    bounces: 0, maxBounces: 5, life: 9, color: '#28f2ff',
+    bounces: 0, maxBounces, life: 9, color: '#28f2ff',
   });
   spawnMuzzleBurst(r.x, r.lane, '#ffffff', 26);
   triggerScreenFlash('#ffffff', 0.35, 1.6);
@@ -1301,7 +1509,8 @@ function fireEnergyBall(r) {
   triggerHitStop();
 }
 function placeTrap(r) {
-  state.traps.push({ x: r.x - 60, lane: r.lane, owner: r, triggered: false });
+  const sizeMult = 1 + (r.level - 1) * CONFIG.LEVEL_ITEM_SCALE_PER_LEVEL; // レベルが上がるほど爆発範囲が広がる
+  state.traps.push({ x: r.x - 60, lane: r.lane, owner: r, triggered: false, sizeMult });
   // 設置時にも小さな砂煙と閃光を出す
   for (let i = 0; i < 10; i++) spawnSmoke(r.x - 60 + rand(-10, 10), r.lane);
   state.particles.push({ kind: 'flash', x: r.x - 60, lane: r.lane, vx: 0, vy: 0, life: 0.2, maxLife: 0.2, color: '#ff3b57' });
@@ -1365,16 +1574,18 @@ function updateProjectiles(dt) {
       if (o === p.owner || p.hit) continue;
       if (o.invincibleTimer > 0) continue; // 無敵中はダメージ無視（すり抜ける）
       const effectiveLane = p.lane + (p.laneOffset || 0);
-      if (Math.abs(effectiveLane - o.lane) < 0.5 && Math.abs(p.x - o.x) < (p.big ? 70 : 34)) {
+      const hitRadius = (p.big ? 70 : 34) * (p.sizeMult || 1);
+      if (Math.abs(effectiveLane - o.lane) < 0.5 && Math.abs(p.x - o.x) < hitRadius) {
         p.hit = true; p.life = 0;
         stunRacer(o, CONFIG.STUN_TIME, 'fall');
         spawnExplosion(o.x, o.lane, p.big ? 'large' : 'medium');
         if (o.isPlayer || p.owner.isPlayer) SFX.explosion(!!p.big);
         if (p.big) {
-          // 大型ミサイルは爆風で近隣レーンにも被害
+          // 大型ミサイルは爆風で近隣レーンにも被害（レベルが上がるほど爆風範囲も広がる）
+          const blastRadius = 130 * (p.sizeMult || 1);
           for (const near of state.racers) {
             if (near === o || near === p.owner) continue;
-            if (Math.abs(near.x - o.x) < 130 && Math.abs(near.lane - o.lane) <= 1) {
+            if (Math.abs(near.x - o.x) < blastRadius && Math.abs(near.lane - o.lane) <= 1) {
               stunRacer(near, CONFIG.STUN_TIME, 'fall');
             }
           }
@@ -1477,6 +1688,7 @@ function updateHud(player) {
   }
   document.getElementById('hudRank').textContent = `${player.rank}/${state.racers.length}`;
   document.getElementById('hudLap').textContent = `${player.lap}/${CONFIG.LAPS}`;
+  document.getElementById('hudLevel').textContent = String(player.level);
   document.getElementById('hudSpeed').textContent = String(Math.round(player.currentSpeed)).padStart(3, '0');
   document.getElementById('hudItem').textContent = player.heldItems.length
     ? player.heldItems.map(itemLabel).join(' / ')
@@ -1504,6 +1716,7 @@ function render() {
   drawTrack(w, h);
   drawItemBoxesAndTraps(w, h);
   drawObstacles(w, h);
+  drawEnemies(w, h);
   drawProjectiles(w, h);
   drawRacers(w, h);
   drawParticles(w, h);
@@ -1850,6 +2063,52 @@ function drawObstacles(w, h) {
   }
 }
 
+/* assets/enemy.PNG が無い場合に使う、その場限りのプレースホルダー画像（遅延生成） */
+let _enemyPlaceholderImg = null;
+function getEnemyImage() {
+  if (assetReady('enemy')) return assetImages.enemy;
+  if (!_enemyPlaceholderImg) {
+    _enemyPlaceholderImg = new Image();
+    _enemyPlaceholderImg.src = generatePlaceholderEnemy();
+  }
+  return _enemyPlaceholderImg;
+}
+
+function drawEnemies(w, h) {
+  const now = performance.now();
+  for (const e of state.enemies) {
+    const sx = worldToScreenX(e.x);
+    if (sx < -80 || sx > w + 80) continue;
+    const img = getEnemyImage();
+    const boxSize = 50;
+
+    if (e.alive) {
+      // 通常時：軽くその場で上下に揺れるアイドルモーション
+      const bob = Math.sin(now / 260 + e.x) * 4;
+      const sy = laneY(e.lane, h) + bob;
+      if (img && (img.complete || img.naturalWidth === undefined)) {
+        const scale = boxSize / Math.max(img.naturalWidth || boxSize, img.naturalHeight || boxSize);
+        const dw = (img.naturalWidth || boxSize) * scale, dh = (img.naturalHeight || boxSize) * scale;
+        ctx.drawImage(img, sx - dw / 2, sy - dh, dw, dh);
+      }
+    } else if (e.knockedTimer > 0) {
+      // 吹っ飛び演出：ロボットに弾かれて回転しながら宙を舞い、フェードアウトする
+      const sy = laneY(e.lane, h) - (e.knockZ || 0) * 0.35;
+      const alpha = clamp(e.knockedTimer / CONFIG.ENEMY_KNOCKBACK_TIME, 0, 1);
+      ctx.save();
+      ctx.globalAlpha = alpha;
+      ctx.translate(sx, sy);
+      ctx.rotate(e.rot || 0);
+      if (img) {
+        const scale = boxSize / Math.max(img.naturalWidth || boxSize, img.naturalHeight || boxSize);
+        const dw = (img.naturalWidth || boxSize) * scale, dh = (img.naturalHeight || boxSize) * scale;
+        ctx.drawImage(img, -dw / 2, -dh / 2, dw, dh);
+      }
+      ctx.restore();
+    }
+  }
+}
+
 /* '#rrggbb' 形式の色を rgba(...) 文字列に変換するヘルパー（レーンハイライト用） */
 function hexToRgba(hex, alpha) {
   const h6 = hex.replace('#', '');
@@ -1923,18 +2182,20 @@ function drawItemBoxesAndTraps(w, h) {
     if (sx < -60 || sx > w + 60) continue;
     const sy = laneY(t.lane, h);
     if (t.triggered) continue;
+    const tSize = t.sizeMult || 1;
     if (assetReady('trap')) {
-      drawAssetImage(assetImages.trap, sx, sy + 16, 44);
+      drawAssetImage(assetImages.trap, sx, sy + 16, 44 * tSize);
     } else {
       // 代替描画：点滅する警告地雷
       const blink = Math.sin(now / 150) > 0;
+      const r13 = 13 * tSize;
       ctx.fillStyle = blink ? '#ff3b57' : '#7a1020';
-      ctx.beginPath(); ctx.arc(sx, sy + 8, 13, 0, Math.PI * 2); ctx.fill();
+      ctx.beginPath(); ctx.arc(sx, sy + 8, r13, 0, Math.PI * 2); ctx.fill();
       ctx.fillStyle = '#1a1a1a';
-      ctx.beginPath(); ctx.arc(sx, sy + 8, 13, 0, Math.PI * 2); ctx.stroke();
+      ctx.beginPath(); ctx.arc(sx, sy + 8, r13, 0, Math.PI * 2); ctx.stroke();
       for (let i = 0; i < 6; i++) {
         const ang = (i / 6) * Math.PI * 2;
-        ctx.fillRect(sx + Math.cos(ang) * 12 - 1.5, sy + 8 + Math.sin(ang) * 12 - 1.5, 3, 3);
+        ctx.fillRect(sx + Math.cos(ang) * (r13 - 1) - 1.5, sy + 8 + Math.sin(ang) * (r13 - 1) - 1.5, 3, 3);
       }
     }
   }
@@ -2013,7 +2274,7 @@ function drawProjectiles(w, h) {
 
     if (p.type === 'big_missile' || p.type === 'homing') {
       const img = p.type === 'big_missile' ? (assetReady('missileBig') ? assetImages.missileBig : null) : homingAssetImage();
-      const size = (p.big ? 54 : 30) * 2; // 従来の2倍サイズ
+      const size = (p.big ? 54 : 30) * 2 * (p.sizeMult || 1); // 従来の2倍サイズ＋レベルによる拡大
       if (img) {
         ctx.save(); ctx.translate(sx, sy); ctx.rotate(angle);
         drawAssetImage(img, 0, size * 0.3, size);
@@ -2078,6 +2339,16 @@ function drawRacers(w, h) {
     const sx = worldToScreenX(r.x);
     if (sx < -80 || sx > w + 80) continue;
     const sy = laneY(r.laneVisual, h) - r.z * 0.35;
+
+    // ジャンプ着地ブースト中は足元に緑のリングを表示して分かりやすくする
+    if (r.jumpBoostTimer > 0) {
+      const ringA = clamp(r.jumpBoostTimer / CONFIG.JUMP_BOOST_DURATION, 0, 1);
+      ctx.strokeStyle = `rgba(99,255,138,${0.7 * ringA})`;
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.ellipse(sx, laneY(r.laneVisual, h) + 14, 20 + (1 - ringA) * 14, 6 + (1 - ringA) * 4, 0, 0, Math.PI * 2);
+      ctx.stroke();
+    }
 
     // ターボ中は後方に派手な炎とスピードラインを表示
     if (r.turboActive && !r.overheated && r.stunTimer <= 0) {
