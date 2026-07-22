@@ -1447,7 +1447,35 @@ function drawAnimatedBG(dt){
   bgctx.fillText(BG[bgTime].label,16,FLOOR-14);
 }
 
-function drawProjectiles(c){\n  var PROJ_MAX_LIFE=120;\n  for(var i=0;i<projectiles.length;i++){\n    var proj=projectiles[i];\n    // Frame selection: 0-30 life elapsed → PROJ_1, 30-60 → PROJ_2, 60+ → PROJ_3\n    var elapsed=PROJ_MAX_LIFE-proj.life;\n    var fIdx=elapsed<20?0:elapsed<40?1:2;\n    var projKey='proj'+(fIdx+1);\n    var projImg=imgs[projKey];\n    // Size based on isSpecial and frame\n    var baseW=proj.isSpecial?320:200;\n    var baseH=proj.isSpecial?160:100;\n    var scaleArr=[0.55,0.78,1.0];\n    var sc=scaleArr[fIdx];\n    var pW=Math.round(baseW*sc);\n    var pH=Math.round(baseH*sc);\n    var gx2=Math.round(proj.x/PX)*PX;\n    var gy2=Math.round(proj.y/PX)*PX;\n    c.save();\n    c.translate(gx2,gy2);\n    // Sprites are drawn right-facing; flip for left-facing projectiles\n    if(proj.dir===-1)c.scale(-1,1);\n    c.imageSmoothingEnabled=false;\n    if(projImg&&projImg.complete&&projImg.naturalWidth>0){\n      c.drawImage(projImg,-pW/2,-pH/2,pW,pH);\n    }else{\n      // Fallback: pixel rect\n      var pr=Math.max(PX*2,Math.round(proj.r/PX)*PX);\n      var pcol=proj.isSpecial?'#4488ff':'#00aaff';\n      c.globalAlpha=0.4;c.fillStyle=pcol;c.fillRect(-pr-PX,-pr-PX,pr*2+PX*2,pr*2+PX*2);\n      c.globalAlpha=1;c.fillStyle='#fff';c.fillRect(-PX,-PX,PX*2,PX*2);\n    }\n    c.restore();\n  }\n}
+function drawProjectiles(c){
+  var PROJ_MAX_LIFE=120;
+  for(var i=0;i<projectiles.length;i++){
+    var proj=projectiles[i];
+    var elapsed=PROJ_MAX_LIFE-proj.life;
+    var fIdx=elapsed<20?0:elapsed<40?1:2;
+    var projImg=imgs['proj'+(fIdx+1)];
+    var baseW=proj.isSpecial?320:200;
+    var baseH=proj.isSpecial?160:100;
+    var sc=[0.55,0.78,1.0][fIdx];
+    var pW=Math.round(baseW*sc);
+    var pH=Math.round(baseH*sc);
+    var gx2=Math.round(proj.x/PX)*PX;
+    var gy2=Math.round(proj.y/PX)*PX;
+    c.save();
+    c.translate(gx2,gy2);
+    if(proj.dir===-1)c.scale(-1,1);
+    c.imageSmoothingEnabled=false;
+    if(projImg&&projImg.complete&&projImg.naturalWidth>0){
+      c.drawImage(projImg,-pW/2,-pH/2,pW,pH);
+    }else{
+      var pr=Math.max(PX*2,Math.round(proj.r/PX)*PX);
+      var pcol=proj.isSpecial?'#4488ff':'#00aaff';
+      c.globalAlpha=0.4;c.fillStyle=pcol;c.fillRect(-pr-PX,-pr-PX,pr*2+PX*2,pr*2+PX*2);
+      c.globalAlpha=1;c.fillStyle='#fff';c.fillRect(-PX,-PX,PX*2,PX*2);
+    }
+    c.restore();
+  }
+}
 
 function drawExplosions(c){
   var expS=lastDt*60||1;
