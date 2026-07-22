@@ -1124,7 +1124,7 @@ Fighter.prototype.draw=function(c){
     if(!fireImg||!fireImg.complete||!fireImg.naturalWidth)return;
     // heavy=smaller, special=larger
     var fW=isSpecRush?(fIdx===2?1200:fIdx===1?900:600):(fIdx===2?700:fIdx===1?500:320);
-    var fH=fW*0.42;
+    var fH=fW;
     var fOx=fw*0.5+40;          // in front of fighter (local x = rightward)
     var fOy=-fh*0.5;             // torso center (local y = upward is negative)
     var fAlpha=fIdx===2?Math.max(0,1-(progress-0.66)/0.34):1;
