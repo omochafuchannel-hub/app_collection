@@ -635,6 +635,8 @@ introEl.addEventListener('click',function(){
   document.getElementById('wrapper').classList.remove('intro-visible');
   bgTime=TIMES[Math.floor(Math.random()*3)];
   initBgParticles();
+  // Apply settings from UI at the moment START is tapped
+  p1.cfg=getCfg('p1');p2.cfg=getCfg('p2');
   gState='fight';roundEndHandled=false;
   // Apply name HUD
   var n1=document.getElementById('p1name-inp').value||'ROBOT';
@@ -1070,9 +1072,9 @@ Fighter.prototype.getHitbox=function(){
   if(this.isIn('lightAttack')&&this.stateTimer<tiLA&&this.stateTimer>3)
     return{x:this.x+this.facing*140,y:this.y-this.h*.6,r:95,dmg:8,kind:'light'};
   if(this.isIn('heavyAttack')&&htype!=='projectile'&&this.stateTimer<tiHA&&this.stateTimer>5)
-    return{x:this.x+this.facing*180,y:this.y-this.h*.55,r:130,dmg:18,kind:'heavy'};
+    return{x:this.x+this.facing*(htype==='rush'?480:180),y:this.y-this.h*.55,r:htype==='rush'?350:130,dmg:18,kind:'heavy'};
   if(this.isIn('special')&&stype!=='projectile'&&this.stateTimer<tiSP&&this.stateTimer>5)
-    return{x:this.x+this.facing*240,y:this.y-this.h*.5,r:200,dmg:36,kind:'special'};
+    return{x:this.x+this.facing*(stype==='rush'?730:240),y:this.y-this.h*.5,r:stype==='rush'?600:200,dmg:36,kind:'special'};
   return null;
 };
 
@@ -1201,39 +1203,6 @@ Fighter.prototype.drawOnSpecialLayer=function(c){
       c.save();c.scale(sx,sy);c.drawImage(bImg,-dw4/2,-fh+oy,dw4,dh4);c.restore();
     }else this._drawFB(c,fw,fh);
     c.shadowBlur=0;
-    for(var ri=0;ri<3;ri++){
-      var ra2=(0.55-ri*0.12)+0.2*Math.sin(Date.now()/80+ri);
-      c.globalAlpha=Math.max(0,ra2);c.fillStyle=this.acc;
-      var rp=Math.round((fw*.9+(ri+1)*50+25*Math.sin(Date.now()/(90+ri*30)))/PX)*PX;
-      var bt4=Math.max(PX,(4-ri)*PX);
-      c.fillRect(-rp,-fh/2-rp,rp*2,bt4);
-      c.fillRect(-rp,-fh/2+rp-bt4,rp*2,bt4);
-      c.fillRect(-rp,-fh/2-rp+bt4,bt4,rp*2-bt4*2);
-      c.fillRect(rp-bt4,-fh/2-rp+bt4,bt4,rp*2-bt4*2);
-    }
-    // ---- Fire rush sprite: show in front of attacker during rush heavy or rush special ----
-    var htype2=this.cfg.heavyType||'rush';
-    var stype2=this.cfg.specialType||'rush';
-    var isRushHeavy=this.isIn('heavyAttack')&&htype2==='rush';
-    var isRushSpec=isSpec&&stype2==='rush';
-    if(isRushHeavy||isRushSpec){
-      var spMax2=Math.round(22/BASE_SPEED);
-      var spElapsed2=spMax2-Math.max(0,spTimer);
-      var fIdx=Math.min(2,Math.floor(spElapsed2/spMax2*3));
-      var fireImg=imgs[fIdx===0?'fire1':fIdx===1?'fire2':'fire3'];
-      // fW/fH: large enough to look impactful (image is 1024x1024 area)
-      var fW=fIdx===2?1200:fIdx===1?900:600;
-      var fH=fW*0.45; // ~16:7 aspect matches the flame shape
-      // In local space: x=right of fighter, y upward is negative
-      var fOx=fw*0.5+60;
-      var fOy=-fh*0.45; // torso center (y is negative = upward in canvas)
-      var fAlpha=fIdx===2?Math.max(0,1-(spElapsed2/spMax2-0.66)/0.34):1;
-      c.globalAlpha=fAlpha;c.shadowBlur=0;c.imageSmoothingEnabled=false;
-      if(fireImg&&fireImg.complete&&fireImg.naturalWidth>0){
-        c.drawImage(fireImg,fOx,fOy-fH/2,fW,fH);
-      }
-      c.globalAlpha=1;
-    }
   }else{
     c.globalAlpha=0.45;
     if(bImg){
@@ -1483,11 +1452,14 @@ function drawProjectiles(c){
     var elapsed=PROJ_MAX_LIFE-proj.life;
     var fIdx=elapsed<20?0:elapsed<40?1:2;
     var projImg=imgs['proj'+(fIdx+1)];
-    var baseW=proj.isSpecial?800:480;
-    var baseH=proj.isSpecial?400:240;
+    // Base size at frame 2 (full): special=1536x1024 native ratio, normal=3/4
+    var baseW=proj.isSpecial?1536:1100;
+    var baseH=proj.isSpecial?1024:733;
     var sc=[0.55,0.78,1.0][fIdx];
     var pW=Math.round(baseW*sc);
     var pH=Math.round(baseH*sc);
+    // Sync hit radius to half the sprite width so collision matches visuals
+    proj.r=pW*0.35;
     var gx2=Math.round(proj.x/PX)*PX;
     var gy2=Math.round(proj.y/PX)*PX;
     c.save();
@@ -1496,11 +1468,6 @@ function drawProjectiles(c){
     c.imageSmoothingEnabled=false;
     if(projImg&&projImg.complete&&projImg.naturalWidth>0){
       c.drawImage(projImg,-pW/2,-pH/2,pW,pH);
-    }else{
-      var pr=Math.max(PX*2,Math.round(proj.r/PX)*PX);
-      var pcol=proj.isSpecial?'#4488ff':'#00aaff';
-      c.globalAlpha=0.4;c.fillStyle=pcol;c.fillRect(-pr-PX,-pr-PX,pr*2+PX*2,pr*2+PX*2);
-      c.globalAlpha=1;c.fillStyle='#fff';c.fillRect(-PX,-PX,PX*2,PX*2);
     }
     c.restore();
   }
