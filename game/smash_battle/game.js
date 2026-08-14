@@ -1,13 +1,14 @@
 /* ============================================================================
    PIXEL BRAWL - game.js
    ------------------------------------------------------------------------
-   HTML5 Canvas + Vanilla JavaScript による1人用・対戦アクションゲーム。
-   スマブラ風の「ダメージ%蓄積 → ノックバック → 撃墜」システムを実装。
+   HTML5 Canvas + Vanilla JavaScript による対戦アクションゲーム。
+   プレイヤー1人 vs CPU3体の4人乱闘(フリーフォーオール)。
+   スマホの横持ちタッチ操作 + PCキーボード操作の両対応。
 
    構成（このファイル内でセクション分けしています）
      1. 基本セットアップ / 定数
      2. ユーティリティ関数
-     3. 入力管理
+     3. 入力管理(キーボード)
      4. サウンド管理 (Web Audio API)
      5. パーティクル / エフェクト管理
      6. ステージ定義
@@ -15,9 +16,12 @@
      8. Fighter 基底クラス（プレイヤー・CPU共通のロジック）
      9. Projectile（飛び道具）クラス
     10. Player クラス（人間操作・画像差し替え対応）
-    11. CPU クラス（AI操作）
+    11. CPU クラス（AI操作・3体それぞれ色違い）
     12. GameManager（状態遷移・UI・メインループ）
-    13. 起動処理
+    13. 画面サイズ対応(レスポンシブ/横持ち)
+    14. タッチ操作(モバイル向け仮想ボタン)
+    15. プレイヤー画像設定(差し替え機能)
+    16. 起動処理
    ========================================================================== */
 
 
@@ -29,7 +33,7 @@ const canvas = document.getElementById('game-canvas');
 const ctx = canvas.getContext('2d');
 ctx.imageSmoothingEnabled = false; // ドット絵をぼかさない
 
-const SCREEN_W = canvas.width;   // 960
+const SCREEN_W = canvas.width;   // 960 (内部解像度。表示サイズはCSSで可変)
 const SCREEN_H = canvas.height;  // 540
 
 // --- 物理定数 ---------------------------------------------------------------
@@ -49,7 +53,7 @@ const FIGHTER_HEIGHT = 58;
 // --- ストック/撃墜関連 ---------------------------------------------------
 const START_STOCKS = 3;
 const KO_MARGIN = 90;        // この距離だけ画面外に出たら撃墜
-const KO_BOTTOM = SCREEN_H + 70;  // これより下に落ちたら撃墜
+const KO_BOTTOM = SCREEN_H + 70; // これより下に落ちたら撃墜
 const RESPAWN_INVINCIBLE_FRAMES = 100; // 復帰後の無敵時間(フレーム)
 
 // --- ノックバック/ダメージのバランス調整値 --------------------------------
@@ -59,6 +63,9 @@ const KB_HITSTUN_MAX = 75;
 // --- ヒットストップ（打撃が当たった瞬間の一瞬の停止演出）------------------
 const HITSTOP_NORMAL = 5;
 const HITSTOP_STRONG = 9;
+
+// --- 識別カラー -------------------------------------------------------------
+const PLAYER_COLOR = '#3f7fdd';
 
 
 /* ============================================================================
@@ -84,13 +91,22 @@ function deg2rad(d) { return d * Math.PI / 180; }
 
 
 /* ============================================================================
-   3. 入力管理
+   3. 入力管理(キーボード)
+   ------------------------------------------------------------------------
+   タッチボタンもこの keysDown / keysJustPressed を直接操作することで
+   キーボードと全く同じ入力経路をファイターに渡せるようにしている。
    ========================================================================== */
 
 const keysDown = new Set();        // 現在押されているキー
 const keysJustPressed = new Set(); // このフレームで押された瞬間のキー
 
 let audioStarted = false;
+function ensureAudioStarted() {
+  if (!audioStarted) {
+    Sound.init();
+    audioStarted = true;
+  }
+}
 
 window.addEventListener('keydown', (e) => {
   if (!keysDown.has(e.code)) keysJustPressed.add(e.code);
@@ -100,24 +116,14 @@ window.addEventListener('keydown', (e) => {
   if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Space'].includes(e.code)) {
     e.preventDefault();
   }
-
-  // 初回キー入力でAudioContextを起動(自動再生ポリシー対策)
-  if (!audioStarted) {
-    Sound.init();
-    audioStarted = true;
-  }
+  ensureAudioStarted();
 });
 
 window.addEventListener('keyup', (e) => {
   keysDown.delete(e.code);
 });
 
-canvas.addEventListener('click', () => {
-  if (!audioStarted) {
-    Sound.init();
-    audioStarted = true;
-  }
-});
+canvas.addEventListener('pointerdown', ensureAudioStarted);
 
 
 /* ============================================================================
@@ -484,7 +490,8 @@ class Fighter {
     this.name = name;
     this.spawnX = spawnX;
     this.spawnY = spawnY;
-    this.colorTheme = colorTheme; // UIやエフェクトの識別色
+    this.colorTheme = colorTheme; // 'player' | 'cpu'
+    this.uiColor = '#ffffff';     // UI/エフェクトの識別色(サブクラスで上書き)
 
     this.width = FIGHTER_WIDTH;
     this.height = FIGHTER_HEIGHT;
@@ -502,7 +509,7 @@ class Fighter {
     this.stocks = START_STOCKS;
 
     this.state = 'idle';   // idle, walk, dash, jump, attack, hitstun, dead
-    this.attack = null;    // 現在実行中の攻撃 {def, phase, timer, hitApplied}
+    this.attack = null;    // 現在実行中の攻撃 {def, phase, timer, hitTargets}
     this.attackCooldown = 0;
 
     this.hitstunTimer = 0;
@@ -516,7 +523,7 @@ class Fighter {
     this.alive = true;
   }
 
-  // ---- 状態リセット(復帰・スタート時) -----------------------------------
+  // ---- 状態リセット(ラウンド開始時) -----------------------------------
   resetForRound() {
     this.x = this.spawnX;
     this.y = this.spawnY;
@@ -575,14 +582,14 @@ class Fighter {
     if (!this.canAct() || this.attackCooldown > 0) return;
     const def = ATTACKS[key];
     if (!def) return;
-    this.attack = { def, phase: 'startup', timer: def.startup, hitApplied: false };
+    this.attack = { def, phase: 'startup', timer: def.startup, hitTargets: new Set() };
     this.state = 'attack';
     this.vx *= 0.4; // 攻撃時は少し減速して踏み込み感を出す
     if (Sound[def.sound]) Sound[def.sound]();
   }
 
   // ---- メイン更新処理 -------------------------------------------------------
-  update(step, opponent, game) {
+  update(step, game) {
     if (!this.alive) return;
 
     this.wasOnGround = this.onGround;
@@ -596,8 +603,8 @@ class Fighter {
       this.handleAttackInput(input);
     }
 
-    // --- 攻撃の状態機械を進める ---------------------------------------------
-    this.updateAttackState(step, opponent, game);
+    // --- 攻撃の状態機械を進める(相手は game.fighters から探す) --------------
+    this.updateAttackState(step, game);
 
     // --- 硬直(ヒットストップ)カウントダウン ---------------------------------
     if (this.state === 'hitstun') {
@@ -668,7 +675,7 @@ class Fighter {
     else if (input.specialPressed) this.startAttack('special');
   }
 
-  updateAttackState(step, opponent, game) {
+  updateAttackState(step, game) {
     if (!this.attack) return;
     const a = this.attack;
     a.timer -= step;
@@ -682,12 +689,18 @@ class Fighter {
         game.spawnProjectile(this, a.def);
       }
     } else if (a.phase === 'active') {
-      // 近接攻撃の判定処理
-      if (a.def.key !== 'special' && !a.hitApplied) {
+      // 近接攻撃の判定処理(乱闘なので周囲の全ファイターを対象にする)
+      if (a.def.key !== 'special') {
         const hitbox = this.getAttackHitbox();
-        if (hitbox && rectsOverlap(hitbox, opponent.getHurtbox())) {
-          a.hitApplied = true;
-          game.applyHit(this, opponent, a.def);
+        if (hitbox) {
+          for (const other of game.fighters) {
+            if (other === this || !other.alive) continue;
+            if (a.hitTargets.has(other)) continue; // 1回のスイングで同じ相手には1回だけ
+            if (rectsOverlap(hitbox, other.getHurtbox())) {
+              a.hitTargets.add(other);
+              game.applyHit(this, other, a.def);
+            }
+          }
         }
       }
       if (a.timer <= 0) {
@@ -833,7 +846,7 @@ class Projectile {
     this.trailTimer = 0;
   }
 
-  update(step, opponent, game) {
+  update(step, game) {
     this.x += this.vx * step;
     this.y += this.vy * step;
     this.life -= step;
@@ -850,15 +863,19 @@ class Projectile {
       return;
     }
 
-    // 対戦相手との当たり判定(円と矩形の簡易判定)
-    const hb = opponent.getHurtbox();
-    const closestX = clamp(this.x, hb.x, hb.x + hb.w);
-    const closestY = clamp(this.y, hb.y, hb.y + hb.h);
-    const dx = this.x - closestX;
-    const dy = this.y - closestY;
-    if (dx * dx + dy * dy < this.radius * this.radius) {
-      game.applyHit(this.owner, opponent, this.def, true);
-      this.dead = true;
+    // 発射者以外の生存中ファイター全員と当たり判定(円と矩形の簡易判定)
+    for (const other of game.fighters) {
+      if (other === this.owner || !other.alive) continue;
+      const hb = other.getHurtbox();
+      const closestX = clamp(this.x, hb.x, hb.x + hb.w);
+      const closestY = clamp(this.y, hb.y, hb.y + hb.h);
+      const dx = this.x - closestX;
+      const dy = this.y - closestY;
+      if (dx * dx + dy * dy < this.radius * this.radius) {
+        game.applyHit(this.owner, other, this.def, true);
+        this.dead = true;
+        break;
+      }
     }
   }
 
@@ -890,6 +907,7 @@ class Projectile {
 class Player extends Fighter {
   constructor(x, y) {
     super('PLAYER', x, y, 'player');
+    this.uiColor = PLAYER_COLOR;
 
     // --- 画像読み込み(assets/player.png を差し替え可能にする) --------------
     this.image = new Image();
@@ -926,7 +944,7 @@ class Player extends Fighter {
     ctx.translate(-(drawX + drawW / 2), 0);
 
     if (this.imageLoaded && !this.imageFailed) {
-      // ユーザーが差し替えた assets/player.png を表示
+      // ユーザーが差し替えた画像(assets/player.png、または設定ボタンで選んだ画像)を表示
       ctx.drawImage(this.image, drawX, drawY, drawW, drawH);
     } else {
       // 画像が無い場合の仮シルエット(青い人型)を表示
@@ -964,23 +982,52 @@ function drawFallbackHumanoid(ctx, x, y, w, h, mainColor, darkColor) {
 
 
 /* ============================================================================
-   11. CPU クラス（AI操作・見た目はオリジナルの赤ロボット）
+   11. CPU クラス（AI操作・見た目はオリジナルの色違いロボット）
    ========================================================================== */
 
+// CPU3体それぞれの見た目バリエーション(色を変えるだけでキャラを増やせる設計)
+const CPU_VARIANTS = [
+  { label: 'CPU-RED',   body: '#e0403a', dark: '#8f231f', arm: '#b23430', eye: '#ffe37a', metal: '#dcdcdc' },
+  { label: 'CPU-GREEN', body: '#3fae5e', dark: '#1f6b38', arm: '#2f8a49', eye: '#ffe37a', metal: '#dcdcdc' },
+  { label: 'CPU-PURPLE',body: '#9a5fe0', dark: '#5c2f8f', arm: '#7c46c2', eye: '#ffe37a', metal: '#dcdcdc' },
+];
+
 class CPU extends Fighter {
-  constructor(x, y) {
-    super('CPU', x, y, 'cpu');
+  constructor(x, y, variant) {
+    super(variant.label, x, y, 'cpu');
+    this.variant = variant;
+    this.uiColor = variant.body;
 
     // --- AI用のパラメータ(初心者向け難易度) ---------------------------------
-    this.aiDecisionTimer = 0;
+    this.aiDecisionTimer = randInt(5, 15);
     this.aiMoveDir = 0;
     this.aiWantsJump = false;
     this.aiWantsAttack = null;
-    this.aiAttackCooldown = 0;
-    this.legPhase = 0; // 見た目のアニメーション用
+    this.aiAttackCooldown = randInt(20, 40);
   }
 
-  // CPUは常に人間プレイヤーの方を向く(移動していない時)
+  resetForRound() {
+    super.resetForRound();
+    this.aiDecisionTimer = randInt(5, 15);
+    this.aiMoveDir = 0;
+    this.aiWantsJump = false;
+    this.aiWantsAttack = null;
+    this.aiAttackCooldown = randInt(20, 40);
+  }
+
+  // 生存中の相手の中から一番近いファイターを狙う(プレイヤー・他のCPU問わず)
+  findNearestOpponent(game) {
+    let nearest = null;
+    let nearestDist = Infinity;
+    for (const f of game.fighters) {
+      if (f === this || !f.alive) continue;
+      const d = Math.abs(f.x - this.x);
+      if (d < nearestDist) { nearestDist = d; nearest = f; }
+    }
+    return nearest;
+  }
+
+  // CPUは常に狙っている相手の方を向く(移動していない時)
   getInput(game) {
     this.runAI(game);
 
@@ -996,7 +1043,6 @@ class CPU extends Fighter {
   }
 
   runAI(game) {
-    const player = game.player;
     this.aiWantsJump = false;
     this.aiWantsAttack = null;
 
@@ -1007,7 +1053,10 @@ class CPU extends Fighter {
     if (this.aiDecisionTimer <= 0) {
       this.aiDecisionTimer = randInt(10, 18); // 反応間隔(初心者向けにやや長め)
 
-      const dx = player.x - this.x;
+      const target = this.findNearestOpponent(game);
+      if (!target) { this.aiMoveDir = 0; return; }
+
+      const dx = target.x - this.x;
       const dist = Math.abs(dx);
 
       // ステージ端に近い場合は中央方向へ強制的に戻る(最優先)
@@ -1047,8 +1096,8 @@ class CPU extends Fighter {
 
       // たまにジャンプ(相手が上にいる、または単純にランダム)
       if (this.onGround) {
-        const playerAbove = player.y < this.y - 40;
-        if ((playerAbove && dist < 260 && Math.random() < 0.5) || Math.random() < 0.05) {
+        const targetAbove = target.y < this.y - 40;
+        if ((targetAbove && dist < 260 && Math.random() < 0.5) || Math.random() < 0.05) {
           this.aiWantsJump = true;
         }
       }
@@ -1057,9 +1106,6 @@ class CPU extends Fighter {
       if (this.aiMoveDir === 0) {
         this.facing = sign(dx) || this.facing;
       }
-    } else {
-      // 意思決定フレーム以外はジャンプ入力を出さない(1フレームだけの入力にするため)
-      this.aiWantsJump = false;
     }
   }
 
@@ -1076,7 +1122,7 @@ class CPU extends Fighter {
     ctx.scale(this.facing, 1);
     ctx.translate(-(x + w / 2), 0);
 
-    drawRobotEnemy(ctx, x, y, w, h, this.onGround ? Math.abs(this.vx) : 0);
+    drawRobotEnemy(ctx, x, y, w, h, this.onGround ? Math.abs(this.vx) : 0, this.variant);
 
     ctx.restore();
 
@@ -1085,13 +1131,13 @@ class CPU extends Fighter {
   }
 }
 
-// オリジナルの「赤いロボット」敵キャラクターを描画
-function drawRobotEnemy(ctx, x, y, w, h, moveSpeed) {
-  const bodyColor = '#e0403a';
-  const darkColor = '#8f231f';
-  const armColor = '#b23430';
-  const eyeColor = '#ffe37a';
-  const metal = '#dcdcdc';
+// オリジナルの「ロボット」敵キャラクターを描画(色はvariantで指定)
+function drawRobotEnemy(ctx, x, y, w, h, moveSpeed, variant) {
+  const bodyColor = variant.body;
+  const darkColor = variant.dark;
+  const armColor = variant.arm;
+  const eyeColor = variant.eye;
+  const metal = variant.metal;
 
   // 脚(移動中は簡易的に上下に揺らす)
   const legOffset = Math.sin(Date.now() / 60) * (moveSpeed > 0.3 ? 3 : 0);
@@ -1157,8 +1203,14 @@ const GameState = {
 
 class GameManager {
   constructor() {
-    this.player = new Player(260, Stage.ground.y);
-    this.cpu = new CPU(760, Stage.ground.y);
+    // プレイヤー1体 + CPU3体の4人乱闘(フリーフォーオール)
+    this.player = new Player(150, Stage.ground.y);
+    this.cpus = [
+      new CPU(370, Stage.ground.y, CPU_VARIANTS[0]),
+      new CPU(600, Stage.ground.y, CPU_VARIANTS[1]),
+      new CPU(830, Stage.ground.y, CPU_VARIANTS[2]),
+    ];
+    this.fighters = [this.player, ...this.cpus];
 
     this.projectiles = [];
 
@@ -1183,8 +1235,7 @@ class GameManager {
     const hitY = hb.y + hb.h * 0.4;
 
     ParticleSystem.spawnHitSpark(hitX, hitY, def.color);
-    ParticleSystem.spawnDamageText(defender.x, hb.y - 4, def.damage,
-      defender.colorTheme === 'player' ? '#8fd0ff' : '#ffb0a8');
+    ParticleSystem.spawnDamageText(defender.x, hb.y - 4, def.damage, defender.uiColor);
 
     if (Sound[def.hitSound]) Sound[def.hitSound]();
 
@@ -1204,27 +1255,40 @@ class GameManager {
 
     fighter.stocks -= 1;
     Sound.ko();
-    ParticleSystem.spawnKoBurst(clamp(fighter.x, 20, SCREEN_W - 20), clamp(fighter.y, 20, SCREEN_H - 20),
-      fighter.colorTheme === 'player' ? '#3f7fdd' : '#e0403a');
+    ParticleSystem.spawnKoBurst(
+      clamp(fighter.x, 20, SCREEN_W - 20),
+      clamp(fighter.y, 20, SCREEN_H - 20),
+      fighter.uiColor
+    );
 
     if (fighter.stocks <= 0) {
       fighter.alive = false;
       fighter.stocks = 0;
-      this.endGame(fighter === this.player ? 'lose' : 'win');
+
+      if (fighter === this.player) {
+        this.endGame('lose');
+        return;
+      }
+      // CPUが全滅していればプレイヤーの勝利
+      const anyCpuAlive = this.cpus.some(c => c.alive);
+      if (!anyCpuAlive && this.player.alive) {
+        this.endGame('win');
+      }
     } else {
       fighter.respawn();
     }
   }
 
   endGame(result) {
+    if (this.state === GameState.GAMEOVER) return; // 二重発火防止
     this.state = GameState.GAMEOVER;
     this.resultText = result === 'win' ? 'YOU WIN!' : 'YOU LOSE...';
+    this.restartBlinkTimer = 0;
     if (result === 'win') Sound.win();
   }
 
   startRound() {
-    this.player.resetForRound();
-    this.cpu.resetForRound();
+    this.fighters.forEach(f => f.resetForRound());
     this.projectiles = [];
     ParticleSystem.list = [];
     this.state = GameState.READY;
@@ -1270,36 +1334,37 @@ class GameManager {
       return;
     }
 
-    // --- 通常更新 -------------------------------------------------------------
-    this.player.update(step, this.cpu, this);
-    this.cpu.update(step, this.player, this);
+    // --- 通常更新(全ファイター共通ループ) --------------------------------
+    this.fighters.forEach(f => { if (f.alive) f.update(step, this); });
 
     // 飛び道具の更新
-    this.projectiles.forEach(p => {
-      const owner = p.owner;
-      const target = owner === this.player ? this.cpu : this.player;
-      p.update(step, target, this);
-    });
+    this.projectiles.forEach(p => p.update(step, this));
     this.projectiles = this.projectiles.filter(p => !p.dead);
 
-    // 単純な押し合い防止(重なりすぎたら少し離す)
-    this.resolveFighterOverlap();
+    // 単純な押し合い防止(重なりすぎたら少し離す) -- 全ペア総当たり
+    this.resolveOverlaps();
 
     ParticleSystem.update(step);
 
     keysJustPressed.clear();
   }
 
-  resolveFighterOverlap() {
-    const a = this.player, b = this.cpu;
-    if (!a.alive || !b.alive) return;
-    const dx = b.x - a.x;
-    const minDist = (a.width + b.width) / 2 - 6;
-    if (Math.abs(dx) < minDist && Math.abs(a.y - b.y) < a.height * 0.6) {
-      const push = (minDist - Math.abs(dx)) / 2;
-      const d = sign(dx) || 1;
-      a.x -= push * d * 0.5;
-      b.x += push * d * 0.5;
+  resolveOverlaps() {
+    for (let i = 0; i < this.fighters.length; i++) {
+      const a = this.fighters[i];
+      if (!a.alive) continue;
+      for (let j = i + 1; j < this.fighters.length; j++) {
+        const b = this.fighters[j];
+        if (!b.alive) continue;
+        const dx = b.x - a.x;
+        const minDist = (a.width + b.width) / 2 - 6;
+        if (Math.abs(dx) < minDist && Math.abs(a.y - b.y) < a.height * 0.6) {
+          const push = (minDist - Math.abs(dx)) / 2;
+          const d = sign(dx) || 1;
+          a.x -= push * d * 0.5;
+          b.x += push * d * 0.5;
+        }
+      }
     }
   }
 
@@ -1307,10 +1372,9 @@ class GameManager {
   draw(ctx) {
     Stage.draw(ctx);
 
-    // ファイター(奥/手前の単純なソートはせず、常にプレイヤーを手前に描画)
-    const back = this.cpu.y < this.player.y ? this.cpu : this.player;
-    const front = back === this.cpu ? this.player : this.cpu;
-    [back, front].forEach(f => { if (f.alive || f.stocks > 0) f.draw(ctx); });
+    // 奥行き簡易ソート(yが小さい=奥のキャラから描画)
+    const sorted = [...this.fighters].sort((a, b) => a.y - b.y);
+    sorted.forEach(f => { if (f.alive) f.draw(ctx); });
 
     this.projectiles.forEach(p => p.draw(ctx));
 
@@ -1321,8 +1385,12 @@ class GameManager {
   }
 
   drawUI(ctx) {
-    drawPlayerPanel(ctx, this.player, 20, 16, 'left');
-    drawPlayerPanel(ctx, this.cpu, SCREEN_W - 20, 16, 'right');
+    // プレイヤーは左上に大きく表示
+    drawPlayerPanel(ctx, this.player, 14, 10, 'left', this.player.uiColor);
+    // CPU3体は右上にコンパクトに縦に並べる
+    this.cpus.forEach((c, i) => {
+      drawCompactPanel(ctx, c, SCREEN_W - 14, 10 + i * 38, c.uiColor);
+    });
   }
 
   drawCenterMessage(ctx) {
@@ -1343,8 +1411,8 @@ class GameManager {
         ctx.fillStyle = '#f2ead8';
         ctx.strokeStyle = '#000';
         ctx.lineWidth = 3;
-        ctx.strokeText('PRESS SPACE TO RESTART', SCREEN_W / 2, SCREEN_H / 2 + 40);
-        ctx.fillText('PRESS SPACE TO RESTART', SCREEN_W / 2, SCREEN_H / 2 + 40);
+        ctx.strokeText('TAP OR PRESS SPACE TO RESTART', SCREEN_W / 2, SCREEN_H / 2 + 40);
+        ctx.fillText('TAP OR PRESS SPACE TO RESTART', SCREEN_W / 2, SCREEN_H / 2 + 40);
       }
     }
     ctx.restore();
@@ -1356,7 +1424,7 @@ function drawBigText(ctx, text, x, y, color, scale = 1) {
   ctx.save();
   ctx.translate(x, y);
   ctx.scale(scale, scale);
-  ctx.font = '900 52px "Courier New", monospace';
+  ctx.font = '900 48px "Courier New", monospace';
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
   ctx.lineWidth = 8;
@@ -1367,43 +1435,72 @@ function drawBigText(ctx, text, x, y, color, scale = 1) {
   ctx.restore();
 }
 
-// 画面上部のダメージ%・ストック表示パネル
-function drawPlayerPanel(ctx, fighter, edgeX, y, align) {
+// 画面左上: プレイヤー用の大きめダメージ%・ストック表示パネル
+function drawPlayerPanel(ctx, fighter, edgeX, y, align, color) {
   ctx.save();
-  const panelW = 230;
+  const panelW = 190;
   const x = align === 'left' ? edgeX : edgeX - panelW;
 
   // パネル背景
   ctx.fillStyle = 'rgba(12,10,20,0.65)';
-  ctx.fillRect(x, y, panelW, 60);
-  ctx.strokeStyle = fighter.colorTheme === 'player' ? '#3f7fdd' : '#e0403a';
+  ctx.fillRect(x, y, panelW, 56);
+  ctx.strokeStyle = color;
   ctx.lineWidth = 3;
-  ctx.strokeRect(x, y, panelW, 60);
+  ctx.strokeRect(x, y, panelW, 56);
 
   // 名前
-  ctx.font = 'bold 13px "Courier New", monospace';
+  ctx.font = 'bold 12px "Courier New", monospace';
   ctx.fillStyle = '#f2ead8';
   ctx.textAlign = align === 'left' ? 'left' : 'right';
   const nameX = align === 'left' ? x + 10 : x + panelW - 10;
-  ctx.fillText(fighter.name, nameX, y + 16);
+  ctx.fillText(fighter.name, nameX, y + 15);
 
   // ダメージ%(高いほど赤くなる)
   const dmgColor = damageColor(fighter.damage);
-  ctx.font = '900 30px "Courier New", monospace';
+  ctx.font = '900 26px "Courier New", monospace';
   ctx.fillStyle = dmgColor;
   ctx.textAlign = align === 'left' ? 'left' : 'right';
   const dmgX = align === 'left' ? x + 10 : x + panelW - 10;
-  ctx.fillText(`${Math.min(999, Math.floor(fighter.damage))}%`, dmgX, y + 46);
+  ctx.fillText(`${Math.min(999, Math.floor(fighter.damage))}%`, dmgX, y + 42);
 
   // ストックアイコン(残機を小さなシルエットで表示)
   for (let i = 0; i < START_STOCKS; i++) {
     const filled = i < fighter.stocks;
     const iconX = align === 'left'
-      ? x + panelW - 16 - i * 16
-      : x + 16 + i * 16;
-    drawStockIcon(ctx, iconX, y + 12, filled, fighter.colorTheme);
+      ? x + panelW - 14 - i * 14
+      : x + 14 + i * 14;
+    drawStockIcon(ctx, iconX, y + 12, filled, color, 5);
   }
 
+  ctx.restore();
+}
+
+// 画面右上: CPU用のコンパクトなパネル(3体分並べても収まるサイズ)
+function drawCompactPanel(ctx, fighter, rightX, y, color) {
+  ctx.save();
+  const w = 150, h = 32;
+  const x = rightX - w;
+
+  ctx.fillStyle = 'rgba(12,10,20,0.65)';
+  ctx.fillRect(x, y, w, h);
+  ctx.strokeStyle = color;
+  ctx.lineWidth = 2;
+  ctx.strokeRect(x, y, w, h);
+
+  ctx.font = 'bold 9px "Courier New", monospace';
+  ctx.fillStyle = '#f2ead8';
+  ctx.textAlign = 'left';
+  ctx.fillText(fighter.name, x + 6, y + 11);
+
+  ctx.font = '900 15px "Courier New", monospace';
+  ctx.fillStyle = damageColor(fighter.damage);
+  ctx.textAlign = 'left';
+  ctx.fillText(`${Math.min(999, Math.floor(fighter.damage))}%`, x + 6, y + 26);
+
+  for (let i = 0; i < START_STOCKS; i++) {
+    const filled = i < fighter.stocks;
+    drawStockIcon(ctx, x + w - 11 - i * 11, y + 9, filled, color, 3.4);
+  }
   ctx.restore();
 }
 
@@ -1414,24 +1511,159 @@ function damageColor(damage) {
   return '#ff4d4d';
 }
 
-function drawStockIcon(ctx, cx, cy, filled, theme) {
+function drawStockIcon(ctx, cx, cy, filled, color, radius = 5) {
   ctx.save();
-  ctx.fillStyle = filled ? (theme === 'player' ? '#3f7fdd' : '#e0403a') : 'rgba(255,255,255,0.15)';
+  ctx.fillStyle = filled ? color : 'rgba(255,255,255,0.15)';
   ctx.beginPath();
-  ctx.arc(cx, cy, 5, 0, Math.PI * 2);
+  ctx.arc(cx, cy, radius, 0, Math.PI * 2);
   ctx.fill();
   ctx.strokeStyle = 'rgba(0,0,0,0.6)';
-  ctx.lineWidth = 1.5;
+  ctx.lineWidth = 1.2;
   ctx.stroke();
   ctx.restore();
 }
 
 
 /* ============================================================================
-   13. 起動処理 / メインループ
+   13. 画面サイズ対応(レスポンシブ/横持ち)
+   ------------------------------------------------------------------------
+   内部の描画解像度は常に 960x540 に固定し、CSSサイズだけを画面に合わせて
+   拡大縮小することでロジックをシンプルに保つ。
+   ========================================================================== */
+
+const canvasFrame = document.getElementById('canvas-frame');
+
+function resizeCanvasFrame() {
+  if (!canvasFrame) return;
+  const vw = window.innerWidth;
+  const vh = window.innerHeight;
+  const scale = Math.max(0.1, Math.min(vw / SCREEN_W, vh / SCREEN_H));
+  canvasFrame.style.width = Math.floor(SCREEN_W * scale) + 'px';
+  canvasFrame.style.height = Math.floor(SCREEN_H * scale) + 'px';
+}
+
+window.addEventListener('resize', resizeCanvasFrame);
+window.addEventListener('orientationchange', () => setTimeout(resizeCanvasFrame, 150));
+resizeCanvasFrame();
+
+
+/* ============================================================================
+   14. タッチ操作(モバイル向け仮想ボタン)
+   ------------------------------------------------------------------------
+   画面下部のボタンは keysDown / keysJustPressed を直接操作するので、
+   Fighter側のロジックはキーボード入力と全く区別する必要がない。
+   ========================================================================== */
+
+const TOUCH_KEY_MAP = {
+  left: 'ArrowLeft',
+  right: 'ArrowRight',
+  jump: 'ArrowUp',
+  jab: 'KeyZ',
+  strong: 'KeyX',
+  special: 'KeyC',
+  dash: 'ShiftLeft',
+};
+
+function bindTouchButton(el) {
+  const code = TOUCH_KEY_MAP[el.dataset.key];
+  if (!code) return;
+
+  const press = (e) => {
+    e.preventDefault();
+    if (!keysDown.has(code)) keysJustPressed.add(code);
+    keysDown.add(code);
+    el.classList.add('active');
+    ensureAudioStarted();
+  };
+  const release = (e) => {
+    if (e) e.preventDefault();
+    keysDown.delete(code);
+    el.classList.remove('active');
+  };
+
+  el.addEventListener('pointerdown', press);
+  el.addEventListener('pointerup', release);
+  el.addEventListener('pointercancel', release);
+  el.addEventListener('pointerleave', release);
+  el.addEventListener('contextmenu', (e) => e.preventDefault());
+}
+
+document.querySelectorAll('.tc-btn').forEach(bindTouchButton);
+
+// ゲームオーバー画面をタップでも再スタートできるようにする(スマホはSpaceキーが無いため)
+canvas.addEventListener('pointerdown', () => {
+  if (game.state === GameState.GAMEOVER) {
+    game.startRound();
+  }
+});
+
+
+/* ============================================================================
+   15. プレイヤー画像設定(差し替え機能)
+   ------------------------------------------------------------------------
+   「画像設定」ボタン → ファイル選択 → 選んだ画像をプレイヤーに反映。
+   選択した画像はブラウザのlocalStorageに保存し、次回起動時にも復元する。
+   ========================================================================== */
+
+const settingsBtn = document.getElementById('settings-btn');
+const playerImageInput = document.getElementById('player-image-input');
+const PLAYER_IMAGE_STORAGE_KEY = 'pixelbrawl_player_image';
+
+function applyPlayerImage(src) {
+  const img = new Image();
+  img.onload = () => {
+    game.player.image = img;
+    game.player.imageLoaded = true;
+    game.player.imageFailed = false;
+  };
+  img.onerror = () => {
+    game.player.imageFailed = true;
+  };
+  img.src = src;
+}
+
+if (settingsBtn && playerImageInput) {
+  settingsBtn.addEventListener('click', () => {
+    ensureAudioStarted();
+    playerImageInput.click();
+  });
+
+  playerImageInput.addEventListener('change', (e) => {
+    const file = e.target.files && e.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      const dataUrl = ev.target.result;
+      applyPlayerImage(dataUrl);
+      try {
+        localStorage.setItem(PLAYER_IMAGE_STORAGE_KEY, dataUrl);
+      } catch (err) {
+        // プライベートモード等でlocalStorageが使えない場合は無視(今回の表示は反映される)
+      }
+    };
+    reader.readAsDataURL(file);
+    // 同じファイルを連続で選び直せるように値をリセット
+    e.target.value = '';
+  });
+}
+
+// 前回選択した画像が保存されていれば復元する(なければデフォルトのassets/player.pngのまま)
+function restoreSavedPlayerImage() {
+  try {
+    const saved = localStorage.getItem(PLAYER_IMAGE_STORAGE_KEY);
+    if (saved) applyPlayerImage(saved);
+  } catch (err) {
+    // localStorageが使えない環境では何もしない
+  }
+}
+
+
+/* ============================================================================
+   16. 起動処理 / メインループ
    ========================================================================== */
 
 const game = new GameManager();
+restoreSavedPlayerImage();
 
 function gameLoop(now) {
   // フレーム間の経過時間から「1フレーム(=1/60秒)を1」とした進行係数stepを算出
