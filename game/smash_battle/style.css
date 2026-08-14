@@ -1,97 +1,60 @@
 /* ==========================================================================
    PIXEL BRAWL - style.css
-   レトロ(ファミコン〜スーファミ)風のUIスタイル
+   スマホ横持ち専用のフルスクリーン・レトロUI
    トークン:
      背景     : #0c0a14 (濃紺紫)
-     筐体パネル: #1c1730 / 縁取り #f4c542 (ゴールド)
      プレイヤー: #3f7fdd (青)
-     CPU      : #e0403a (赤)
+     CPU-RED   : #e0403a / CPU-GREEN: #3fae5e / CPU-PURPLE: #9a5fe0
      警告/強調 : #f4c542 (ゴールド)
-   フォント: 等幅フォントを太字・字間広めで用いてドット文字風に見せる
    ========================================================================== */
-
-@font-face {
-  /* 外部CDNに依存せず、OS標準の等幅フォントでドット風の質感を出す */
-  font-family: 'PixelMono';
-  src: local('Consolas'), local('Menlo'), local('Courier New');
-}
 
 * {
   box-sizing: border-box;
   image-rendering: pixelated;
   image-rendering: -moz-crisp-edges;
   image-rendering: crisp-edges;
+  -webkit-tap-highlight-color: transparent;
+  user-select: none;
+  -webkit-user-select: none;
 }
 
 html, body {
   margin: 0;
   padding: 0;
+  width: 100%;
   height: 100%;
-  background: radial-gradient(ellipse at center, #241d3d 0%, #0c0a14 70%);
+  overflow: hidden;
+  background: #05040a;
   color: #f2ead8;
-  font-family: 'PixelMono', 'Courier New', monospace;
+  font-family: 'Courier New', monospace;
+  letter-spacing: 0.5px;
+  overscroll-behavior: none;
+  touch-action: none;
+}
+
+/* ---- ゲーム画面(常に画面中央、内部解像度960x540をCSSで拡縮) ---- */
+#screen-wrap {
+  position: fixed;
+  inset: 0;
   display: flex;
   align-items: center;
   justify-content: center;
-  overflow: hidden;
-  letter-spacing: 1px;
+  background: radial-gradient(ellipse at center, #1c1730 0%, #05040a 75%);
 }
 
-#cabinet {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  padding: 18px 22px 14px;
-  background: linear-gradient(180deg, #1c1730 0%, #140f24 100%);
-  border: 4px solid #4a3f77;
-  border-radius: 10px;
-  box-shadow:
-    0 0 0 4px #0c0a14,
-    0 0 40px rgba(244, 197, 66, 0.08),
-    0 20px 50px rgba(0,0,0,0.6);
-}
-
-/* ---- タイトルロゴ ---- */
-#crt-title {
-  margin-bottom: 10px;
-  text-align: center;
-}
-.title-main {
-  display: block;
-  font-size: 30px;
-  font-weight: 900;
-  color: #f4c542;
-  text-shadow:
-    3px 3px 0 #a8332d,
-    3px 3px 0 #a8332d,
-    -1px -1px 0 #0c0a14,
-    1px -1px 0 #0c0a14,
-    -1px 1px 0 #0c0a14,
-    1px 1px 0 #0c0a14;
-  letter-spacing: 4px;
-}
-.title-sub {
-  display: block;
-  font-size: 12px;
-  color: #8ea6d9;
-  letter-spacing: 6px;
-  margin-top: 2px;
-}
-
-/* ---- ゲーム画面 ---- */
-#screen-wrap {
+#canvas-frame {
   position: relative;
-  border: 6px solid #0c0a14;
-  outline: 3px solid #f4c542;
-  outline-offset: -3px;
-  box-shadow: inset 0 0 30px rgba(0,0,0,0.8);
+  border: 3px solid #0c0a14;
+  outline: 2px solid #f4c542;
+  outline-offset: -2px;
+  box-shadow: 0 0 30px rgba(0,0,0,0.7);
 }
 
 #game-canvas {
   display: block;
+  width: 100%;
+  height: 100%;
   background: #000;
-  width: 960px;
-  height: 540px;
 }
 
 /* CRT走査線エフェクト */
@@ -103,8 +66,8 @@ html, body {
     to bottom,
     rgba(0,0,0,0.0) 0px,
     rgba(0,0,0,0.0) 1px,
-    rgba(0,0,0,0.18) 2px,
-    rgba(0,0,0,0.18) 3px
+    rgba(0,0,0,0.16) 2px,
+    rgba(0,0,0,0.16) 3px
   );
   mix-blend-mode: multiply;
 }
@@ -117,45 +80,175 @@ html, body {
   background: radial-gradient(ellipse at center, rgba(0,0,0,0) 55%, rgba(0,0,0,0.45) 100%);
 }
 
-/* ---- 操作説明パネル ---- */
-#controls-panel {
-  margin-top: 14px;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 14px;
-  justify-content: center;
-  background: #241d3d;
-  border: 2px solid #4a3f77;
-  border-radius: 6px;
-  padding: 8px 16px;
-  max-width: 960px;
-}
-.ctrl-group {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 11px;
-  color: #b9c6ea;
-}
-.ctrl-label {
-  color: #8ea6d9;
-}
-.key {
-  display: inline-block;
-  min-width: 20px;
-  padding: 2px 6px;
-  text-align: center;
-  background: #0c0a14;
-  border: 2px solid #f4c542;
-  border-radius: 3px;
-  color: #f4c542;
+/* ---- 画像設定ボタン(画面上部中央固定) ---- */
+#settings-btn {
+  position: fixed;
+  top: 8px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 30;
+  font-family: 'Courier New', monospace;
   font-weight: bold;
-  font-size: 11px;
+  font-size: 12px;
+  color: #f4c542;
+  background: rgba(12,10,20,0.75);
+  border: 2px solid #f4c542;
+  border-radius: 6px;
+  padding: 6px 12px;
+  cursor: pointer;
+  letter-spacing: 1px;
+  touch-action: manipulation;
+}
+#settings-btn:active {
+  background: #f4c542;
+  color: #0c0a14;
 }
 
-#footer-note {
-  margin-top: 8px;
-  font-size: 10px;
-  color: #5c6690;
-  letter-spacing: 0.5px;
+/* ==========================================================================
+   タッチ操作ボタン(画面下部、横持ち専用)
+   ========================================================================== */
+
+#touch-controls {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 25;
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  padding: 10px 14px 14px;
+  pointer-events: none; /* 隙間はゲーム画面のタップを妨げない */
+}
+
+.tc-cluster {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  pointer-events: auto;
+}
+
+.tc-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.tc-btn {
+  font-family: 'Courier New', monospace;
+  font-weight: 900;
+  color: #f2ead8;
+  background: rgba(28, 23, 48, 0.72);
+  border: 2px solid rgba(244, 197, 66, 0.85);
+  border-radius: 10px;
+  box-shadow: 0 3px 0 rgba(0,0,0,0.5);
+  touch-action: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.05s, transform 0.05s;
+}
+
+.tc-btn:active,
+.tc-btn.active {
+  background: rgba(244, 197, 66, 0.85);
+  color: #0c0a14;
+  transform: translateY(2px);
+  box-shadow: 0 1px 0 rgba(0,0,0,0.5);
+}
+
+/* 移動・ジャンプ(左クラスター) */
+.tc-move {
+  width: 56px;
+  height: 56px;
+  font-size: 22px;
+  border-radius: 50%;
+}
+.tc-jump {
+  width: 52px;
+  height: 52px;
+  font-size: 20px;
+  border-radius: 50%;
+  border-color: rgba(122, 208, 255, 0.9);
+  color: #7ad0ff;
+}
+.tc-dash {
+  width: 100px;
+  height: 30px;
+  font-size: 11px;
+  border-radius: 8px;
+  border-color: rgba(255, 138, 90, 0.9);
+  color: #ff8a5a;
+}
+
+/* 攻撃ボタン(右クラスター) */
+.tc-cluster.tc-right {
+  flex-direction: row;
+  align-items: flex-end;
+}
+.tc-atk {
+  width: 62px;
+  height: 62px;
+  font-size: 22px;
+  border-radius: 50%;
+}
+.tc-jab {
+  border-color: rgba(255, 226, 122, 0.9);
+  color: #ffe27a;
+}
+.tc-strong {
+  border-color: rgba(255, 138, 90, 0.9);
+  color: #ff8a5a;
+}
+.tc-special {
+  border-color: rgba(122, 208, 255, 0.9);
+  color: #7ad0ff;
+}
+
+/* ==========================================================================
+   横向き強制: 縦持ちの場合はゲームを隠して回転案内を表示
+   ========================================================================== */
+
+#rotate-overlay {
+  display: none;
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  background: #05040a;
+  text-align: center;
+  padding: 20px;
+}
+.rotate-icon {
+  font-size: 56px;
+  margin-bottom: 14px;
+  animation: rotate-hint 1.6s ease-in-out infinite;
+}
+#rotate-overlay p {
+  margin: 4px 0;
+  font-size: 16px;
+}
+#rotate-overlay .rotate-sub {
+  font-size: 12px;
+  color: #8ea6d9;
+}
+@keyframes rotate-hint {
+  0%, 100% { transform: rotate(0deg); }
+  50% { transform: rotate(-90deg); }
+}
+
+@media (orientation: portrait) {
+  #rotate-overlay { display: flex; }
+  #screen-wrap, #touch-controls, #settings-btn { display: none; }
+}
+
+/* 画面が極端に低い横持ち(小型端末)でもボタンが収まるよう少し縮小 */
+@media (orientation: landscape) and (max-height: 380px) {
+  .tc-move, .tc-jump { width: 46px; height: 46px; font-size: 18px; }
+  .tc-atk { width: 52px; height: 52px; font-size: 18px; }
+  .tc-dash { width: 84px; height: 26px; font-size: 10px; }
 }
