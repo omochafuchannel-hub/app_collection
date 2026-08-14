@@ -2,57 +2,47 @@
 <html lang="ja">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>PIXEL BRAWL - レトロ対戦アクション</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<title>PIXEL BRAWL - レトロ対戦アクション(スマホ対応)</title>
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
 
-  <!-- ゲーム全体をまとめる筐体風フレーム -->
-  <div id="cabinet">
+  <!-- 縦持ちの場合に表示する「横向きにしてください」オーバーレイ -->
+  <div id="rotate-overlay">
+    <div class="rotate-icon">⟲📱</div>
+    <p>デバイスを<strong>横向き</strong>にしてください</p>
+    <p class="rotate-sub">このゲームは横持ち専用です</p>
+  </div>
 
-    <div id="crt-title">
-      <span class="title-main">PIXEL BRAWL</span>
-      <span class="title-sub">- ONE ON ONE -</span>
-    </div>
-
-    <!-- ゲーム描画用キャンバス -->
-    <div id="screen-wrap">
+  <!-- ゲーム画面(内部解像度960x540固定、CSSで画面サイズに合わせて拡縮) -->
+  <div id="screen-wrap">
+    <div id="canvas-frame">
       <canvas id="game-canvas" width="960" height="540"></canvas>
-      <!-- CRTっぽい走査線オーバーレイ -->
       <div id="scanlines"></div>
       <div id="vignette"></div>
     </div>
+  </div>
 
-    <!-- 操作説明 -->
-    <div id="controls-panel">
-      <div class="ctrl-group">
-        <span class="ctrl-label">移動</span>
-        <span class="key">←</span><span class="key">→</span>
-      </div>
-      <div class="ctrl-group">
-        <span class="ctrl-label">ジャンプ</span>
-        <span class="key">↑</span>
-      </div>
-      <div class="ctrl-group">
-        <span class="ctrl-label">通常攻撃</span>
-        <span class="key">Z</span>
-      </div>
-      <div class="ctrl-group">
-        <span class="ctrl-label">強攻撃</span>
-        <span class="key">X</span>
-      </div>
-      <div class="ctrl-group">
-        <span class="ctrl-label">必殺技</span>
-        <span class="key">C</span>
-      </div>
-      <div class="ctrl-group">
-        <span class="ctrl-label">ダッシュ</span>
-        <span class="key">SHIFT</span>
+  <!-- 画面上部中央: プレイヤー画像の差し替えボタン -->
+  <button id="settings-btn" type="button">🖼️ 画像設定</button>
+  <input type="file" id="player-image-input" accept="image/*" hidden>
+
+  <!-- 画面下部: スマホ横持ち用の仮想ボタン(PCではマウスクリックでも操作可) -->
+  <div id="touch-controls">
+    <div class="tc-cluster tc-left">
+      <button class="tc-btn tc-dash" data-key="dash">DASH</button>
+      <div class="tc-row">
+        <button class="tc-btn tc-move" data-key="left">◀</button>
+        <button class="tc-btn tc-jump" data-key="jump">▲</button>
+        <button class="tc-btn tc-move" data-key="right">▶</button>
       </div>
     </div>
-
-    <div id="footer-note">assets/player.png を差し替えるとプレイヤーの見た目を変更できます</div>
+    <div class="tc-cluster tc-right">
+      <button class="tc-btn tc-atk tc-jab" data-key="jab">Z</button>
+      <button class="tc-btn tc-atk tc-strong" data-key="strong">X</button>
+      <button class="tc-btn tc-atk tc-special" data-key="special">C</button>
+    </div>
   </div>
 
   <script src="game.js"></script>
