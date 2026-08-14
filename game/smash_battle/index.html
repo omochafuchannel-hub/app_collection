@@ -1,1 +1,60 @@
-dmy
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PIXEL BRAWL - レトロ対戦アクション</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+  <!-- ゲーム全体をまとめる筐体風フレーム -->
+  <div id="cabinet">
+
+    <div id="crt-title">
+      <span class="title-main">PIXEL BRAWL</span>
+      <span class="title-sub">- ONE ON ONE -</span>
+    </div>
+
+    <!-- ゲーム描画用キャンバス -->
+    <div id="screen-wrap">
+      <canvas id="game-canvas" width="960" height="540"></canvas>
+      <!-- CRTっぽい走査線オーバーレイ -->
+      <div id="scanlines"></div>
+      <div id="vignette"></div>
+    </div>
+
+    <!-- 操作説明 -->
+    <div id="controls-panel">
+      <div class="ctrl-group">
+        <span class="ctrl-label">移動</span>
+        <span class="key">←</span><span class="key">→</span>
+      </div>
+      <div class="ctrl-group">
+        <span class="ctrl-label">ジャンプ</span>
+        <span class="key">↑</span>
+      </div>
+      <div class="ctrl-group">
+        <span class="ctrl-label">通常攻撃</span>
+        <span class="key">Z</span>
+      </div>
+      <div class="ctrl-group">
+        <span class="ctrl-label">強攻撃</span>
+        <span class="key">X</span>
+      </div>
+      <div class="ctrl-group">
+        <span class="ctrl-label">必殺技</span>
+        <span class="key">C</span>
+      </div>
+      <div class="ctrl-group">
+        <span class="ctrl-label">ダッシュ</span>
+        <span class="key">SHIFT</span>
+      </div>
+    </div>
+
+    <div id="footer-note">assets/player.png を差し替えるとプレイヤーの見た目を変更できます</div>
+  </div>
+
+  <script src="game.js"></script>
+</body>
+</html>
