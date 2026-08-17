@@ -210,6 +210,24 @@ html, body {
   color: #7ad0ff;
 }
 
+/* 超必殺技オーブを持っている間、Cボタンが光って知らせる */
+@keyframes ultimate-ready-glow {
+  0%, 100% {
+    box-shadow: 0 0 10px 3px rgba(255, 246, 201, 0.55);
+    transform: scale(1);
+  }
+  50% {
+    box-shadow: 0 0 26px 12px rgba(255, 246, 201, 0.95);
+    transform: scale(1.08);
+  }
+}
+.tc-special.ready-glow {
+  background: rgba(255, 246, 201, 0.85);
+  border-color: #fff6c9;
+  color: #2c2410;
+  animation: ultimate-ready-glow 0.7s ease-in-out infinite;
+}
+
 /* ==========================================================================
    横向き強制: 縦持ちの場合はゲームを隠して回転案内を表示
    ========================================================================== */
