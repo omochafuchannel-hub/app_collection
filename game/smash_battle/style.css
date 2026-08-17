@@ -159,20 +159,12 @@ html, body {
   box-shadow: 0 1px 0 rgba(0,0,0,0.5);
 }
 
-/* 移動・ジャンプ(左クラスター) */
+/* 移動(左クラスター) */
 .tc-move {
   width: 56px;
   height: 56px;
   font-size: 22px;
   border-radius: 50%;
-}
-.tc-jump {
-  width: 52px;
-  height: 52px;
-  font-size: 20px;
-  border-radius: 50%;
-  border-color: rgba(122, 208, 255, 0.9);
-  color: #7ad0ff;
 }
 .tc-dash {
   width: 100px;
@@ -183,15 +175,26 @@ html, body {
   color: #ff8a5a;
 }
 
-/* 攻撃ボタン(右クラスター) */
+/* ジャンプボタン(右クラスター上段。右手側に配置) */
 .tc-cluster.tc-right {
-  flex-direction: row;
-  align-items: flex-end;
+  flex-direction: column;
+  align-items: center;
 }
+.tc-jump {
+  width: 100px;
+  height: 34px;
+  font-size: 13px;
+  border-radius: 8px;
+  border-color: rgba(122, 208, 255, 0.9);
+  color: #7ad0ff;
+  letter-spacing: 2px;
+}
+
+/* 攻撃ボタン(右クラスター下段) */
 .tc-atk {
-  width: 62px;
-  height: 62px;
-  font-size: 22px;
+  width: 60px;
+  height: 60px;
+  font-size: 21px;
   border-radius: 50%;
 }
 .tc-jab {
