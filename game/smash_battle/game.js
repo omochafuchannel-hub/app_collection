@@ -194,6 +194,8 @@ const Sound = {
   pickup() { this._tone(660, 0.08, 'square', 0.12, 880); },
   throwItem() { this._tone(400, 0.09, 'triangle', 0.12, 250); },
   heal() { this._tone(320, 0.28, 'sine', 0.16, 760); },
+  ultimate() { this._tone(150, 0.5, 'sawtooth', 0.22, 700); this._noise(0.4, 0.28, 2500); },
+  explosion() { this._noise(0.35, 0.3, 700); this._tone(90, 0.3, 'sawtooth', 0.18, 40); },
 };
 
 
@@ -252,6 +254,14 @@ class Particle {
       ctx.lineWidth = 3;
       ctx.strokeText(this.text, this.x, this.y);
       ctx.fillText(this.text, this.x, this.y);
+    } else if (this.type === 'ring') {
+      // 超必殺技・爆発用の拡大していく衝撃波リング
+      const progress = 1 - this.alpha; // 0(発生直後)→1(消える直前)
+      ctx.strokeStyle = this.color;
+      ctx.lineWidth = 5;
+      ctx.beginPath();
+      ctx.arc(this.x, this.y, this.size * progress, 0, Math.PI * 2);
+      ctx.stroke();
     }
     ctx.restore();
   }
@@ -341,6 +351,28 @@ const ParticleSystem = {
         x, y,
         vx: Math.cos(angle) * speed, vy: Math.sin(angle) * speed,
         gravity: 0.1,
+        life: randRange(20, 40), maxLife: 40,
+        size: randRange(2, 5), color, type: 'circle',
+      }));
+    }
+  },
+
+  // 超必殺技・爆弾の爆発などに使う大きな衝撃波演出
+  spawnBigBurst(x, y, color, particleCount = 40) {
+    for (let r = 0; r < 3; r++) {
+      this.list.push(new Particle({
+        x, y, vx: 0, vy: 0,
+        life: 22 + r * 6, maxLife: 22 + r * 6,
+        size: 24 + r * 34, color, type: 'ring',
+      }));
+    }
+    for (let i = 0; i < particleCount; i++) {
+      const angle = randRange(0, Math.PI * 2);
+      const speed = randRange(3, 9);
+      this.list.push(new Particle({
+        x, y,
+        vx: Math.cos(angle) * speed, vy: Math.sin(angle) * speed,
+        gravity: 0.05,
         life: randRange(20, 40), maxLife: 40,
         size: randRange(2, 5), color, type: 'circle',
       }));
@@ -516,6 +548,24 @@ const ITEM_MODIFIED_ATTACKS = {
   },
 };
 
+// --- 超必殺技(超必殺技オーブを持っている時にCボタンで発動する、自分中心の全方位大技) ---
+const ULTIMATE_ATTACK = {
+  key: 'ultimate',
+  label: '超必殺技',
+  startup: 20,       // 溜め(この間に発動を見て相手は避けられる)
+  active: 14,         // 爆発が持続する時間
+  recovery: 34,       // 大技なので隙も大きい
+  radius: 230,        // 自分を中心とした爆発半径
+  damage: 26,
+  kbBase: 15,
+  kbScale: 0.6,
+  angleDeg: 45,
+  hitstopSelf: 16,
+  sound: 'ultimate',
+  hitSound: 'ultimate',
+  color: '#fff6c9',
+};
+
 
 /* ============================================================================
    7.5 アイテムデータ定義
@@ -523,6 +573,8 @@ const ITEM_MODIFIED_ATTACKS = {
    ・ボール    : 装備品。Z/Xの性能に影響しない。Cで投げられるだけ。
    ・剣        : 装備品。持っているとZ/Xの射程が伸びる(上のITEM_MODIFIED_ATTACKS参照)。
    ・エネルギータンク: 回復アイテム。触れると即座にダメージ%が50減少して消える。
+   ・超必殺技オーブ  : 装備品。持っている間はCボタンが光り、Cを押すと巨大な範囲攻撃(ULTIMATE_ATTACK)を放つ。
+                       フィールドに同時に1個までしか出現しない。
    新しいアイテムは、この ITEM_DEFS に追加するだけで出現するようになる。
    ========================================================================== */
 
@@ -540,6 +592,42 @@ const ITEM_DEFS = {
   energyTank: {
     label: 'エネルギータンク', shortLabel: '回復', color: '#57e08a', radius: 12,
     healAmount: 50, // 触れた瞬間にダメージ%をこれだけ減少させる
+  },
+  ultimate: {
+    label: '超必殺技オーブ', shortLabel: '超', color: '#fff6c9', radius: 13,
+    isUltimate: true, // 拾うとCボタンで超必殺技(ULTIMATE_ATTACK)が撃てるようになる
+  },
+};
+
+// アイテムの出現しやすさの重み(値が大きいほど出やすい)。超必殺技オーブはレア枠。
+const ITEM_SPAWN_WEIGHTS = { ball: 3, sword: 3, energyTank: 2, ultimate: 1 };
+
+
+/* ============================================================================
+   7.6 フィールド天災(爆弾・矢・レーザー)データ定義
+   ------------------------------------------------------------------------
+   約10秒に1回、ランダムな種類・ランダムなX座標で「予告(warn)」→「発生(active)」の
+   順に発生する範囲攻撃。プレイヤー・CPUを問わず巻き込まれるとダメージを受ける。
+   ========================================================================== */
+
+const HAZARD_DEFS = {
+  bomb: {
+    label: '爆弾', warnFrames: 55, fuseFrames: 5, explodeRadius: 95,
+    damage: 18, kbBase: 11, kbScale: 0.50, angleDeg: 60,
+    color: '#ff8a5a', warnColor: 'rgba(255,90,60,0.35)',
+    hitSound: 'strongHit', hitstopSelf: HITSTOP_STRONG,
+  },
+  arrow: {
+    label: '矢', warnFrames: 34, strikeFrames: 7, strikeWidth: 26,
+    damage: 12, kbBase: 8, kbScale: 0.40, angleDeg: 20,
+    color: '#e8e2d0', warnColor: 'rgba(232,226,208,0.30)',
+    hitSound: 'hit', hitstopSelf: HITSTOP_NORMAL,
+  },
+  laser: {
+    label: 'レーザー', warnFrames: 62, beamFrames: 26, beamWidth: 46, tickInterval: 10,
+    damage: 7, kbBase: 5, kbScale: 0.35, angleDeg: 15,
+    color: '#7ad0ff', warnColor: 'rgba(122,208,255,0.30)',
+    hitSound: 'hit', hitstopSelf: HITSTOP_NORMAL,
   },
 };
 
@@ -625,7 +713,7 @@ class Fighter {
   getAttackHitbox() {
     if (!this.attack || this.attack.phase !== 'active') return null;
     const def = this.attack.def;
-    if (def.key === 'special') return null; // 必殺技は飛び道具側で判定するため近接判定なし
+    if (def.key === 'special' || def.key === 'ultimate') return null; // 必殺技・超必殺技は別方式で判定するため近接矩形判定なし
     const range = def.range || 0;
     const centerY = this.y - this.height / 2 + (def.yOffset || 0);
     const boxW = range;
@@ -654,6 +742,19 @@ class Fighter {
     const itemMod = this.heldItem && ITEM_MODIFIED_ATTACKS[this.heldItem];
     if (itemMod && itemMod[key]) def = itemMod[key];
 
+    this.beginAttackWithDef(def);
+  }
+
+  // 超必殺技オーブを持っている時にCボタンで発動する巨大な範囲攻撃
+  startUltimate() {
+    if (!this.canAct() || this.attackCooldown > 0) return false;
+    this.heldItem = null; // オーブを消費
+    this.beginAttackWithDef(ULTIMATE_ATTACK);
+    return true;
+  }
+
+  // 技データ(def)から実際に攻撃状態へ入る共通処理
+  beginAttackWithDef(def) {
     this.attack = { def, phase: 'startup', timer: def.startup, hitTargets: new Set() };
     this.state = 'attack';
     this.vx *= 0.4; // 攻撃時は少し減速して踏み込み感を出す
@@ -755,9 +856,15 @@ class Fighter {
     if (input.jabPressed) this.startAttack('jab');
     else if (input.strongPressed) this.startAttack('strong');
     else if (input.specialPressed) {
-      // 装備品を持っている場合、Cは必殺技ではなく「投げる」になる
-      if (this.heldItem && game) game.throwItem(this);
-      else this.startAttack('special');
+      if (this.heldItem === 'ultimate') {
+        // 超必殺技オーブを持っている時のCは巨大な範囲攻撃
+        this.startUltimate();
+      } else if (this.heldItem && game) {
+        // それ以外の装備品(ボール・剣)を持っている時のCは投げる
+        game.throwItem(this);
+      } else {
+        this.startAttack('special');
+      }
     }
   }
 
@@ -774,9 +881,25 @@ class Fighter {
       if (a.def.key === 'special') {
         game.spawnProjectile(this, a.def);
       }
+      // 超必殺技はアクティブフェーズ開始時に爆発演出(画面揺れ等)を発生させる
+      if (a.def.key === 'ultimate') {
+        game.triggerUltimateFx(this, a.def);
+      }
     } else if (a.phase === 'active') {
-      // 近接攻撃の判定処理(乱闘なので周囲の全ファイターを対象にする)
-      if (a.def.key !== 'special') {
+      if (a.def.key === 'ultimate') {
+        // 超必殺技: 自分を中心とした全方位の範囲攻撃
+        for (const other of game.fighters) {
+          if (other === this || !other.alive) continue;
+          if (a.hitTargets.has(other)) continue;
+          const dx = other.x - this.x;
+          const dy = (other.y - other.height / 2) - (this.y - this.height / 2);
+          if (dx * dx + dy * dy < a.def.radius * a.def.radius) {
+            a.hitTargets.add(other);
+            game.applyHit(this, other, a.def);
+          }
+        }
+      } else if (a.def.key !== 'special') {
+        // 近接攻撃の判定処理(乱闘なので周囲の全ファイターを対象にする)
         const hitbox = this.getAttackHitbox();
         if (hitbox) {
           for (const other of game.fighters) {
@@ -929,6 +1052,15 @@ class Fighter {
       ctx.moveTo(hx - this.facing * 2, hy + 7);
       ctx.lineTo(hx + this.facing * 5, hy + 3);
       ctx.stroke();
+    } else if (this.heldItem === 'ultimate') {
+      const grad = ctx.createRadialGradient(hx, hy, 1, hx, hy, 12);
+      grad.addColorStop(0, '#ffffff');
+      grad.addColorStop(0.6, def.color);
+      grad.addColorStop(1, 'rgba(255,246,201,0)');
+      ctx.fillStyle = grad;
+      ctx.beginPath();
+      ctx.arc(hx, hy, 12, 0, Math.PI * 2);
+      ctx.fill();
     }
     ctx.restore();
   }
@@ -936,6 +1068,24 @@ class Fighter {
   // 攻撃の軌跡(簡易エフェクト)を描く
   drawAttackEffect(ctx) {
     if (!this.attack || this.attack.phase !== 'active') return;
+
+    // 超必殺技は自分を中心にした円形の爆発エフェクトを表示
+    if (this.attack.def.key === 'ultimate') {
+      ctx.save();
+      const cx = this.x;
+      const cy = this.y - this.height / 2;
+      const grad = ctx.createRadialGradient(cx, cy, 1, cx, cy, this.attack.def.radius);
+      grad.addColorStop(0, 'rgba(255,255,255,0.7)');
+      grad.addColorStop(0.5, 'rgba(255,246,201,0.35)');
+      grad.addColorStop(1, 'rgba(255,246,201,0)');
+      ctx.fillStyle = grad;
+      ctx.beginPath();
+      ctx.arc(cx, cy, this.attack.def.radius, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+      return;
+    }
+
     const hb = this.getAttackHitbox();
     if (!hb) return;
     ctx.save();
@@ -1145,8 +1295,199 @@ class Item {
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
       ctx.fillText('+', 0, 1);
+    } else if (this.type === 'ultimate') {
+      // 超必殺技オーブ: 光る球体(特別感を出すため常に脈動させる)
+      const pulse = 1 + Math.sin(Date.now() / 140) * 0.15;
+      const r = this.def.radius * 1.7 * pulse;
+      const grad = ctx.createRadialGradient(0, 0, 1, 0, 0, r);
+      grad.addColorStop(0, '#ffffff');
+      grad.addColorStop(0.45, this.def.color);
+      grad.addColorStop(1, 'rgba(255,246,201,0)');
+      ctx.fillStyle = grad;
+      ctx.beginPath();
+      ctx.arc(0, 0, r, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = '#fff6c9';
+      ctx.beginPath();
+      ctx.arc(0, 0, this.def.radius * 0.5, 0, Math.PI * 2);
+      ctx.fill();
     }
     ctx.restore();
+  }
+}
+
+
+/* ============================================================================
+   9.6 Hazard（フィールド天災: 爆弾・矢・レーザー)クラス
+   ------------------------------------------------------------------------
+   約10秒に1回、ランダムな種類・ランダムなX座標で発生する範囲攻撃。
+   「予告(warn)」で発生位置を示してから実際にダメージが出るので、
+   プレイヤー・CPUともに見てから避けられるようになっている。
+   ========================================================================== */
+
+class Hazard {
+  constructor(type, x) {
+    this.type = type;
+    this.def = HAZARD_DEFS[type];
+    this.x = x;
+    this.y = -30;      // 爆弾の落下開始位置
+    this.vy = 0;
+    this.phase = 'warn'; // bomb: warn→fall→explode / arrow: warn→strike / laser: warn→beam
+    this.timer = this.def.warnFrames;
+    this.tickTimer = 0;  // レーザーの継続ダメージ間隔用
+    this.explosionRadius = 0; // 爆発演出の広がり具合
+    this.exploded = false;
+    this.dead = false;
+  }
+
+  update(step, game) {
+    this.timer -= step;
+
+    if (this.type === 'bomb') {
+      if (this.phase === 'warn') {
+        if (this.timer <= 0) { this.phase = 'fall'; }
+      } else if (this.phase === 'fall') {
+        this.vy = clamp(this.vy + GRAVITY * 1.4 * step, -999, 16);
+        this.y += this.vy * step;
+        for (const s of Stage.getAllSolids()) {
+          const within = this.x > s.x && this.x < s.x + s.w;
+          if (within && this.y >= s.y) {
+            this.y = s.y;
+            this.phase = 'explode';
+            this.timer = this.def.fuseFrames;
+            break;
+          }
+        }
+        if (this.y > KO_BOTTOM) this.dead = true;
+      } else if (this.phase === 'explode') {
+        if (this.timer <= 0 && !this.exploded) {
+          this.exploded = true;
+          game.applyHazardExplosion(this);
+        }
+        if (this.exploded) {
+          this.explosionRadius += 14 * step;
+          if (this.explosionRadius > this.def.explodeRadius + 20) this.dead = true;
+        }
+      }
+    } else if (this.type === 'arrow') {
+      if (this.phase === 'warn' && this.timer <= 0) {
+        this.phase = 'strike';
+        this.timer = this.def.strikeFrames;
+        game.applyHazardLineHit(this);
+      } else if (this.phase === 'strike' && this.timer <= 0) {
+        this.dead = true;
+      }
+    } else if (this.type === 'laser') {
+      if (this.phase === 'warn' && this.timer <= 0) {
+        this.phase = 'beam';
+        this.timer = this.def.beamFrames;
+        this.tickTimer = 0;
+      } else if (this.phase === 'beam') {
+        this.tickTimer -= step;
+        if (this.tickTimer <= 0) {
+          this.tickTimer = this.def.tickInterval;
+          game.applyHazardLineHit(this);
+        }
+        if (this.timer <= 0) this.dead = true;
+      }
+    }
+  }
+
+  draw(ctx) {
+    const def = this.def;
+
+    if (this.type === 'bomb') {
+      if (this.phase === 'warn') {
+        const blink = Math.floor(this.timer / 6) % 2 === 0;
+        if (blink) {
+          ctx.save();
+          ctx.strokeStyle = def.color;
+          ctx.lineWidth = 3;
+          ctx.beginPath();
+          ctx.arc(this.x, Stage.ground.y, 18, 0, Math.PI * 2);
+          ctx.stroke();
+          ctx.beginPath();
+          ctx.moveTo(this.x - 22, Stage.ground.y); ctx.lineTo(this.x + 22, Stage.ground.y);
+          ctx.moveTo(this.x, Stage.ground.y - 22); ctx.lineTo(this.x, Stage.ground.y + 4);
+          ctx.stroke();
+          ctx.restore();
+        }
+      } else if (this.phase === 'fall') {
+        ctx.save();
+        ctx.fillStyle = '#2a2a2a';
+        ctx.beginPath();
+        ctx.arc(this.x, this.y, 10, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.strokeStyle = def.color;
+        ctx.lineWidth = 2;
+        ctx.stroke();
+        ctx.strokeStyle = '#ff5a4d';
+        ctx.beginPath();
+        ctx.moveTo(this.x, this.y - 10); ctx.lineTo(this.x + 4, this.y - 17);
+        ctx.stroke();
+        ctx.restore();
+      } else if (this.phase === 'explode' && this.exploded) {
+        ctx.save();
+        ctx.globalAlpha = clamp(1 - this.explosionRadius / (def.explodeRadius + 20), 0.15, 1);
+        const grad = ctx.createRadialGradient(this.x, this.y, 1, this.x, this.y, Math.max(1, this.explosionRadius));
+        grad.addColorStop(0, '#ffffff');
+        grad.addColorStop(0.5, def.color);
+        grad.addColorStop(1, 'rgba(255,90,60,0)');
+        ctx.fillStyle = grad;
+        ctx.beginPath();
+        ctx.arc(this.x, this.y, Math.max(1, this.explosionRadius), 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+      }
+    } else if (this.type === 'arrow') {
+      if (this.phase === 'warn') {
+        const blink = Math.floor(this.timer / 4) % 2 === 0;
+        ctx.save();
+        ctx.fillStyle = def.warnColor;
+        ctx.fillRect(this.x - def.strikeWidth / 2, 0, def.strikeWidth, SCREEN_H);
+        if (blink) {
+          ctx.strokeStyle = def.color;
+          ctx.lineWidth = 2;
+          ctx.setLineDash([6, 6]);
+          ctx.beginPath();
+          ctx.moveTo(this.x, 0); ctx.lineTo(this.x, SCREEN_H);
+          ctx.stroke();
+          ctx.setLineDash([]);
+        }
+        ctx.restore();
+      } else if (this.phase === 'strike') {
+        ctx.save();
+        ctx.globalAlpha = clamp(this.timer / def.strikeFrames, 0.15, 1);
+        ctx.strokeStyle = def.color;
+        ctx.lineWidth = 6;
+        ctx.beginPath();
+        ctx.moveTo(this.x, 0); ctx.lineTo(this.x, SCREEN_H);
+        ctx.stroke();
+        ctx.restore();
+      }
+    } else if (this.type === 'laser') {
+      if (this.phase === 'warn') {
+        const blink = Math.floor(this.timer / 5) % 2 === 0;
+        ctx.save();
+        ctx.fillStyle = def.warnColor;
+        ctx.fillRect(this.x - def.beamWidth / 2, 0, def.beamWidth, SCREEN_H);
+        if (blink) {
+          ctx.strokeStyle = def.color;
+          ctx.lineWidth = 2;
+          ctx.strokeRect(this.x - def.beamWidth / 2, 0, def.beamWidth, SCREEN_H);
+        }
+        ctx.restore();
+      } else if (this.phase === 'beam') {
+        ctx.save();
+        const grad = ctx.createLinearGradient(this.x - def.beamWidth / 2, 0, this.x + def.beamWidth / 2, 0);
+        grad.addColorStop(0, 'rgba(122,208,255,0)');
+        grad.addColorStop(0.5, def.color);
+        grad.addColorStop(1, 'rgba(122,208,255,0)');
+        ctx.fillStyle = grad;
+        ctx.fillRect(this.x - def.beamWidth / 2, 0, def.beamWidth, SCREEN_H);
+        ctx.restore();
+      }
+    }
   }
 }
 
@@ -1491,6 +1832,12 @@ class GameManager {
     this.items = [];
     this.itemSpawnTimer = randInt(180, 260); // 最初のアイテム出現までのフレーム数
 
+    this.hazards = [];
+    this.hazardSpawnTimer = randInt(420, 600); // 最初の天災までのフレーム数(開始直後の猶予)
+
+    this.screenShakeTimer = 0; // 超必殺技・爆発時の画面揺れ演出
+    this.screenShakeMag = 0;
+
     this.state = GameState.READY;
     this.stateTimer = 60; // READY表示のフレーム数
 
@@ -1526,6 +1873,75 @@ class GameManager {
     this.projectiles.push(new Projectile(owner, def, originX, originY));
   }
 
+  // 超必殺技発動時の演出(爆発エフェクト+画面揺れ+効果音)
+  triggerUltimateFx(fighter, def) {
+    ParticleSystem.spawnBigBurst(fighter.x, fighter.y - fighter.height / 2, def.color, 46);
+    this.screenShakeTimer = 20;
+    this.screenShakeMag = 10;
+    Sound.ultimate();
+  }
+
+  // ---- 天災(爆弾・矢・レーザー)関連 -----------------------------------
+
+  updateHazardSpawning(step) {
+    this.hazardSpawnTimer -= step;
+    if (this.hazardSpawnTimer <= 0) {
+      this.hazardSpawnTimer = randInt(540, 660); // 次回まで約9〜11秒
+      this.spawnRandomHazard();
+    }
+  }
+
+  spawnRandomHazard() {
+    if (this.hazards.length >= 3) return; // 出しすぎない安全弁
+    const types = Object.keys(HAZARD_DEFS);
+    const type = types[randInt(0, types.length - 1)];
+    const g = Stage.ground;
+    const x = randRange(g.x + 50, g.x + g.w - 50);
+    this.hazards.push(new Hazard(type, x));
+  }
+
+  // 爆弾の爆発: 中心から半径内にいる全ファイターにダメージを与える
+  applyHazardExplosion(hazard) {
+    const def = hazard.def;
+    for (const f of this.fighters) {
+      if (!f.alive) continue;
+      const dx = f.x - hazard.x;
+      const dy = (f.y - f.height / 2) - hazard.y;
+      if (dx * dx + dy * dy < def.explodeRadius * def.explodeRadius) {
+        this.applyEnvironmentalHit(f, def, hazard.x);
+      }
+    }
+    ParticleSystem.spawnBigBurst(hazard.x, hazard.y, def.color, 30);
+    this.screenShakeTimer = Math.max(this.screenShakeTimer, 16);
+    this.screenShakeMag = Math.max(this.screenShakeMag, 7);
+    Sound.explosion();
+  }
+
+  // 矢・レーザーの直撃判定: 指定X座標付近の帯にいる全ファイターにダメージを与える
+  applyHazardLineHit(hazard) {
+    const def = hazard.def;
+    const halfWidth = (def.strikeWidth || def.beamWidth) / 2;
+    for (const f of this.fighters) {
+      if (!f.alive) continue;
+      if (Math.abs(f.x - hazard.x) < halfWidth) {
+        this.applyEnvironmentalHit(f, def, hazard.x);
+      }
+    }
+  }
+
+  // 天災による被弾処理(攻撃者が存在しないため、ダミーの発生源座標から吹っ飛び方向を計算する)
+  applyEnvironmentalHit(defender, def, sourceX) {
+    const fakeAttacker = { x: sourceX, facing: Math.random() < 0.5 ? -1 : 1 };
+    const applied = defender.receiveHit(fakeAttacker, def);
+    if (!applied) return;
+
+    const hb = defender.getHurtbox();
+    ParticleSystem.spawnHitSpark(defender.x, hb.y + hb.h * 0.4, def.color);
+    ParticleSystem.spawnDamageText(defender.x, hb.y - 4, def.damage, defender.uiColor);
+    if (Sound[def.hitSound]) Sound[def.hitSound]();
+    this.hitStopTimer = Math.max(this.hitStopTimer, def.hitstopSelf || HITSTOP_NORMAL);
+  }
+
   // ---- アイテム関連 -----------------------------------------------------
 
   updateItemSpawning(step) {
@@ -1538,8 +1954,19 @@ class GameManager {
 
   spawnRandomItem() {
     if (this.items.length >= 4) return; // フィールドに出しすぎない
-    const types = Object.keys(ITEM_DEFS);
-    const type = types[randInt(0, types.length - 1)];
+
+    // 超必殺技オーブは「フィールド上 or 誰かが所持中」のいずれかで既に1個存在するなら出さない
+    const ultimateExists = this.items.some(i => i.type === 'ultimate') ||
+                            this.fighters.some(f => f.heldItem === 'ultimate');
+
+    const pool = [];
+    for (const [type, weight] of Object.entries(ITEM_SPAWN_WEIGHTS)) {
+      if (type === 'ultimate' && ultimateExists) continue;
+      for (let n = 0; n < weight; n++) pool.push(type);
+    }
+    if (pool.length === 0) return;
+    const type = pool[randInt(0, pool.length - 1)];
+
     const g = Stage.ground;
     const x = randRange(g.x + 60, g.x + g.w - 60);
     this.items.push(new Item(type, x, -20, { vy: 0 }));
@@ -1656,6 +2083,10 @@ class GameManager {
     this.projectiles = [];
     this.items = [];
     this.itemSpawnTimer = randInt(180, 260);
+    this.hazards = [];
+    this.hazardSpawnTimer = randInt(420, 600);
+    this.screenShakeTimer = 0;
+    this.screenShakeMag = 0;
     ParticleSystem.list = [];
     this.state = GameState.READY;
     this.stateTimer = 60;
@@ -1713,6 +2144,14 @@ class GameManager {
     this.items = this.items.filter(i => !i.dead);
     this.checkHealPickups();
 
+    // 天災(爆弾・矢・レーザー)の出現・更新
+    this.updateHazardSpawning(step);
+    this.hazards.forEach(h => h.update(step, this));
+    this.hazards = this.hazards.filter(h => !h.dead);
+
+    // 画面揺れの減衰
+    if (this.screenShakeTimer > 0) this.screenShakeTimer -= step;
+
     // 単純な押し合い防止(重なりすぎたら少し離す) -- 全ペア総当たり
     this.resolveOverlaps();
 
@@ -1742,6 +2181,14 @@ class GameManager {
 
   // ---- 描画 -----------------------------------------------------------------
   draw(ctx) {
+    ctx.save();
+
+    // 超必殺技・爆発などの演出時に画面全体を軽く揺らす(HUDは対象外)
+    if (this.screenShakeTimer > 0) {
+      const mag = this.screenShakeMag * clamp(this.screenShakeTimer / 20, 0, 1);
+      ctx.translate(randRange(-mag, mag), randRange(-mag, mag));
+    }
+
     Stage.draw(ctx);
 
     // アイテムはファイターより先に描画(地面の小物として扱う)
@@ -1754,6 +2201,11 @@ class GameManager {
     this.projectiles.forEach(p => p.draw(ctx));
 
     ParticleSystem.draw(ctx);
+
+    // 天災の予告/発生エフェクトは最前面に表示して視認性を確保する
+    this.hazards.forEach(h => h.draw(ctx));
+
+    ctx.restore();
 
     this.drawUI(ctx);
     this.drawCenterMessage(ctx);
@@ -1950,6 +2402,17 @@ canvas.addEventListener('pointerdown', () => {
   }
 });
 
+// --- 超必殺技オーブを持っている間、Cボタン(必殺技ボタン)を光らせる ---------
+const specialButtonEl = document.querySelector('[data-key="special"]');
+function updateUltimateButtonGlow() {
+  if (!specialButtonEl) return;
+  if (game.player.heldItem === 'ultimate') {
+    specialButtonEl.classList.add('ready-glow');
+  } else {
+    specialButtonEl.classList.remove('ready-glow');
+  }
+}
+
 
 /* ============================================================================
    15. プレイヤー画像設定(差し替え機能)
@@ -2026,6 +2489,7 @@ function gameLoop(now) {
   let step = clamp(delta / (1000 / 60), 0, 2.2);
 
   game.update(step);
+  updateUltimateButtonGlow();
 
   ctx.clearRect(0, 0, SCREEN_W, SCREEN_H);
   game.draw(ctx);
