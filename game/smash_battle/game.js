@@ -191,6 +191,9 @@ const Sound = {
   land() { this._tone(150, 0.06, 'square', 0.08, 90); },
   ko() { this._tone(300, 0.5, 'sawtooth', 0.2, 40); },
   win() { this._tone(523, 0.15, 'square', 0.15, 784); },
+  pickup() { this._tone(660, 0.08, 'square', 0.12, 880); },
+  throwItem() { this._tone(400, 0.09, 'triangle', 0.12, 250); },
+  heal() { this._tone(320, 0.28, 'sine', 0.16, 760); },
 };
 
 
@@ -296,6 +299,30 @@ const ParticleSystem = {
       life: 40, maxLife: 40,
       color, type: 'text', text: `+${amount}%`,
     }));
+  },
+
+  // 回復量の表示(エネルギータンク使用時など)。緑文字でマイナス表記にする。
+  spawnHealText(x, y, amount, color = '#7affa0') {
+    this.list.push(new Particle({
+      x, y, vx: 0, vy: -1.1,
+      life: 46, maxLife: 46,
+      color, type: 'text', text: `-${amount}%`,
+    }));
+  },
+
+  // アイテム取得時の小さなキラキラ演出
+  spawnPickupSparkle(x, y, color) {
+    for (let i = 0; i < 8; i++) {
+      const angle = randRange(0, Math.PI * 2);
+      const speed = randRange(1, 2.6);
+      this.list.push(new Particle({
+        x, y,
+        vx: Math.cos(angle) * speed, vy: Math.sin(angle) * speed - 1,
+        gravity: 0.05,
+        life: randRange(14, 24), maxLife: 24,
+        size: randRange(1.5, 3), color, type: 'circle',
+      }));
+    }
   },
 
   spawnProjectileTrail(x, y, color) {
@@ -480,6 +507,42 @@ const ATTACKS = {
   },
 };
 
+// --- 装備品による技の強化(item側からatttack名を指定するだけで拡張できる設計) ---
+// 新しい装備品が「ジャブや強攻撃を強化する」場合はここに項目を足すだけでよい。
+const ITEM_MODIFIED_ATTACKS = {
+  sword: {
+    jab: { ...ATTACKS.jab, range: Math.round(ATTACKS.jab.range * 1.7), color: '#d8ecff' },
+    strong: { ...ATTACKS.strong, range: Math.round(ATTACKS.strong.range * 1.55), color: '#d8ecff' },
+  },
+};
+
+
+/* ============================================================================
+   7.5 アイテムデータ定義
+   ------------------------------------------------------------------------
+   ・ボール    : 装備品。Z/Xの性能に影響しない。Cで投げられるだけ。
+   ・剣        : 装備品。持っているとZ/Xの射程が伸びる(上のITEM_MODIFIED_ATTACKS参照)。
+   ・エネルギータンク: 回復アイテム。触れると即座にダメージ%が50減少して消える。
+   新しいアイテムは、この ITEM_DEFS に追加するだけで出現するようになる。
+   ========================================================================== */
+
+const ITEM_DEFS = {
+  ball: {
+    label: 'ボール', shortLabel: '球', color: '#f2ead8', radius: 10,
+    damage: 5, kbBase: 4, kbScale: 0.25, angleDeg: 35,
+    hitSound: 'hit', hitstopSelf: HITSTOP_NORMAL,
+  },
+  sword: {
+    label: '剣', shortLabel: '剣', color: '#cfd8e0', radius: 11,
+    damage: 9, kbBase: 6, kbScale: 0.40, angleDeg: 40,
+    hitSound: 'strongHit', hitstopSelf: HITSTOP_STRONG,
+  },
+  energyTank: {
+    label: 'エネルギータンク', shortLabel: '回復', color: '#57e08a', radius: 12,
+    healAmount: 50, // 触れた瞬間にダメージ%をこれだけ減少させる
+  },
+};
+
 
 /* ============================================================================
    8. Fighter 基底クラス
@@ -520,6 +583,8 @@ class Fighter {
     this.jumpsUsed = 0;
     this.maxJumps = 2; // 二段ジャンプ可能(初心者にも遊びやすいように)
 
+    this.heldItem = null; // 現在持っている装備品('ball' | 'sword' | null)
+
     this.alive = true;
   }
 
@@ -535,6 +600,7 @@ class Fighter {
     this.hitstunTimer = 0;
     this.invincibleTimer = RESPAWN_INVINCIBLE_FRAMES;
     this.jumpsUsed = 0;
+    this.heldItem = null;
     this.alive = true;
   }
 
@@ -548,6 +614,7 @@ class Fighter {
     this.hitstunTimer = 0;
     this.invincibleTimer = RESPAWN_INVINCIBLE_FRAMES;
     this.jumpsUsed = 0;
+    this.heldItem = null; // 撃墜されると持っていたアイテムは失う
   }
 
   // ---- ヒットボックス/ハートボックス --------------------------------------
@@ -580,8 +647,13 @@ class Fighter {
   // ---- 攻撃開始 -----------------------------------------------------------
   startAttack(key) {
     if (!this.canAct() || this.attackCooldown > 0) return;
-    const def = ATTACKS[key];
+    let def = ATTACKS[key];
     if (!def) return;
+
+    // 装備品を持っている場合、技データを差し替えて性能を変化させる(例: 剣で射程UP)
+    const itemMod = this.heldItem && ITEM_MODIFIED_ATTACKS[this.heldItem];
+    if (itemMod && itemMod[key]) def = itemMod[key];
+
     this.attack = { def, phase: 'startup', timer: def.startup, hitTargets: new Set() };
     this.state = 'attack';
     this.vx *= 0.4; // 攻撃時は少し減速して踏み込み感を出す
@@ -600,7 +672,7 @@ class Fighter {
     if (this.state !== 'hitstun') {
       this.handleMovement(input, step);
       this.handleJump(input, step);
-      this.handleAttackInput(input);
+      this.handleAttackInput(input, game);
     }
 
     // --- 攻撃の状態機械を進める(相手は game.fighters から探す) --------------
@@ -668,11 +740,25 @@ class Fighter {
     }
   }
 
-  handleAttackInput(input) {
+  handleAttackInput(input, game) {
     if (!this.canAct()) return;
+
+    // 装備品を持っていない時、Z/Xの入力は「近くにアイテムがあれば拾う」を優先する
+    if (!this.heldItem && (input.jabPressed || input.strongPressed) && game) {
+      const item = game.findPickupableItemNear(this);
+      if (item) {
+        game.pickupItem(this, item);
+        return; // この入力は拾い専用として消費し、同フレームでは攻撃しない
+      }
+    }
+
     if (input.jabPressed) this.startAttack('jab');
     else if (input.strongPressed) this.startAttack('strong');
-    else if (input.specialPressed) this.startAttack('special');
+    else if (input.specialPressed) {
+      // 装備品を持っている場合、Cは必殺技ではなく「投げる」になる
+      if (this.heldItem && game) game.throwItem(this);
+      else this.startAttack('special');
+    }
   }
 
   updateAttackState(step, game) {
@@ -814,6 +900,39 @@ class Fighter {
     }
   }
 
+  // 持っている装備品を手元に小さく描画する
+  drawHeldItem(ctx) {
+    if (!this.heldItem) return;
+    const def = ITEM_DEFS[this.heldItem];
+    const hx = this.x + this.facing * (this.width / 2 + 4);
+    const hy = this.y - this.height * 0.55;
+
+    ctx.save();
+    if (this.heldItem === 'ball') {
+      ctx.fillStyle = def.color;
+      ctx.beginPath();
+      ctx.arc(hx, hy, 7, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = '#a83a3a';
+      ctx.lineWidth = 1.5;
+      ctx.stroke();
+    } else if (this.heldItem === 'sword') {
+      ctx.strokeStyle = def.color;
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.moveTo(hx - this.facing * 4, hy + 10);
+      ctx.lineTo(hx + this.facing * 15, hy - 10);
+      ctx.stroke();
+      ctx.strokeStyle = '#8a6a3a';
+      ctx.lineWidth = 4;
+      ctx.beginPath();
+      ctx.moveTo(hx - this.facing * 2, hy + 7);
+      ctx.lineTo(hx + this.facing * 5, hy + 3);
+      ctx.stroke();
+    }
+    ctx.restore();
+  }
+
   // 攻撃の軌跡(簡易エフェクト)を描く
   drawAttackEffect(ctx) {
     if (!this.attack || this.attack.phase !== 'active') return;
@@ -901,6 +1020,138 @@ class Projectile {
 
 
 /* ============================================================================
+   9.5 Item（アイテム)クラス
+   ------------------------------------------------------------------------
+   フィールドに落ちている/落下中/投げられて飛んでいる、の3状態を1クラスで表現する。
+     - 通常状態: 重力で落下し、足場に着地するとその場に留まる(拾える)
+     - thrown=true: 投げられて飛んでいる間。ファイターに当たるとダメージを与えて消える
+     - 着地するとthrown=falseに戻り、再び「拾える」状態になる
+   ========================================================================== */
+
+class Item {
+  constructor(type, x, y, opts = {}) {
+    this.type = type;
+    this.def = ITEM_DEFS[type];
+    this.x = x;
+    this.y = y;
+    this.vx = opts.vx || 0;
+    this.vy = opts.vy || 0;
+    this.onGround = false;
+    this.thrown = !!opts.thrown;
+    this.owner = opts.owner || null;   // 投げた本人(投げた直後に自分へ当たらないようにする)
+    this.hitTargets = new Set();       // 飛行中にヒット済みの相手(1回だけ当てる)
+    this.dead = false;
+    this.spinAngle = 0;
+  }
+
+  update(step, game) {
+    if (!this.onGround) {
+      this.vy = clamp(this.vy + GRAVITY * step, -999, MAX_FALL_SPEED);
+      this.x += this.vx * step;
+      this.y += this.vy * step;
+      this.spinAngle += 0.25 * step;
+    }
+
+    // --- 足場との当たり判定(ファイターと同じ足場リストを利用した簡易版) -----
+    if (this.vy >= 0) {
+      for (const s of Stage.getAllSolids()) {
+        const within = this.x > s.x + 2 && this.x < s.x + s.w - 2;
+        if (!within) continue;
+        const prevY = this.y - this.vy * step;
+        if (prevY <= s.y + 2 && this.y >= s.y) {
+          this.y = s.y;
+          this.vx = 0; this.vy = 0;
+          this.onGround = true;
+          this.thrown = false; // 着地したら再び拾えるアイテムに戻る
+          this.owner = null;
+          this.hitTargets.clear();
+          break;
+        }
+      }
+    }
+
+    // --- 投げられて飛んでいる間はファイターとの当たり判定を行う -------------
+    if (this.thrown) {
+      for (const f of game.fighters) {
+        if (!f.alive || f === this.owner || this.hitTargets.has(f)) continue;
+        const hb = f.getHurtbox();
+        const cx = clamp(this.x, hb.x, hb.x + hb.w);
+        const cy = clamp(this.y, hb.y, hb.y + hb.h);
+        const dx = this.x - cx, dy = this.y - cy;
+        if (dx * dx + dy * dy < this.def.radius * this.def.radius) {
+          this.hitTargets.add(f);
+          if (this.type !== 'energyTank') {
+            game.applyHit(this.owner, f, this.def, true);
+          }
+          this.dead = true; // 命中したアイテムは消える
+          break;
+        }
+      }
+    }
+
+    // --- 画面外/ステージ下に落ちたら消滅 -----------------------------------
+    if (this.x < -60 || this.x > SCREEN_W + 60 || this.y > KO_BOTTOM) {
+      this.dead = true;
+    }
+  }
+
+  draw(ctx) {
+    ctx.save();
+
+    // 落下中はやや目立つよう光彩を先に描く
+    if (!this.onGround) {
+      ctx.globalAlpha = 0.35;
+      ctx.fillStyle = '#ffffff';
+      ctx.beginPath();
+      ctx.arc(this.x, this.y, this.def.radius + 5, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.globalAlpha = 1;
+    } else {
+      // 地面に置かれている時は影を落とす
+      ctx.fillStyle = 'rgba(0,0,0,0.35)';
+      ctx.beginPath();
+      ctx.ellipse(this.x, this.y + 2, 10, 3, 0, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    ctx.translate(this.x, this.y);
+    if (this.thrown) ctx.rotate(this.spinAngle);
+
+    if (this.type === 'ball') {
+      ctx.fillStyle = this.def.color;
+      ctx.beginPath();
+      ctx.arc(0, 0, this.def.radius, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = '#a83a3a';
+      ctx.lineWidth = 2;
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.moveTo(-this.def.radius, 0); ctx.lineTo(this.def.radius, 0);
+      ctx.moveTo(0, -this.def.radius); ctx.lineTo(0, this.def.radius);
+      ctx.stroke();
+    } else if (this.type === 'sword') {
+      ctx.fillStyle = this.def.color;
+      ctx.fillRect(-2, -15, 4, 20);          // 刀身
+      ctx.fillStyle = '#8a6a3a';
+      ctx.fillRect(-8, 4, 16, 4);            // 鍔
+      ctx.fillRect(-2, 8, 4, 8);             // 柄
+    } else if (this.type === 'energyTank') {
+      ctx.fillStyle = '#2c6b46';
+      ctx.fillRect(-9, -13, 18, 26);
+      ctx.fillStyle = this.def.color;
+      ctx.fillRect(-6, -9, 12, 18);
+      ctx.fillStyle = '#eafff0';
+      ctx.font = 'bold 13px "Courier New", monospace';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText('+', 0, 1);
+    }
+    ctx.restore();
+  }
+}
+
+
+/* ============================================================================
    10. Player クラス（人間操作）
    ========================================================================== */
 
@@ -953,6 +1204,7 @@ class Player extends Fighter {
 
     ctx.restore();
 
+    this.drawHeldItem(ctx);
     this.drawAttackEffect(ctx);
     this.drawHitFlash(ctx);
   }
@@ -1053,6 +1305,28 @@ class CPU extends Fighter {
     if (this.aiDecisionTimer <= 0) {
       this.aiDecisionTimer = randInt(10, 18); // 反応間隔(初心者向けにやや長め)
 
+      // --- アイテムが近くにあれば優先的に拾いに行く(持っていない時だけ) ------
+      if (!this.heldItem) {
+        const nearItem = game.findNearestGroundItem(this, 220);
+        if (nearItem && Math.random() < 0.6) {
+          const dx2 = nearItem.x - this.x;
+          this.aiMoveDir = Math.abs(dx2) < 24 ? 0 : sign(dx2);
+          if (Math.abs(dx2) < 40) this.aiWantsAttack = 'jab'; // 近ければ拾いに行く(拾える距離ならjabが自動的にpickupになる)
+          if (this.aiMoveDir === 0) this.facing = sign(dx2) || this.facing;
+          return;
+        }
+      } else if (this.aiAttackCooldown <= 0 && Math.random() < 0.08) {
+        // --- 装備品を持っている時、まれに相手へ向けて投げる ---------------
+        const throwTarget = this.findNearestOpponent(game);
+        if (throwTarget) {
+          this.facing = sign(throwTarget.x - this.x) || this.facing;
+          this.aiMoveDir = 0;
+          this.aiWantsAttack = 'special'; // アイテムを持っている時のspecialは「投げる」になる
+          this.aiAttackCooldown = randInt(60, 100);
+          return;
+        }
+      }
+
       const target = this.findNearestOpponent(game);
       if (!target) { this.aiMoveDir = 0; return; }
 
@@ -1126,6 +1400,7 @@ class CPU extends Fighter {
 
     ctx.restore();
 
+    this.drawHeldItem(ctx);
     this.drawAttackEffect(ctx);
     this.drawHitFlash(ctx);
   }
@@ -1213,6 +1488,8 @@ class GameManager {
     this.fighters = [this.player, ...this.cpus];
 
     this.projectiles = [];
+    this.items = [];
+    this.itemSpawnTimer = randInt(180, 260); // 最初のアイテム出現までのフレーム数
 
     this.state = GameState.READY;
     this.stateTimer = 60; // READY表示のフレーム数
@@ -1247,6 +1524,93 @@ class GameManager {
     const originX = owner.x + (owner.facing * (owner.width / 2 + 10));
     const originY = owner.y - owner.height / 2 + (def.yOffset || 0);
     this.projectiles.push(new Projectile(owner, def, originX, originY));
+  }
+
+  // ---- アイテム関連 -----------------------------------------------------
+
+  updateItemSpawning(step) {
+    this.itemSpawnTimer -= step;
+    if (this.itemSpawnTimer <= 0) {
+      this.itemSpawnTimer = randInt(280, 420); // 次のアイテム出現まで(約5〜7秒)
+      this.spawnRandomItem();
+    }
+  }
+
+  spawnRandomItem() {
+    if (this.items.length >= 4) return; // フィールドに出しすぎない
+    const types = Object.keys(ITEM_DEFS);
+    const type = types[randInt(0, types.length - 1)];
+    const g = Stage.ground;
+    const x = randRange(g.x + 60, g.x + g.w - 60);
+    this.items.push(new Item(type, x, -20, { vy: 0 }));
+  }
+
+  // 拾える状態(地面に置かれている)のアイテムのうち、指定ファイターの手が届く範囲にあるものを探す
+  findPickupableItemNear(fighter) {
+    for (const item of this.items) {
+      if (item.thrown || !item.onGround || item.type === 'energyTank') continue;
+      const dx = Math.abs(item.x - fighter.x);
+      const dy = Math.abs(item.y - (fighter.y - fighter.height / 2));
+      if (dx < 36 && dy < 55) return item;
+    }
+    return null;
+  }
+
+  // CPUが目標として狙うための、少し広めの範囲での最寄りアイテム検索(装備品のみ)
+  findNearestGroundItem(fighter, maxDist) {
+    let nearest = null;
+    let nearestDist = Infinity;
+    for (const item of this.items) {
+      if (item.thrown || !item.onGround || item.type === 'energyTank') continue;
+      const d = Math.abs(item.x - fighter.x);
+      if (d < maxDist && d < nearestDist) { nearestDist = d; nearest = item; }
+    }
+    return nearest;
+  }
+
+  pickupItem(fighter, item) {
+    fighter.heldItem = item.type;
+    this.items = this.items.filter(i => i !== item);
+    Sound.pickup();
+    ParticleSystem.spawnPickupSparkle(fighter.x, fighter.y - fighter.height * 0.6, item.def.color);
+  }
+
+  throwItem(fighter) {
+    const type = fighter.heldItem;
+    if (!type) return;
+    fighter.heldItem = null;
+
+    const originX = fighter.x + fighter.facing * (fighter.width / 2 + 10);
+    const originY = fighter.y - fighter.height * 0.55;
+    const thrown = new Item(type, originX, originY, {
+      vx: 7.4 * fighter.facing,
+      vy: -2.2,
+      thrown: true,
+      owner: fighter,
+    });
+    thrown.onGround = false;
+    this.items.push(thrown);
+    Sound.throwItem();
+  }
+
+  // エネルギータンクは拾うボタン不要で、触れた瞬間に自動で回復する
+  checkHealPickups() {
+    for (const item of this.items) {
+      if (item.type !== 'energyTank' || item.thrown || !item.onGround) continue;
+      for (const f of this.fighters) {
+        if (!f.alive) continue;
+        const dx = Math.abs(item.x - f.x);
+        const dy = Math.abs(item.y - (f.y - f.height / 2));
+        if (dx < 34 && dy < 46) {
+          f.damage = Math.max(0, f.damage - item.def.healAmount);
+          ParticleSystem.spawnHealText(f.x, f.y - f.height - 6, item.def.healAmount);
+          ParticleSystem.spawnPickupSparkle(f.x, f.y - f.height * 0.6, item.def.color);
+          Sound.heal();
+          this.items = this.items.filter(i => i !== item);
+          return; // 1体が取得したらこのアイテムは消費済み
+        }
+      }
+    }
   }
 
   onFighterKO(fighter) {
@@ -1290,6 +1654,8 @@ class GameManager {
   startRound() {
     this.fighters.forEach(f => f.resetForRound());
     this.projectiles = [];
+    this.items = [];
+    this.itemSpawnTimer = randInt(180, 260);
     ParticleSystem.list = [];
     this.state = GameState.READY;
     this.stateTimer = 60;
@@ -1341,6 +1707,12 @@ class GameManager {
     this.projectiles.forEach(p => p.update(step, this));
     this.projectiles = this.projectiles.filter(p => !p.dead);
 
+    // アイテムの出現・更新・回復判定
+    this.updateItemSpawning(step);
+    this.items.forEach(i => i.update(step, this));
+    this.items = this.items.filter(i => !i.dead);
+    this.checkHealPickups();
+
     // 単純な押し合い防止(重なりすぎたら少し離す) -- 全ペア総当たり
     this.resolveOverlaps();
 
@@ -1372,6 +1744,9 @@ class GameManager {
   draw(ctx) {
     Stage.draw(ctx);
 
+    // アイテムはファイターより先に描画(地面の小物として扱う)
+    this.items.forEach(i => i.draw(ctx));
+
     // 奥行き簡易ソート(yが小さい=奥のキャラから描画)
     const sorted = [...this.fighters].sort((a, b) => a.y - b.y);
     sorted.forEach(f => { if (f.alive) f.draw(ctx); });
@@ -1385,12 +1760,8 @@ class GameManager {
   }
 
   drawUI(ctx) {
-    // プレイヤーは左上に大きく表示
-    drawPlayerPanel(ctx, this.player, 14, 10, 'left', this.player.uiColor);
-    // CPU3体は右上にコンパクトに縦に並べる
-    this.cpus.forEach((c, i) => {
-      drawCompactPanel(ctx, c, SCREEN_W - 14, 10 + i * 38, c.uiColor);
-    });
+    // 4人分のダメージ%を画面下に大きく横並びで表示(スマブラ風レイアウト)
+    drawBottomHud(ctx, this.fighters);
   }
 
   drawCenterMessage(ctx) {
@@ -1435,72 +1806,54 @@ function drawBigText(ctx, text, x, y, color, scale = 1) {
   ctx.restore();
 }
 
-// 画面左上: プレイヤー用の大きめダメージ%・ストック表示パネル
-function drawPlayerPanel(ctx, fighter, edgeX, y, align, color) {
-  ctx.save();
-  const panelW = 190;
-  const x = align === 'left' ? edgeX : edgeX - panelW;
+// 画面下部中央: 4人分のダメージ%を横並びで大きく表示する(スマブラ風HUD)
+// タッチボタンは画面の左右端(コーナー)に配置しているため、中央に寄せることで
+// 操作ボタンとの重なりを避けている。
+function drawBottomHud(ctx, fighters) {
+  const boxW = 176;
+  const boxH = 84;
+  const gap = 8;
+  const totalW = fighters.length * boxW + (fighters.length - 1) * gap;
+  let x = (SCREEN_W - totalW) / 2;
+  const y = SCREEN_H - boxH - 6;
 
-  // パネル背景
-  ctx.fillStyle = 'rgba(12,10,20,0.65)';
-  ctx.fillRect(x, y, panelW, 56);
-  ctx.strokeStyle = color;
-  ctx.lineWidth = 3;
-  ctx.strokeRect(x, y, panelW, 56);
-
-  // 名前
-  ctx.font = 'bold 12px "Courier New", monospace';
-  ctx.fillStyle = '#f2ead8';
-  ctx.textAlign = align === 'left' ? 'left' : 'right';
-  const nameX = align === 'left' ? x + 10 : x + panelW - 10;
-  ctx.fillText(fighter.name, nameX, y + 15);
-
-  // ダメージ%(高いほど赤くなる)
-  const dmgColor = damageColor(fighter.damage);
-  ctx.font = '900 26px "Courier New", monospace';
-  ctx.fillStyle = dmgColor;
-  ctx.textAlign = align === 'left' ? 'left' : 'right';
-  const dmgX = align === 'left' ? x + 10 : x + panelW - 10;
-  ctx.fillText(`${Math.min(999, Math.floor(fighter.damage))}%`, dmgX, y + 42);
-
-  // ストックアイコン(残機を小さなシルエットで表示)
-  for (let i = 0; i < START_STOCKS; i++) {
-    const filled = i < fighter.stocks;
-    const iconX = align === 'left'
-      ? x + panelW - 14 - i * 14
-      : x + 14 + i * 14;
-    drawStockIcon(ctx, iconX, y + 12, filled, color, 5);
-  }
-
-  ctx.restore();
+  fighters.forEach((f) => {
+    drawFighterHudBox(ctx, f, x, y, boxW, boxH, f.uiColor);
+    x += boxW + gap;
+  });
 }
 
-// 画面右上: CPU用のコンパクトなパネル(3体分並べても収まるサイズ)
-function drawCompactPanel(ctx, fighter, rightX, y, color) {
+function drawFighterHudBox(ctx, fighter, x, y, w, h, color) {
   ctx.save();
-  const w = 150, h = 32;
-  const x = rightX - w;
 
-  ctx.fillStyle = 'rgba(12,10,20,0.65)';
+  // パネル背景
+  ctx.fillStyle = 'rgba(10,8,18,0.72)';
   ctx.fillRect(x, y, w, h);
   ctx.strokeStyle = color;
-  ctx.lineWidth = 2;
+  ctx.lineWidth = 3;
   ctx.strokeRect(x, y, w, h);
 
-  ctx.font = 'bold 9px "Courier New", monospace';
+  // 名前(装備品を持っていればアイコンも添える)
+  ctx.font = 'bold 11px "Courier New", monospace';
   ctx.fillStyle = '#f2ead8';
-  ctx.textAlign = 'left';
-  ctx.fillText(fighter.name, x + 6, y + 11);
+  ctx.textAlign = 'center';
+  const heldLabel = fighter.heldItem ? ` [${ITEM_DEFS[fighter.heldItem].shortLabel}]` : '';
+  ctx.fillText(fighter.name + heldLabel, x + w / 2, y + 15);
 
-  ctx.font = '900 15px "Courier New", monospace';
+  // ダメージ%(大きく表示。高いほど赤くなる)
+  ctx.font = '900 36px "Courier New", monospace';
   ctx.fillStyle = damageColor(fighter.damage);
-  ctx.textAlign = 'left';
-  ctx.fillText(`${Math.min(999, Math.floor(fighter.damage))}%`, x + 6, y + 26);
+  ctx.textAlign = 'center';
+  ctx.fillText(`${Math.min(999, Math.floor(fighter.damage))}%`, x + w / 2, y + 58);
 
+  // ストックアイコン
+  const iconsTotalW = (START_STOCKS - 1) * 15;
+  let iconX = x + w / 2 - iconsTotalW / 2;
   for (let i = 0; i < START_STOCKS; i++) {
-    const filled = i < fighter.stocks;
-    drawStockIcon(ctx, x + w - 11 - i * 11, y + 9, filled, color, 3.4);
+    drawStockIcon(ctx, iconX, y + h - 11, i < fighter.stocks, color, 5);
+    iconX += 15;
   }
+
   ctx.restore();
 }
 
