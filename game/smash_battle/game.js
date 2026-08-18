@@ -33,6 +33,30 @@ const canvas = document.getElementById('game-canvas');
 const ctx = canvas.getContext('2d');
 ctx.imageSmoothingEnabled = false; // ドット絵をぼかさない
 
+// --- Safari(特にiOS)のピンチズーム/ダブルタップズーム対策 -------------------
+// viewportメタタグの user-scalable=no だけでは、iOS Safariはアクセシビリティ上の
+// 理由からピンチズームを許可してしまうことがある。ズームしたまま戻せなくなる
+// (操作ボタンが押せなくなる)事故を防ぐため、JS側でも二重に無効化しておく。
+(function preventMobileZoom() {
+  // 2本指ジェスチャー(ピンチズーム)そのものを無効化(Safari固有のイベント)
+  document.addEventListener('gesturestart', (e) => e.preventDefault());
+  document.addEventListener('gesturechange', (e) => e.preventDefault());
+  document.addEventListener('gestureend', (e) => e.preventDefault());
+
+  // 2本指以上でのtouchmove(ピンチ操作の実体)を無効化
+  document.addEventListener('touchmove', (e) => {
+    if (e.touches && e.touches.length > 1) e.preventDefault();
+  }, { passive: false });
+
+  // ダブルタップズームを無効化(短時間に連続したタップの2回目をキャンセル)
+  let lastTouchEnd = 0;
+  document.addEventListener('touchend', (e) => {
+    const now = Date.now();
+    if (now - lastTouchEnd <= 350) e.preventDefault();
+    lastTouchEnd = now;
+  }, { passive: false, capture: true });
+})();
+
 const SCREEN_W = canvas.width;   // 960 (内部解像度。表示サイズはCSSで可変)
 const SCREEN_H = canvas.height;  // 540
 
@@ -128,7 +152,10 @@ window.addEventListener('keyup', (e) => {
   keysDown.delete(e.code);
 });
 
-canvas.addEventListener('pointerdown', ensureAudioStarted);
+canvas.addEventListener('pointerdown', (e) => {
+  e.preventDefault(); // Safariでのダブルタップズーム等の誤操作を防ぐ
+  ensureAudioStarted();
+});
 
 
 /* ============================================================================
@@ -2439,7 +2466,8 @@ function bindTouchButton(el) {
 document.querySelectorAll('.tc-btn').forEach(bindTouchButton);
 
 // ゲームオーバー画面をタップでも再スタートできるようにする(スマホはSpaceキーが無いため)
-canvas.addEventListener('pointerdown', () => {
+canvas.addEventListener('pointerdown', (e) => {
+  e.preventDefault(); // Safariでのダブルタップズーム等の誤操作を防ぐ
   if (game.state === GameState.GAMEOVER) {
     game.startRound();
   }
