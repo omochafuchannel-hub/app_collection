@@ -64,6 +64,11 @@ const KB_HITSTUN_MAX = 75;
 const HITSTOP_NORMAL = 5;
 const HITSTOP_STRONG = 9;
 
+// --- ステージギミック関連 ---------------------------------------------------
+// バトル開始(FIGHT表示が終わってから)何フレーム後に浮遊足場が動き出すか。
+// 60fps換算で 60秒 = 3600フレーム。
+const PLATFORM_MOVE_START_FRAMES = 3600;
+
 // --- 識別カラー -------------------------------------------------------------
 const PLAYER_COLOR = '#3f7fdd';
 
@@ -399,15 +404,35 @@ const Stage = {
   ground: { x: 60, y: 440, w: 840, h: 100 },
 
   // 空中に浮かぶ足場(すり抜けは実装せず、上からだけ乗れる単純な当たり判定)
+  // baseX: 動き出す前の基準位置 / moveAmp・moveSpeed・movePhase: 左右移動のサイン波パラメータ
   platforms: [
-    { x: 140, y: 330, w: 170, h: 18 },
-    { x: 650, y: 330, w: 170, h: 18 },
-    { x: 395, y: 205, w: 170, h: 18 },
+    { x: 140, y: 330, w: 170, h: 18, baseX: 140, moveAmp: 70, moveSpeed: 0.018, movePhase: 0 },
+    { x: 650, y: 330, w: 170, h: 18, baseX: 650, moveAmp: 70, moveSpeed: 0.015, movePhase: Math.PI },
+    { x: 395, y: 205, w: 170, h: 18, baseX: 395, moveAmp: 110, moveSpeed: 0.021, movePhase: Math.PI / 2 },
   ],
+
+  // 浮遊足場が動き始めているかどうか(バトル開始から一定時間経過でtrueになる)
+  platformsMoving: false,
+  platformMoveClock: 0,
 
   // 全ての足場(地面+プラットフォーム)を1つの配列として返す
   getAllSolids() {
     return [this.ground, ...this.platforms];
+  },
+
+  // 浮遊足場をサイン波でゆっくり左右に動かす(地面は動かさない)
+  updatePlatforms(step) {
+    this.platformMoveClock += step;
+    this.platforms.forEach((p) => {
+      p.x = p.baseX + Math.sin(this.platformMoveClock * p.moveSpeed + p.movePhase) * p.moveAmp;
+    });
+  },
+
+  // ラウンド開始時に足場の位置と動き出しフラグをリセットする
+  resetPlatforms() {
+    this.platforms.forEach((p) => { p.x = p.baseX; });
+    this.platformMoveClock = 0;
+    this.platformsMoving = false;
   },
 
   draw(ctx) {
@@ -1608,16 +1633,20 @@ class CPU extends Fighter {
     this.aiAttackCooldown = randInt(20, 40);
   }
 
-  // 生存中の相手の中から一番近いファイターを狙う(プレイヤー・他のCPU問わず)
-  findNearestOpponent(game) {
-    let nearest = null;
-    let nearestDist = Infinity;
+  // 生存中の相手の中から「残機が最も多い」ファイターを狙う(プレイヤー・他のCPU問わず)。
+  // 残機が同じ場合は距離が近い方を優先する。
+  findPriorityTarget(game) {
+    let best = null;
+    let bestStocks = -1;
+    let bestDist = Infinity;
     for (const f of game.fighters) {
       if (f === this || !f.alive) continue;
       const d = Math.abs(f.x - this.x);
-      if (d < nearestDist) { nearestDist = d; nearest = f; }
+      if (f.stocks > bestStocks || (f.stocks === bestStocks && d < bestDist)) {
+        best = f; bestStocks = f.stocks; bestDist = d;
+      }
     }
-    return nearest;
+    return best;
   }
 
   // CPUは常に狙っている相手の方を向く(移動していない時)
@@ -1658,7 +1687,7 @@ class CPU extends Fighter {
         }
       } else if (this.aiAttackCooldown <= 0 && Math.random() < 0.08) {
         // --- 装備品を持っている時、まれに相手へ向けて投げる ---------------
-        const throwTarget = this.findNearestOpponent(game);
+        const throwTarget = this.findPriorityTarget(game);
         if (throwTarget) {
           this.facing = sign(throwTarget.x - this.x) || this.facing;
           this.aiMoveDir = 0;
@@ -1668,7 +1697,8 @@ class CPU extends Fighter {
         }
       }
 
-      const target = this.findNearestOpponent(game);
+      // 残機が最も多い相手(=一番狙う価値のある相手)を優先して追いかける
+      const target = this.findPriorityTarget(game);
       if (!target) { this.aiMoveDir = 0; return; }
 
       const dx = target.x - this.x;
@@ -1837,6 +1867,8 @@ class GameManager {
 
     this.screenShakeTimer = 0; // 超必殺技・爆発時の画面揺れ演出
     this.screenShakeMag = 0;
+
+    this.battleTimer = 0; // BATTLE状態になってからの経過フレーム数(浮遊足場の動き出し等に使用)
 
     this.state = GameState.READY;
     this.stateTimer = 60; // READY表示のフレーム数
@@ -2087,6 +2119,8 @@ class GameManager {
     this.hazardSpawnTimer = randInt(420, 600);
     this.screenShakeTimer = 0;
     this.screenShakeMag = 0;
+    this.battleTimer = 0;
+    Stage.resetPlatforms();
     ParticleSystem.list = [];
     this.state = GameState.READY;
     this.stateTimer = 60;
@@ -2129,6 +2163,15 @@ class GameManager {
       ParticleSystem.update(step);
       keysJustPressed.clear();
       return;
+    }
+
+    // --- バトル経過時間の計測(浮遊足場の動き出しに使用) -----------------------
+    this.battleTimer += step;
+    if (!Stage.platformsMoving && this.battleTimer >= PLATFORM_MOVE_START_FRAMES) {
+      Stage.platformsMoving = true;
+    }
+    if (Stage.platformsMoving) {
+      Stage.updatePlatforms(step);
     }
 
     // --- 通常更新(全ファイター共通ループ) --------------------------------
