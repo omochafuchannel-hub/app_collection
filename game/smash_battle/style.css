@@ -40,6 +40,7 @@ html, body {
   align-items: center;
   justify-content: center;
   background: radial-gradient(ellipse at center, #1c1730 0%, #05040a 75%);
+  touch-action: none; /* Safari等でのピンチズーム・二本指スクロールを無効化 */
 }
 
 #canvas-frame {
@@ -48,6 +49,7 @@ html, body {
   outline: 2px solid #f4c542;
   outline-offset: -2px;
   box-shadow: 0 0 30px rgba(0,0,0,0.7);
+  touch-action: none;
 }
 
 #game-canvas {
@@ -55,6 +57,7 @@ html, body {
   width: 100%;
   height: 100%;
   background: #000;
+  touch-action: none;
 }
 
 /* CRT走査線エフェクト */
