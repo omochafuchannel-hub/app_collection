@@ -268,7 +268,25 @@ html, body{
 /* ------------------------------------------------------------------
    2. ゲーム画面
    ------------------------------------------------------------------ */
-#gameContainer{ background: #000; }
+#gameContainer{
+  background: #000;
+  display:flex; align-items:center; justify-content:center;
+}
+
+/* ゲーム中（レース／表彰台）は常に16:9(1920×1080相当)の比率を保ち、
+   画面の縦横比がそれと違う端末では上下または左右に黒帯ができるようにする。
+   width/height を100vw/100vhにした上で、比率を保ったまま収まる方の
+   max-width / max-height で頭打ちにする、というCSSだけで完結する
+   レターボックス手法。 */
+.game-stage{
+  position:relative;
+  width:100vw; height:100vh;
+  max-width: calc(100vh * 16 / 9);
+  max-height: calc(100vw * 9 / 16);
+  background:#000;
+  overflow:hidden;
+}
+
 #gameCanvas{ position:absolute; inset:0; width:100%; height:100%; display:block; }
 
 #hud{
@@ -309,6 +327,25 @@ html, body{
   pointer-events:none;
 }
 
+.level-up-banner{
+  position:absolute; top:32%; left:50%; transform:translate(-50%,-50%);
+  font-family: var(--font-display); font-size: clamp(24px, 5vw, 40px);
+  color: #8dff4d;
+  text-shadow: 0 0 10px rgba(141,255,77,0.9), 0 0 26px rgba(141,255,77,0.6);
+  letter-spacing: 2px;
+  pointer-events:none;
+  display:flex; align-items:baseline; gap:10px;
+  animation: levelUpPop 1.5s ease-out forwards;
+}
+.level-up-banner span{ font-size: 0.6em; color: #fff; }
+@keyframes levelUpPop{
+  0%   { opacity:0; transform:translate(-50%,-50%) scale(0.6); }
+  12%  { opacity:1; transform:translate(-50%,-50%) scale(1.15); }
+  22%  { transform:translate(-50%,-50%) scale(1); }
+  75%  { opacity:1; }
+  100% { opacity:0; transform:translate(-50%,-65%) scale(1); }
+}
+
 .touch-controls{
   position:absolute; bottom:0; left:0; right:0;
   display:flex; justify-content:space-between; align-items:flex-end;
@@ -337,7 +374,10 @@ html, body{
 /* ------------------------------------------------------------------
    3. 表彰式画面
    ------------------------------------------------------------------ */
-#resultScreen{ background:#000; }
+#resultScreen{
+  background:#000;
+  display:flex; align-items:center; justify-content:center;
+}
 #podiumCanvas{ position:absolute; inset:0; width:100%; height:100%; }
 .podium-restart{
   position:absolute; left:50%; bottom:22px; transform:translateX(-50%);
