@@ -909,9 +909,24 @@ function levelUp(racer) {
   racer.statRecoveryMult = Math.max(1 / ceil, racer.statRecoveryMult / mult);
   racer.baseSpeed = CONFIG.BASE_SPEED * racer.statSpeedMult + racer.speedVarianceAdd;
 
-  if (racer.isPlayer) SFX.levelUp();
+  if (racer.isPlayer) { SFX.levelUp(); showLevelUpBanner(racer.level); }
   spawnItemSparkleBurst(racer.x, racer.lane); // レベルアップの派手な演出（キラキラ）
   state.particles.push({ kind: 'flash', x: racer.x, lane: racer.lane, vx: 0, vy: 0, life: 0.4, maxLife: 0.4, color: '#8dff4d' });
+}
+
+/* 画面に「LEVEL UP!」の文字を表示する（プレイヤーのレベルアップ時のみ）。
+   連続でレベルアップした場合もアニメーションが再生し直されるよう、
+   一度クラスを外してから付け直すことでCSSアニメーションを再スタートさせている。 */
+function showLevelUpBanner(level) {
+  const el = document.getElementById('levelUpBanner');
+  const numEl = document.getElementById('levelUpNum');
+  numEl.textContent = `Lv.${level}`;
+  el.classList.remove('hidden');
+  el.style.animation = 'none';
+  void el.offsetWidth; // 強制リフローでアニメーションをリスタートさせる
+  el.style.animation = '';
+  clearTimeout(showLevelUpBanner._hideTimer);
+  showLevelUpBanner._hideTimer = setTimeout(() => { el.classList.add('hidden'); }, 1500);
 }
 
 /* 敵キャラを倒した時などに経験値を加算し、必要なら複数回レベルアップさせる */
@@ -954,8 +969,10 @@ function applyEnemyCollisions(r) {
     if (Math.abs(r.x - e.x) < CONFIG.ENEMY_HIT_RADIUS) {
       if (r.turboActive && !r.overheated) {
         defeatEnemy(e, r, r.currentSpeed);
+      } else {
+        // ターボを使っていない時は倒せず、障害物にぶつかった時と同様に一定時間停止する
+        stunRacer(r, CONFIG.STUN_TIME, 'fall');
       }
-      // ターボを使っていない時は当たっても何も起きない（すり抜ける）
     }
   }
 }
@@ -1090,6 +1107,7 @@ function initRace() {
   state.countdownValue = 3;
   state.finishCounter = 0;
   state._prevPlayerLap = undefined;
+  document.getElementById('levelUpBanner').classList.add('hidden');
   generateTrack();
   resizeCanvas();
 
@@ -1156,14 +1174,13 @@ function readPlayerInput() {
 /* ============================== キャンバスサイズ ============================== */
 const canvas = document.getElementById('gameCanvas');
 const ctx = canvas.getContext('2d');
+const gameStageEl = document.getElementById('gameStage');
 function resizeCanvas() {
-  // iOS の visualViewport（実際に見えている領域）を優先的に使う。
-  // window.innerWidth/Height だけに頼ると、ホーム画面追加後のスタンドアロン
-  // 表示でアドレスバー分の高さがズレて計算され、タップ位置と描画位置が
-  // 微妙にズレて見える原因になることがあるため。
-  const vv = window.visualViewport;
-  canvas.width = vv ? Math.round(vv.width) : window.innerWidth;
-  canvas.height = vv ? Math.round(vv.height) : window.innerHeight;
+  // ゲーム画面は常に16:9(1920×1080相当)のレターボックス表示にしているため、
+  // ウィンドウ全体ではなく実際に描画される #gameStage の実サイズに合わせる。
+  const rect = gameStageEl.getBoundingClientRect();
+  canvas.width = Math.max(1, Math.round(rect.width));
+  canvas.height = Math.max(1, Math.round(rect.height));
 }
 window.addEventListener('resize', resizeCanvas);
 if (window.visualViewport) {
@@ -2559,9 +2576,9 @@ function showResults() {
 function startPodiumAnimation(ranked) {
   SFX.victory();
   const pc = document.getElementById('podiumCanvas');
-  const vv = window.visualViewport;
-  pc.width = vv ? Math.round(vv.width) : window.innerWidth;
-  pc.height = vv ? Math.round(vv.height) : window.innerHeight;
+  const rect = document.getElementById('resultStage').getBoundingClientRect();
+  pc.width = Math.max(1, Math.round(rect.width));
+  pc.height = Math.max(1, Math.round(rect.height));
   const pctx = pc.getContext('2d');
   const top3 = ranked.slice(0, 3);
   const fourth = ranked[3]; // 4位も表彰台の横に表示する
