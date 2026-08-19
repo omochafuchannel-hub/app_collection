@@ -1,5 +1,5 @@
-name=ヴァルガノス
-speed=25
-turbo=25
-jump=25
-recovery=25
+name=巨大機動兵器 ヴァルガノス
+speed=15
+turbo=55
+jump=15
+recovery=15
