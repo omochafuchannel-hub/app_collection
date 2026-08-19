@@ -1,5 +1,5 @@
-name=IRON-01
+name=エンピツマン
 speed=25
 turbo=25
-jump=25
-recovery=25
+jump=28
+recovery=22
