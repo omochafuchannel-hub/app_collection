@@ -1,5 +1,5 @@
-name=IRON-01
-speed=25
-turbo=25
+name=ビリビリマン
+speed=35
+turbo=20
 jump=25
-recovery=25
+recovery=20
