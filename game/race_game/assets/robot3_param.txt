@@ -1,4 +1,4 @@
-name=もぐだん
+name=バイキンガンマンロボ
 speed=20
 turbo=25
 jump=25
