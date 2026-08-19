@@ -1,0 +1,5 @@
+name=IRON-01
+speed=25
+turbo=25
+jump=25
+recovery=25
