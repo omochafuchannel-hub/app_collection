@@ -30,11 +30,13 @@
 <!-- 0. オープニング画面（タイトルロゴ・背景はJS側でPNGを指定）              -->
 <!-- ============================================================ -->
 <div id="openingScreen" class="screen">
-  <div id="openingBg" class="opening-bg"></div>
-  <div class="opening-overlay">
-    <img id="openingLogo" class="opening-logo hidden" alt="ROBO RUSH">
-    <div id="openingLogoFallback" class="game-title opening-logo-fallback">ROBO<span class="accent">RUSH</span></div>
-    <button id="openingStartBtn" class="opening-tap">TAP TO START</button>
+  <div id="openingStage" class="game-stage">
+    <div id="openingBg" class="opening-bg"></div>
+    <div class="opening-overlay">
+      <img id="openingLogo" class="opening-logo hidden" alt="ROBO RUSH">
+      <div id="openingLogoFallback" class="game-title opening-logo-fallback">ROBO<span class="accent">RUSH</span></div>
+      <button id="openingStartBtn" class="opening-tap">TAP TO START</button>
+    </div>
   </div>
 </div>
 
@@ -42,55 +44,57 @@
 <!-- 1. キャラクター選択画面（ゲーム開始前に必ず表示される）                 -->
 <!-- ============================================================ -->
 <div id="settingsScreen" class="screen hidden">
-  <div class="scanlines"></div>
-  <header class="title-block">
-    <h1 class="game-title">CHARACTER<span class="accent">SELECT</span></h1>
-    <p class="game-sub">// CHOOSE YOUR ROBOT //</p>
-  </header>
+  <div id="settingsStage" class="game-stage stage-scroll">
+    <div class="scanlines"></div>
+    <header class="title-block">
+      <h1 class="game-title">CHARACTER<span class="accent">SELECT</span></h1>
+      <p class="game-sub">// CHOOSE YOUR ROBOT //</p>
+    </header>
 
-  <!-- 10体のロボット + カスタム画像枠 をJSで生成 -->
-  <div id="rosterGrid" class="roster-grid"></div>
+    <!-- 10体のロボット + カスタム画像枠 をJSで生成 -->
+    <div id="rosterGrid" class="roster-grid"></div>
 
-  <!-- 選んだロボットのプレビューと名前入力 -->
-  <div class="player-preview-row">
-    <div id="playerPreview" class="drop-zone player-preview">
-      <div class="dz-placeholder">ロボットを選択してください</div>
-      <img id="playerPreviewImg" style="display:none;">
+    <!-- 選んだロボットのプレビューと名前入力 -->
+    <div class="player-preview-row">
+      <div id="playerPreview" class="drop-zone player-preview">
+        <div class="dz-placeholder">ロボットを選択してください</div>
+        <img id="playerPreviewImg" style="display:none;">
+      </div>
+      <div class="player-preview-fields">
+        <label class="field-label">PLAYER NAME</label>
+        <input id="playerNameInput" class="name-input" maxlength="14" value="PLAYER">
+        <p class="hint">上のリストから選択、または「CUSTOM」から自分の画像をアップロードできます。</p>
+      </div>
+      <!-- カーソルを当てた（またはタップして選んだ）キャラのステータス配分を棒グラフで表示 -->
+      <div id="statsPanel" class="stats-panel">
+        <div class="stats-panel-title">STATUS</div>
+        <div class="stat-row">
+          <span class="stat-label">SPEED</span>
+          <div class="stat-bar"><div id="statBarSpeed" class="stat-bar-fill speed"></div></div>
+          <span id="statValSpeed" class="stat-val">25</span>
+        </div>
+        <div class="stat-row">
+          <span class="stat-label">TURBO</span>
+          <div class="stat-bar"><div id="statBarTurbo" class="stat-bar-fill turbo"></div></div>
+          <span id="statValTurbo" class="stat-val">25</span>
+        </div>
+        <div class="stat-row">
+          <span class="stat-label">JUMP</span>
+          <div class="stat-bar"><div id="statBarJump" class="stat-bar-fill jump"></div></div>
+          <span id="statValJump" class="stat-val">25</span>
+        </div>
+        <div class="stat-row">
+          <span class="stat-label">RECOVERY</span>
+          <div class="stat-bar"><div id="statBarRecovery" class="stat-bar-fill recovery"></div></div>
+          <span id="statValRecovery" class="stat-val">25</span>
+        </div>
+      </div>
     </div>
-    <div class="player-preview-fields">
-      <label class="field-label">PLAYER NAME</label>
-      <input id="playerNameInput" class="name-input" maxlength="14" value="PLAYER">
-      <p class="hint">上のリストから選択、または「CUSTOM」から自分の画像をアップロードできます。</p>
-    </div>
-    <!-- カーソルを当てた（またはタップして選んだ）キャラのステータス配分を棒グラフで表示 -->
-    <div id="statsPanel" class="stats-panel">
-      <div class="stats-panel-title">STATUS</div>
-      <div class="stat-row">
-        <span class="stat-label">SPEED</span>
-        <div class="stat-bar"><div id="statBarSpeed" class="stat-bar-fill speed"></div></div>
-        <span id="statValSpeed" class="stat-val">25</span>
-      </div>
-      <div class="stat-row">
-        <span class="stat-label">TURBO</span>
-        <div class="stat-bar"><div id="statBarTurbo" class="stat-bar-fill turbo"></div></div>
-        <span id="statValTurbo" class="stat-val">25</span>
-      </div>
-      <div class="stat-row">
-        <span class="stat-label">JUMP</span>
-        <div class="stat-bar"><div id="statBarJump" class="stat-bar-fill jump"></div></div>
-        <span id="statValJump" class="stat-val">25</span>
-      </div>
-      <div class="stat-row">
-        <span class="stat-label">RECOVERY</span>
-        <div class="stat-bar"><div id="statBarRecovery" class="stat-bar-fill recovery"></div></div>
-        <span id="statValRecovery" class="stat-val">25</span>
-      </div>
-    </div>
-  </div>
 
-  <div class="start-row">
-    <button id="startBtn" class="btn-start">GAME START</button>
-    <p class="hint">対戦相手の3体はこの中からランダムで選ばれます。</p>
+    <div class="start-row">
+      <button id="startBtn" class="btn-start">GAME START</button>
+      <p class="hint">対戦相手の3体はこの中からランダムで選ばれます。</p>
+    </div>
   </div>
 </div>
 
