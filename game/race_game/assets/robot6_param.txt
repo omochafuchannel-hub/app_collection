@@ -1,4 +1,4 @@
-name=IRON-01
+name=トンボメカ
 speed=25
 turbo=25
 jump=25
