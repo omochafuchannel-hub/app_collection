@@ -261,12 +261,21 @@ function fallbackBeep(key){
 function rand(a,b){ return a + Math.random()*(b-a); }
 function dist2(x1,y1,x2,y2){ const dx=x1-x2, dy=y1-y2; return dx*dx+dy*dy; }
 function clamp(v,a,b){ return Math.max(a,Math.min(b,v)); }
+function hexToRgb(hex){
+  hex = hex.replace('#','');
+  return { r:parseInt(hex.substring(0,2),16), g:parseInt(hex.substring(2,4),16), b:parseInt(hex.substring(4,6),16) };
+}
+function lerpColor(hexA, hexB, t){
+  const a=hexToRgb(hexA), b=hexToRgb(hexB);
+  const r=Math.round(a.r+(b.r-a.r)*t), g=Math.round(a.g+(b.g-a.g)*t), bl=Math.round(a.b+(b.b-a.b)*t);
+  return 'rgb('+r+','+g+','+bl+')';
+}
 
 /* ---------------- Game State ---------------- */
 const STATE = { TITLE:'title', PLAY:'play', BANNER:'banner', OVER:'over', RESULT:'result' };
 let state = STATE.TITLE;
 
-const player = { x:540, y:960, r:46, hp:100, maxHp:100, alive:true, atkCd:0, facing:1 };
+const player = { x:540, y:960, r:46, hp:100, maxHp:100, alive:true, atkCd:0, facing:1, atkAnim:0, atkDirX:0, atkDirY:1 };
 
 let dandans = [];      // followers (object pool)
 let enemies = [];
@@ -294,6 +303,7 @@ let hitstopTimer = 0;
 let showcaseZoomTimer = 0;
 let celebratedMilestones = { 10:false, 50:false, 100:false };
 let lastDandanDisplayed = 1;
+let bgTint = 0; // 0 = normal sky, 1 = full boss-fight tint
 const camera = { zoom:1, targetZoom:1, focusX:540, focusY:960, shakeTime:0, shakeMag:0 };
 
 function screenFlash(alpha=0.6, fadeMs=250){
@@ -349,6 +359,7 @@ function spawnDandan(x,y, animate=true){
     seedAngle: rand(0,Math.PI*2),
     seedRing: Math.floor(rand(0,5)),
     seedJitter: rand(-40,40),
+    atkAnim: 0, atkDirX: 0, atkDirY: 1,
     alive:true
   });
 }
@@ -534,7 +545,7 @@ function showBanner(text, big=false){
 function resetGame(){
   dandans = []; enemies=[]; particles=[]; dmgNumbers=[]; items=[];
   score=0; coins=0; waveIndex=0; bossActive=false; bossRef=null;
-  celebratedMilestones = { 10:false, 50:false, 100:false }; showcaseZoomTimer=0; hitstopTimer=0;
+  celebratedMilestones = { 10:false, 50:false, 100:false }; showcaseZoomTimer=0; hitstopTimer=0; bgTint=0;
   camera.zoom=1; camera.targetZoom=1; camera.shakeTime=0;
   player.x=VW/2; player.y=VH*0.55; player.hp=player.maxHp=100; player.alive=true;
   camera.focusX=player.x; camera.focusY=player.y;
@@ -667,6 +678,7 @@ function update(dt){
     if(d.hopT<1){ d.hopT += dt*2.4; }
     if(d.atkCd>0) d.atkCd -= dt;
     if(d.hitCd>0) d.hitCd -= dt;
+    if(d.atkAnim>0) d.atkAnim -= dt;
     if(!bossActive && d.hp<d.maxHp) d.hp = Math.min(d.maxHp, d.hp + dt*3); // the army patches itself up between hits, but not mid-boss-fight
   }
 
@@ -695,6 +707,8 @@ function update(dt){
       target.knockX += Math.cos(ang)*30; target.knockY += Math.sin(ang)*30;
       spawnDmg(target.x+rand(-10,10), target.y-target.r, Math.round(dmg));
       d.atkCd = rand(0.35,0.55);
+      d.atkAnim = 0.18; d.atkDirX = Math.cos(ang); d.atkDirY = Math.sin(ang); // lunge toward the target so the hit is readable at a glance
+      spawnBurst(d.x+d.atkDirX*20, d.y+d.atkDirY*20, '#ffffff', 2);
       if(Math.random()<0.15) playSfx('attack');
     }
   }
@@ -702,6 +716,7 @@ function update(dt){
   // player attack (strong, auto)
   if(player.alive){
     if(player.atkCd>0) player.atkCd -= dt;
+    if(player.atkAnim>0) player.atkAnim -= dt;
     if(player.atkCd<=0){
       let target=null, best=99999;
       for(let j=0;j<enemies.length;j++){
@@ -716,6 +731,8 @@ function update(dt){
         target.knockX += Math.cos(ang)*60; target.knockY += Math.sin(ang)*60;
         spawnDmg(target.x, target.y-target.r-10, Math.round(dmg), true);
         player.atkCd = 0.4;
+        player.atkAnim = 0.2; player.atkDirX=Math.cos(ang); player.atkDirY=Math.sin(ang);
+        spawnBurst(player.x+player.atkDirX*26, player.y+player.atkDirY*26, '#ffe066', 3);
         playSfx('hit');
       }
     }
@@ -825,6 +842,7 @@ function update(dt){
 
 function updateCamera(dt){
   if(showcaseZoomTimer>0) showcaseZoomTimer -= dt;
+  bgTint += ((bossActive?1:0) - bgTint) * Math.min(1, dt*1.2); // sky slowly bleeds into an ominous tone once the boss shows up
   const n = dandans.length;
   let tz = 1;
   if(n>250) tz = 0.58; else if(n>100) tz = 0.68; else if(n>50) tz = 0.8; else if(n>20) tz = 0.92;
@@ -964,9 +982,11 @@ function drawSprite(imgKey, x,y, size, fallbackColor, hitFlash){
 
 function render(){
   const w=canvas.width, h=canvas.height;
-  // sky/ground background
+  // sky/ground background — bleeds into a dark, ominous palette once the boss shows up
   const g = ctx.createLinearGradient(0,0,0,h);
-  g.addColorStop(0,'#8fd8f0'); g.addColorStop(0.6,'#bff0c4'); g.addColorStop(1,'#9fe6a8');
+  g.addColorStop(0,  lerpColor('#8fd8f0','#3a0a0a',bgTint));
+  g.addColorStop(0.6,lerpColor('#bff0c4','#4a0d0d',bgTint));
+  g.addColorStop(1,  lerpColor('#9fe6a8','#220505',bgTint));
   ctx.fillStyle=g; ctx.fillRect(0,0,w,h);
 
   if(state===STATE.TITLE) return;
@@ -1002,7 +1022,10 @@ function render(){
     const hopBounce = d.hopT<1 ? Math.sin(d.hopT*Math.PI)*-26 : 0; // pop-in hop when newly joined
     const bob = lod<2 ? Math.sin(d.bob)*4 : 0;
     const glow = d.hopT<1;
-    const size = (56*d.scale) * (d.hopT<1 ? (1+Math.sin(d.hopT*Math.PI)*0.4) : 1);
+    const lungeP = d.atkAnim>0 ? Math.sin((d.atkAnim/0.18)*Math.PI) : 0; // quick forward-and-back punch toward the target
+    const lungeX = d.atkDirX*lungeP*16, lungeY = d.atkDirY*lungeP*16;
+    const atkScale = 1 + lungeP*0.22;
+    const size = (84*d.scale) * (d.hopT<1 ? (1+Math.sin(d.hopT*Math.PI)*0.4) : 1) * atkScale;
     if(glow){
       ctx.save();
       ctx.globalAlpha = 0.5*(1-d.hopT);
@@ -1010,21 +1033,47 @@ function render(){
       ctx.beginPath(); ctx.arc(d.x*sx,(d.y+hopBounce)*sy,size*0.7*sx,0,Math.PI*2); ctx.fill();
       ctx.restore();
     }
-    drawSprite('dandan', d.x, d.y+bob+hopBounce, size, '#5ac8fa', 0);
+    drawSprite('dandan', d.x+lungeX, d.y+bob+hopBounce+lungeY, size, '#5ac8fa', 0);
   }
 
   // player
   if(player.alive){
-    drawSprite('player', player.x, player.y, 88, '#ff9f43', 0);
+    const plP = player.atkAnim>0 ? Math.sin((player.atkAnim/0.2)*Math.PI) : 0;
+    drawSprite('player', player.x+player.atkDirX*plP*18, player.y+player.atkDirY*plP*18, 132*(1+plP*0.18), '#ff9f43', 0);
   }
 
-  // enemies
+  // enemies — outlined and marked so they always read clearly as threats,
+  // regardless of whatever artwork is loaded for them
   for(const en of enemies){
-    if(en.type==='boss'){
-      drawSprite('boss', en.x, en.y, en.r*2.1, '#8b2e2e', en.hitFlash);
+    const isBoss = en.type==='boss';
+    const markColor = isBoss ? '#ff2222' : (en.type==='zako' ? '#ff5b5b' : '#c239ff');
+    const baseR = isBoss ? en.r*1.6 : en.r*1.5; // matches the 1.5x sprite scale below
+    const pulse = 1 + Math.sin(gameTime*6 + en.x*0.01)*0.06;
+    // pulsing warning ring
+    ctx.save();
+    ctx.translate(en.x*sx, en.y*sy);
+    ctx.globalAlpha = 0.9;
+    ctx.strokeStyle = markColor;
+    ctx.lineWidth = (isBoss?7:4.5)*sx;
+    ctx.beginPath();
+    ctx.arc(0,0, baseR*pulse*sx, 0, Math.PI*2);
+    ctx.stroke();
+    ctx.restore();
+    // small warning chevron above the enemy so it pops out from allies at a glance
+    ctx.save();
+    ctx.translate(en.x*sx, (en.y - baseR - (isBoss?46:26))*sy);
+    ctx.fillStyle = markColor;
+    const triW = (isBoss?22:14)*sx, triH=(isBoss?18:12)*sy;
+    ctx.beginPath();
+    ctx.moveTo(0, triH); ctx.lineTo(-triW/2, -triH); ctx.lineTo(triW/2, -triH); ctx.closePath();
+    ctx.fill();
+    ctx.restore();
+
+    if(isBoss){
+      drawSprite('boss', en.x, en.y, en.r*3.15, '#8b2e2e', en.hitFlash);
     } else {
       const key = en.type==='zako' ? 'enemy' : 'enemy2';
-      drawSprite(key, en.x, en.y, en.r*1.9, en.type==='zako'?'#e05656':'#8b2fbf', en.hitFlash);
+      drawSprite(key, en.x, en.y, en.r*2.85, en.type==='zako'?'#e05656':'#8b2fbf', en.hitFlash);
     }
   }
 
