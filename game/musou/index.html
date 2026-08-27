@@ -1,1 +1,1114 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>だだんだん無双</title>
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color: transparent; user-select:none; -webkit-user-select:none; -webkit-touch-callout:none; -webkit-user-drag:none; user-drag:none; }
+  html,body { width:100%; height:100%; background:#0a0e1a; overflow:hidden; font-family:"Hiragino Sans","Yu Gothic",sans-serif; touch-action:none; overscroll-behavior:none; }
+  #stage-wrap { position:fixed; inset:0; display:flex; align-items:center; justify-content:center; background:#05070d; }
+  #game-frame { position:relative; width:100%; height:100%; max-width:calc(100vh * 9 / 16); max-height:100vh; background:#7ec8e3; overflow:hidden; box-shadow:0 0 60px rgba(0,0,0,0.6); }
+  @media (min-aspect-ratio: 9/16) {
+    #game-frame { width:calc(100vh * 9 / 16); height:100vh; }
+  }
+  @media (max-aspect-ratio: 9/16) {
+    #game-frame { width:100vw; height:calc(100vw * 16 / 9); }
+  }
+  canvas { position:absolute; top:0; left:0; width:100%; height:100%; display:block; touch-action:none; }
+  #ui-layer { position:absolute; inset:0; pointer-events:none; z-index:5; }
+  #hud-top { position:absolute; top:0; left:0; right:0; padding:14px 16px 8px; display:flex; flex-direction:column; gap:6px; background:linear-gradient(to bottom, rgba(0,0,0,0.55), transparent); }
+  #wave-label { color:#fff; font-size:15px; font-weight:700; letter-spacing:2px; text-shadow:0 2px 4px rgba(0,0,0,0.6); }
+  #hud-row { display:flex; justify-content:space-between; align-items:flex-end; }
+  #dandan-count { color:#fff700; font-size:44px; font-weight:900; text-shadow:0 0 12px rgba(255,247,0,0.8), 0 3px 6px rgba(0,0,0,0.7); line-height:1; }
+  #dandan-sub { color:#fff; font-size:12px; font-weight:700; opacity:0.9; margin-top:2px; }
+  #score-box { color:#fff; font-size:16px; font-weight:700; text-align:right; text-shadow:0 2px 4px rgba(0,0,0,0.6); }
+  #boss-hp-wrap { position:absolute; top:88px; left:16px; right:16px; display:none; }
+  #boss-name { color:#fff; font-size:13px; font-weight:800; text-align:center; text-shadow:0 2px 4px rgba(0,0,0,0.8); margin-bottom:3px; letter-spacing:2px; }
+  #boss-hp-bg { width:100%; height:14px; background:rgba(0,0,0,0.5); border-radius:8px; border:2px solid #fff; overflow:hidden; }
+  #boss-hp-fill { height:100%; width:100%; background:linear-gradient(90deg,#ff3b3b,#ff8a00); transition:width 0.15s; }
+  #gear-btn { position:absolute; top:14px; right:14px; width:38px; height:38px; border-radius:50%; background:rgba(0,0,0,0.45); display:flex; align-items:center; justify-content:center; font-size:18px; pointer-events:auto; cursor:pointer; z-index:20; }
+  .overlay { position:absolute; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:22px; background:rgba(10,14,26,0.92); z-index:30; pointer-events:auto; text-align:center; padding:20px; }
+  .hidden { display:none !important; }
+  #title-screen h1 { color:#fff; font-size:46px; font-weight:900; letter-spacing:6px; text-shadow:0 0 20px #ffd54a, 0 4px 8px rgba(0,0,0,0.6); }
+  #title-screen p { color:#ffe08a; font-size:14px; font-weight:700; letter-spacing:1px; }
+  .big-btn { font-size:26px; font-weight:900; letter-spacing:3px; color:#fff; background:linear-gradient(135deg,#ff8a3d,#ff5252); padding:18px 56px; border-radius:50px; border:3px solid #fff; box-shadow:0 8px 0 rgba(0,0,0,0.35), 0 0 30px rgba(255,120,50,0.6); cursor:pointer; }
+  .big-btn:active { transform:translateY(6px); box-shadow:0 2px 0 rgba(0,0,0,0.35); }
+  #banner-text { position:absolute; top:38%; left:0; right:0; text-align:center; z-index:25; pointer-events:none; }
+  #banner-text span { display:inline-block; color:#fff; font-size:40px; font-weight:900; letter-spacing:3px; text-shadow:0 0 24px #ffea00, 0 4px 10px rgba(0,0,0,0.7); padding:10px 24px; }
+  #settings-panel { position:absolute; inset:0; background:rgba(8,10,20,0.96); z-index:40; pointer-events:auto; overflow-y:auto; touch-action:pan-y; padding:24px 18px; display:none; flex-direction:column; gap:16px; }
+  #settings-panel h2 { color:#fff; font-size:20px; text-align:center; margin-bottom:6px; }
+  .asset-row { background:rgba(255,255,255,0.06); border-radius:14px; padding:12px; display:flex; align-items:center; gap:12px; }
+  .asset-row .preview { width:56px; height:56px; border-radius:10px; background:rgba(255,255,255,0.1); display:flex; align-items:center; justify-content:center; overflow:hidden; flex-shrink:0; border:2px solid rgba(255,255,255,0.25); }
+  .asset-row .preview img { max-width:100%; max-height:100%; object-fit:contain; }
+  .asset-row .info { flex:1; color:#fff; }
+  .asset-row .info .name { font-size:14px; font-weight:700; }
+  .asset-row label.file-btn { display:inline-block; margin-top:6px; font-size:12px; background:#4a5568; color:#fff; padding:6px 12px; border-radius:8px; cursor:pointer; }
+  .asset-row input[type=file] { display:none; }
+  #settings-close, #settings-reset { margin-top:8px; padding:12px; border-radius:12px; font-size:15px; font-weight:800; color:#fff; cursor:pointer; }
+  #settings-close { background:#38a169; }
+  #settings-reset { background:#c53030; }
+  #joy-hint { position:absolute; bottom:18px; left:0; right:0; text-align:center; color:rgba(255,255,255,0.75); font-size:11px; letter-spacing:1px; z-index:6; pointer-events:none; }
+  #gameover-screen h1 { color:#ff4d4d; font-size:38px; font-weight:900; letter-spacing:3px; text-shadow:0 0 20px rgba(255,50,50,0.7); }
+  #gameover-stats { color:#fff; font-size:16px; font-weight:700; }
+  @keyframes dandanPop { 0%{transform:scale(1);} 35%{transform:scale(1.5) rotate(-2deg); filter:brightness(1.6) drop-shadow(0 0 14px #fff700);} 100%{transform:scale(1);} }
+  #dandan-count.pop { animation: dandanPop 0.4s ease-out; transform-origin:left center; }
+  @keyframes bigBannerPop { 0%{transform:scale(0.3); opacity:0;} 55%{transform:scale(1.15); opacity:1;} 75%{transform:scale(0.97);} 100%{transform:scale(1); opacity:1;} }
+  #banner-text.big span { font-size:54px; animation: bigBannerPop 0.5s cubic-bezier(.2,1.4,.4,1); }
+  #flash-layer { position:absolute; inset:0; background:#fff; opacity:0; pointer-events:none; z-index:22; }
+</style>
+</head>
+<body>
+<div id="stage-wrap">
+  <div id="game-frame">
+    <canvas id="game-canvas"></canvas>
+
+    <div id="ui-layer">
+      <div id="hud-top">
+        <div id="wave-label">WAVE 1</div>
+        <div id="hud-row">
+          <div>
+            <div id="dandan-count">味方 × 1</div>
+            <div id="dandan-sub">仲間を集めろ！</div>
+          </div>
+          <div id="score-box">SCORE<br><span id="score-val">0</span></div>
+        </div>
+      </div>
+      <div id="boss-hp-wrap">
+        <div id="boss-name">BOSS</div>
+        <div id="boss-hp-bg"><div id="boss-hp-fill"></div></div>
+      </div>
+      <div id="joy-hint">ドラッグして移動 / 戦闘はおまかせ</div>
+    </div>
+
+    <div id="gear-btn">⚙</div>
+
+    <div id="flash-layer"></div>
+    <div id="banner-text" class="hidden"><span id="banner-text-inner"></span></div>
+
+    <div class="overlay" id="title-screen">
+      <h1>だだんだん<br>無双</h1>
+      <p>だだんだんを集めて、軍団で敵を蹂躙せよ！</p>
+      <div class="big-btn" id="start-btn">START</div>
+    </div>
+
+    <div class="overlay hidden" id="gameover-screen">
+      <h1>GAME OVER</h1>
+      <div id="gameover-stats"></div>
+      <div class="big-btn" id="retry-btn">RETRY</div>
+    </div>
+
+    <div id="settings-panel">
+      <h2>画像設定 / IMAGE SETTINGS</h2>
+      <div class="asset-row" data-key="player">
+        <div class="preview"><img id="prev-player"></div>
+        <div class="info"><div class="name">プレイヤー（親だだんだん）</div>
+          <label class="file-btn">画像を選ぶ<input type="file" accept="image/png,image/webp" data-key="player"></label>
+        </div>
+      </div>
+      <div class="asset-row" data-key="dandan">
+        <div class="preview"><img id="prev-dandan"></div>
+        <div class="info"><div class="name">仲間だだんだん</div>
+          <label class="file-btn">画像を選ぶ<input type="file" accept="image/png,image/webp" data-key="dandan"></label>
+        </div>
+      </div>
+      <div class="asset-row" data-key="enemy">
+        <div class="preview"><img id="prev-enemy"></div>
+        <div class="info"><div class="name">雑魚敵</div>
+          <label class="file-btn">画像を選ぶ<input type="file" accept="image/png,image/webp" data-key="enemy"></label>
+        </div>
+      </div>
+      <div class="asset-row" data-key="enemy2">
+        <div class="preview"><img id="prev-enemy2"></div>
+        <div class="info"><div class="name">強敵</div>
+          <label class="file-btn">画像を選ぶ<input type="file" accept="image/png,image/webp" data-key="enemy2"></label>
+        </div>
+      </div>
+      <div class="asset-row" data-key="boss">
+        <div class="preview"><img id="prev-boss"></div>
+        <div class="info"><div class="name">ボス</div>
+          <label class="file-btn">画像を選ぶ<input type="file" accept="image/png,image/webp" data-key="boss"></label>
+        </div>
+      </div>
+      <div id="settings-close">閉じる / CLOSE</div>
+      <div id="settings-reset">画像をリセット / RESET IMAGES</div>
+    </div>
+  </div>
+</div>
+
+<script>
+(function(){
+"use strict";
+
+/* ======================================================================
+   1. CONFIGURATION — edit these to customize the game
+   ====================================================================== */
+
+// External image paths. Replace files under /assets/ to reskin the game.
+// You can also change images live from the in-game ⚙ settings panel
+// (those are stored in localStorage and take priority over these paths).
+const GAME_CONFIG = {
+  playerImage: "assets/player.png"
+};
+
+const ASSETS = {
+  player: "assets/player.png",
+  dandan: "assets/dandan.png",
+  enemy:  "assets/enemy.png",
+  enemy2: "assets/enemy2.png",
+  boss:   "assets/boss.png"
+};
+
+// Sound files — optional. If a file fails to load, a synthesized beep is used instead.
+const SOUNDS = {
+  attack:  "assets/sfx_attack.mp3",
+  hit:     "assets/sfx_hit.mp3",
+  join:    "assets/sfx_join.mp3",
+  bossIn:  "assets/sfx_boss_in.mp3",
+  bossDown:"assets/sfx_boss_down.mp3",
+  levelUp: "assets/sfx_levelup.mp3"
+};
+
+// Developer / balance tuning
+const DEBUG_CONFIG = {
+  startDandanCount: 1,
+  enemySpawnRate: 1.0,      // multiplier on spawn interval (lower = faster spawns)
+  enemyHpMultiplier: 1.0,
+  dandanGainMultiplier: 1.0,
+  maxDandan: 1000,
+  maxActiveFighters: 220,   // cap on dandans that run combat logic per frame (perf)
+  itemDropChance: 0.9
+};
+
+/* ====================================================================== */
+
+const canvas = document.getElementById('game-canvas');
+const ctx = canvas.getContext('2d');
+const frameEl = document.getElementById('game-frame');
+
+let VW = 1080, VH = 1920; // virtual design resolution
+function resize(){
+  const rect = frameEl.getBoundingClientRect();
+  canvas.width = rect.width * (window.devicePixelRatio||1);
+  canvas.height = rect.height * (window.devicePixelRatio||1);
+  canvas.style.width = rect.width+'px';
+  canvas.style.height = rect.height+'px';
+  VW = 1080; VH = 1920 * (rect.height/rect.width) / (16/9); // keep logical 1080 width
+  VH = 1080 * (rect.height/rect.width);
+}
+window.addEventListener('resize', resize);
+resize();
+
+function toCanvasScale(){
+  return { sx: canvas.width / VW, sy: canvas.height / VH };
+}
+
+/* ---------------- Asset loading (with localStorage overrides) ---------------- */
+const images = {};
+function loadImage(key, src){
+  return new Promise((resolve)=>{
+    const img = new Image();
+    img.onload = ()=>{ images[key]=img; resolve(true); };
+    img.onerror = ()=>{ resolve(false); };
+    img.src = src;
+  });
+}
+async function initAssets(){
+  for(const key of Object.keys(ASSETS)){
+    const stored = localStorage.getItem('dadandan_img_'+key);
+    if(stored){ await loadImage(key, stored); continue; }
+    await loadImage(key, key==='player'? GAME_CONFIG.playerImage : ASSETS[key]);
+  }
+}
+
+/* ---------------- Simple synthesized sound fallback ---------------- */
+let actx;
+function beep(freq=440, dur=0.08, type='sine', vol=0.18){
+  try{
+    actx = actx || new (window.AudioContext||window.webkitAudioContext)();
+    const o = actx.createOscillator(); const g = actx.createGain();
+    o.type=type; o.frequency.value=freq;
+    g.gain.value=vol;
+    o.connect(g); g.connect(actx.destination);
+    g.gain.exponentialRampToValueAtTime(0.001, actx.currentTime+dur);
+    o.start(); o.stop(actx.currentTime+dur);
+  }catch(e){}
+}
+const audioEls = {};
+for(const k in SOUNDS){
+  const a = new Audio(); a.src = SOUNDS[k]; a.volume=0.5;
+  a.onerror = ()=>{ audioEls[k] = null; };
+  audioEls[k] = a;
+}
+function playSfx(key){
+  const a = audioEls[key];
+  if(a && a.error===null){
+    try{ const c = a.cloneNode(); c.volume=0.5; c.play().catch(()=>{ fallbackBeep(key); }); }catch(e){ fallbackBeep(key); }
+  } else fallbackBeep(key);
+}
+function fallbackBeep(key){
+  switch(key){
+    case 'attack': beep(320,0.05,'square',0.08); break;
+    case 'hit': beep(180,0.06,'square',0.12); break;
+    case 'join': beep(880,0.12,'triangle',0.15); break;
+    case 'bossIn': beep(110,0.4,'sawtooth',0.2); break;
+    case 'bossDown': beep(660,0.5,'triangle',0.25); break;
+    case 'levelUp': beep(1200,0.15,'sine',0.15); break;
+  }
+}
+
+/* ---------------- Utility ---------------- */
+function rand(a,b){ return a + Math.random()*(b-a); }
+function dist2(x1,y1,x2,y2){ const dx=x1-x2, dy=y1-y2; return dx*dx+dy*dy; }
+function clamp(v,a,b){ return Math.max(a,Math.min(b,v)); }
+
+/* ---------------- Game State ---------------- */
+const STATE = { TITLE:'title', PLAY:'play', BANNER:'banner', OVER:'over', RESULT:'result' };
+let state = STATE.TITLE;
+
+const player = { x:540, y:960, r:46, hp:100, maxHp:100, alive:true, atkCd:0, facing:1 };
+
+let dandans = [];      // followers (object pool)
+let enemies = [];
+let particles = [];
+let dmgNumbers = [];
+let items = [];
+
+let score = 0;
+let coins = 0;
+let waveIndex = 0;
+let waveTimer = 0;
+let spawnQueue = [];
+let spawnTimer = 0;
+let bossActive = false;
+let bossRef = null;
+let bannerTimer = 0;
+let postBossShowcase = 0;
+
+const pointer = { active:false, x:540, y:960, tx:540, ty:960 };
+const keys = {};
+
+/* --- camera / juice state --- */
+let gameTime = 0;
+let hitstopTimer = 0;
+let showcaseZoomTimer = 0;
+let celebratedMilestones = { 10:false, 50:false, 100:false };
+let lastDandanDisplayed = 1;
+const camera = { zoom:1, targetZoom:1, focusX:540, focusY:960, shakeTime:0, shakeMag:0 };
+
+function screenFlash(alpha=0.6, fadeMs=250){
+  const el = document.getElementById('flash-layer');
+  el.style.transition='none';
+  el.style.opacity=String(alpha);
+  requestAnimationFrame(()=>{
+    el.style.transition='opacity '+fadeMs+'ms ease-out';
+    el.style.opacity='0';
+  });
+}
+function shakeCamera(mag, time){
+  camera.shakeTime = Math.max(camera.shakeTime, time);
+  camera.shakeMag = Math.max(camera.shakeMag, mag);
+}
+
+/* Finite wave structure: WAVE 1-4 build up the army, then a single boss
+   fight ends the run. No more endless looping — one play session has a
+   clear beginning, middle, and a decisive finish. */
+const WAVE_DEFS = [
+  { count:6,  types:['zako'],               hpMult:1.0,  dmgMult:0.4, interval:380 },
+  { count:10, types:['zako','tough'],       hpMult:1.1,  dmgMult:0.6, interval:340 },
+  { count:15, types:['zako','tough'],       hpMult:1.25, dmgMult:0.8, interval:300 },
+  { count:20, types:['zako','tough','big'], hpMult:1.45, dmgMult:1.0, interval:260 }
+];
+function getWaveDef(idx){
+  if(idx >= WAVE_DEFS.length) return { boss:true };
+  const d = WAVE_DEFS[idx];
+  return {
+    boss:false,
+    count:d.count,
+    hpMult:d.hpMult,
+    dmgMult:d.dmgMult,
+    interval: d.interval * DEBUG_CONFIG.enemySpawnRate,
+    types:d.types
+  };
+}
+
+/* ---------------- Dandan (followers) ---------------- */
+function spawnDandan(x,y, animate=true){
+  if(dandans.length >= DEBUG_CONFIG.maxDandan) return;
+  const isNew = animate;
+  dandans.push({
+    x: x + rand(-20,20), y: y + rand(-20,20),
+    vx:0, vy:0,
+    slot: dandans.length,
+    scale: animate?0.1:1,
+    hopT: isNew?0:99,
+    atkCd: rand(0,0.4),
+    hitCd: 0,
+    hp: 20, maxHp:20,
+    bob: Math.random()*Math.PI*2,
+    seedAngle: rand(0,Math.PI*2),
+    seedRing: Math.floor(rand(0,5)),
+    seedJitter: rand(-40,40),
+    alive:true
+  });
+}
+function formationTarget(i, total){
+  // ring-based formation around player, rings expand outward
+  const ringCap = [8,16,24,32,40,48,56,64];
+  let ring=0, idx=i, cap=ringCap[0], used=0;
+  while(idx >= cap){ idx -= cap; ring++; cap = ringCap[Math.min(ring,ringCap.length-1)]; }
+  const angle = (idx/cap)*Math.PI*2 + ring*0.35;
+  const radius = 60 + ring*46;
+  return { dx: Math.cos(angle)*radius, dy: Math.sin(angle)*radius*0.85 };
+}
+// Surround/charge target: dandans swarm and encircle an assigned enemy,
+// spread across a few concentric rings with a slow orbit so it reads as
+// a living mob "charging" rather than a static ring of markers.
+function chargeTarget(d, target){
+  const radius = target.r + 42 + d.seedRing*38 + d.seedJitter*0.7;
+  const angle = d.seedAngle + gameTime*0.55;
+  return { x: target.x + Math.cos(angle)*radius, y: target.y + Math.sin(angle)*radius*0.82 };
+}
+
+/* ---------------- Enemies ---------------- */
+const ENEMY_DEFS = {
+  zako:  { hp:18, spd:70,  r:30, dmg:2, gain:2, score:10, img:'enemy' },
+  tough: { hp:60, spd:52,  r:38, dmg:4, gain:4, score:30, img:'enemy2' },
+  big:   { hp:140,spd:38,  r:54, dmg:6, gain:8, score:60, img:'enemy2' }
+};
+function spawnEnemy(type){
+  const def = ENEMY_DEFS[type];
+  const side = Math.floor(rand(0,4));
+  let x,y;
+  if(side===0){ x=rand(0,VW); y=-60; }
+  else if(side===1){ x=rand(0,VW); y=VH+60; }
+  else if(side===2){ x=-60; y=rand(0,VH); }
+  else { x=VW+60; y=rand(0,VH); }
+  enemies.push({
+    type, x, y, hp:def.hp*DEBUG_CONFIG.enemyHpMultiplier*curHpMult, maxHp:def.hp*DEBUG_CONFIG.enemyHpMultiplier*curHpMult,
+    r:def.r, spd:def.spd*rand(0.9,1.1), dmg:def.dmg*curDmgMult, gain:def.gain, scoreVal:def.score,
+    knockX:0, knockY:0, alive:true, hitFlash:0
+  });
+}
+let curHpMult = 1;
+let curDmgMult = 1; // scales enemy damage per-wave so early waves are gentle on the army
+
+function spawnBoss(){
+  // Boss HP is tied to how many dandans can actually fight at once (capped
+  // by maxActiveFighters), not the wave index. This keeps the showdown at a
+  // consistent, satisfying length whether the army is 15 or 300 strong,
+  // instead of instantly evaporating once the crowd gets big.
+  const fightersCount = Math.min(dandans.length, DEBUG_CONFIG.maxActiveFighters);
+  const bossHp = 700 + fightersCount*190;
+  bossRef = {
+    type:'boss', x:VW/2, y: -200, hp: bossHp, maxHp:bossHp,
+    r:150, spd:24, dmg:14, gain:0, alive:true, hitFlash:0,
+    phase:'enter', atkTimer:2.6, knockX:0, knockY:0, lastStage:1
+  };
+  enemies.push(bossRef);
+  bossActive = true;
+  document.getElementById('boss-hp-wrap').style.display='block';
+  document.getElementById('boss-name').textContent = 'BOSS  WAVE '+(waveIndex+1);
+  showBanner('BOSS出現！！', true);
+  shakeCamera(16, 0.6);
+  screenFlash(0.45, 500);
+  playSfx('bossIn');
+}
+
+/* ---------------- Items ---------------- */
+function spawnItem(x,y,gain){
+  items.push({ x,y, gain, vy:0, t:0, alive:true });
+}
+
+/* ---------------- Particles / damage numbers ---------------- */
+function spawnBurst(x,y,color,n=10){
+  for(let i=0;i<n;i++){
+    const a = rand(0,Math.PI*2), sp = rand(60,220);
+    particles.push({ x,y, vx:Math.cos(a)*sp, vy:Math.sin(a)*sp, life:rand(0.3,0.6), t:0, color, r:rand(3,7) });
+  }
+}
+function spawnDmg(x,y,val,crit=false){
+  dmgNumbers.push({ x, y, val, t:0, crit, vy:-rand(150,190) });
+}
+
+/* ---------------- Input ---------------- */
+function screenToVirtual(clientX, clientY){
+  const rect = frameEl.getBoundingClientRect();
+  const dpr = window.devicePixelRatio||1;
+  const canvasPxX = (clientX-rect.left)*dpr;
+  const canvasPxY = (clientY-rect.top)*dpr;
+  const {sx,sy} = toCanvasScale();
+  const cx = canvas.width/2, cy = canvas.height/2;
+  // invert the camera's zoom/pan transform so a screen tap always maps to
+  // the correct world position, even when the camera has zoomed out or
+  // panned toward a boss — otherwise controls silently drift as the army grows
+  const worldX = (canvasPxX - cx)/(camera.zoom*sx) + camera.focusX;
+  const worldY = (canvasPxY - cy)/(camera.zoom*sy) + camera.focusY;
+  return { x: worldX, y: worldY };
+}
+canvas.addEventListener('pointerdown', e=>{
+  if(state!==STATE.PLAY) return;
+  e.preventDefault();
+  pointer.active = true;
+  const v = screenToVirtual(e.clientX,e.clientY);
+  pointer.tx=v.x; pointer.ty=v.y;
+});
+canvas.addEventListener('pointermove', e=>{
+  if(!pointer.active) return;
+  e.preventDefault();
+  const v = screenToVirtual(e.clientX,e.clientY);
+  pointer.tx=v.x; pointer.ty=v.y;
+});
+window.addEventListener('pointerup', ()=>{ pointer.active=false; });
+window.addEventListener('keydown', e=>{ keys[e.key.toLowerCase()]=true; });
+window.addEventListener('keyup', e=>{ keys[e.key.toLowerCase()]=false; });
+
+// Stop iOS Safari's long-press context menu / text-selection / native image
+// drag from hijacking what is meant to be a plain drag-to-move gesture.
+// None of these interfere with the settings panel's file <input>, since
+// opening the file picker is a normal click, not a contextmenu/select/drag.
+document.addEventListener('contextmenu', e=>{ e.preventDefault(); });
+document.addEventListener('selectstart', e=>{ e.preventDefault(); });
+document.addEventListener('dragstart', e=>{ e.preventDefault(); });
+canvas.addEventListener('touchstart', e=>{ e.preventDefault(); }, { passive:false });
+canvas.addEventListener('touchmove', e=>{ e.preventDefault(); }, { passive:false });
+
+/* ---------------- Wave management ---------------- */
+function startWave(){
+  const def = getWaveDef(waveIndex);
+  document.getElementById('wave-label').textContent = def.boss ? '★ FINAL BOSS ★' : ('WAVE '+(waveIndex+1)+' / '+WAVE_DEFS.length);
+  curHpMult = def.hpMult;
+  curDmgMult = def.dmgMult || 1;
+  if(def.boss){
+    spawnQueue = [];
+    setTimeout(spawnBoss, 900);
+  } else {
+    spawnQueue = [];
+    for(let i=0;i<def.count;i++){
+      spawnQueue.push(def.types[Math.floor(rand(0,def.types.length))]);
+    }
+    spawnTimer = 0;
+  }
+}
+
+function onEnemyDeath(en){
+  spawnBurst(en.x,en.y, en.type==='boss'?'#ffdd55':'#ffb3c6', en.type==='boss'?60:14);
+  score += en.scoreVal||500;
+  if(en.type!=='boss'){
+    if(Math.random() < DEBUG_CONFIG.itemDropChance){
+      spawnItem(en.x, en.y, Math.max(1, Math.round(en.gain*DEBUG_CONFIG.dandanGainMultiplier)));
+    }
+  } else {
+    // boss always bursts into many dandan
+    const n = 12;
+    for(let i=0;i<n;i++){
+      setTimeout(()=>spawnItem(en.x+rand(-80,80), en.y+rand(-80,80), 3), i*70);
+    }
+  }
+}
+
+function bossDefeated(){
+  bossActive = false;
+  document.getElementById('boss-hp-wrap').style.display='none';
+  playSfx('bossDown');
+  showBanner('BOSS DEFEATED!!', true);
+  screenFlash(0.55, 400);
+  postBossShowcase = 3.2;
+  showcaseZoomTimer = 3.4; // pull the camera back so the whole surviving army is visible
+  // the boss fight IS the ending — no more waves after this, straight to RESULT
+  setTimeout(()=>{ if(state===STATE.PLAY) triggerResult(); }, 3400);
+}
+
+function showBanner(text, big=false){
+  const el = document.getElementById('banner-text');
+  document.getElementById('banner-text-inner').textContent = text;
+  el.classList.remove('hidden');
+  el.classList.toggle('big', big);
+  // restart the pop animation even if the same text is shown again
+  const span = document.getElementById('banner-text-inner');
+  span.style.animation='none'; void span.offsetWidth; span.style.animation='';
+  bannerTimer = big ? 2.6 : 1.5;
+}
+
+/* ---------------- Game reset / start ---------------- */
+function resetGame(){
+  dandans = []; enemies=[]; particles=[]; dmgNumbers=[]; items=[];
+  score=0; coins=0; waveIndex=0; bossActive=false; bossRef=null;
+  celebratedMilestones = { 10:false, 50:false, 100:false }; showcaseZoomTimer=0; hitstopTimer=0;
+  camera.zoom=1; camera.targetZoom=1; camera.shakeTime=0;
+  player.x=VW/2; player.y=VH*0.55; player.hp=player.maxHp=100; player.alive=true;
+  camera.focusX=player.x; camera.focusY=player.y;
+  for(let i=0;i<DEBUG_CONFIG.startDandanCount;i++) spawnDandan(player.x,player.y,false);
+  lastDandanDisplayed = dandans.length;
+  document.getElementById('boss-hp-wrap').style.display='none';
+  updateHud();
+}
+function startGame(){
+  resetGame();
+  state = STATE.PLAY;
+  document.getElementById('title-screen').classList.add('hidden');
+  document.getElementById('gameover-screen').classList.add('hidden');
+  startWave();
+}
+
+document.getElementById('start-btn').addEventListener('click', ()=>{ if(actx&&actx.state==='suspended') actx.resume(); startGame(); });
+document.getElementById('retry-btn').addEventListener('click', startGame);
+
+/* ---------------- HUD ---------------- */
+function updateHud(){
+  const el = document.getElementById('dandan-count');
+  el.textContent = '味方 × '+dandans.length;
+  if(dandans.length > lastDandanDisplayed){
+    el.classList.remove('pop'); void el.offsetWidth; el.classList.add('pop');
+  }
+  lastDandanDisplayed = dandans.length;
+  document.getElementById('score-val').textContent = score;
+  const subs = ['仲間を集めろ！','増えてきた！','いい調子！','軍団化してきた！','大軍団！','無双状態！！'];
+  const idx = clamp(Math.floor(dandans.length/20),0,subs.length-1);
+  document.getElementById('dandan-sub').textContent = subs[idx];
+}
+
+// Milestone celebrations at 10 / 50 / 100 — the growth itself is the show,
+// so each threshold gets a bigger pop than the last.
+function triggerMilestone(n, big){
+  celebratedMilestones[n] = true;
+  showBanner('味方 × '+n+(big?'!!':'！'), big);
+  playSfx(big ? 'levelUp' : 'join');
+  shakeCamera(big?10:6, big?0.4:0.25);
+  screenFlash(big?0.65:0.35, 400);
+  showcaseZoomTimer = Math.max(showcaseZoomTimer, big?2.6:1.3);
+  if(big) hitstopTimer = 0.18;
+  spawnBurst(player.x, player.y, '#fff700', big?40:18);
+}
+
+/* ---------------- Main update loop ---------------- */
+let lastT = performance.now();
+function loop(now){
+  let dt = Math.min(0.05, (now-lastT)/1000);
+  lastT = now;
+  if(hitstopTimer>0){ hitstopTimer -= dt; dt *= 0.06; } // brief freeze-frame punch for big moments
+  update(dt);
+  render();
+  requestAnimationFrame(loop);
+}
+
+function update(dt){
+  if(state===STATE.TITLE) return;
+  gameTime += dt;
+  updateCamera(dt);
+
+  if(bannerTimer>0){ bannerTimer -= dt; if(bannerTimer<=0) document.getElementById('banner-text').classList.add('hidden'); }
+
+  if(state===STATE.OVER){
+    // followers keep fighting a bit even without player
+  }
+
+  // --- player movement ---
+  if(player.alive){
+    let mx=0,my=0;
+    if(keys['arrowup']||keys['w']) my-=1;
+    if(keys['arrowdown']||keys['s']) my+=1;
+    if(keys['arrowleft']||keys['a']) mx-=1;
+    if(keys['arrowright']||keys['d']) mx+=1;
+    if(mx||my){
+      const len=Math.hypot(mx,my); mx/=len; my/=len;
+      player.x += mx*260*dt; player.y += my*260*dt;
+    } else if(pointer.active){
+      const dx=pointer.tx-player.x, dy=pointer.ty-player.y;
+      const d=Math.hypot(dx,dy);
+      if(d>6){ player.x += (dx/d)*Math.min(320*dt,d); player.y += (dy/d)*Math.min(320*dt,d); }
+      if(dx!==0) player.facing = dx<0?-1:1;
+    }
+    player.x = clamp(player.x, 40, VW-40);
+    player.y = clamp(player.y, 40, VH-40);
+  }
+
+  // --- spawn queue ---
+  if(state===STATE.PLAY && !bossActive && spawnQueue.length>0){
+    spawnTimer -= dt*1000;
+    if(spawnTimer<=0){
+      spawnEnemy(spawnQueue.shift());
+      spawnTimer = getWaveDef(waveIndex).interval;
+    }
+  }
+  if(state===STATE.PLAY && !bossActive && spawnQueue.length===0 && enemies.length===0 && !bossActive){
+    // wave clear -> next
+    if(!getWaveDef(waveIndex).boss){
+      waveIndex++;
+      startWave();
+    }
+  }
+
+  // --- dandans update (formation + charge/surround + combat) ---
+  const total = dandans.length;
+  const engaging = enemies.length > 0;
+  const n = enemies.length;
+  for(let i=0;i<total;i++){
+    const d = dandans[i];
+    if(d.scale<1) d.scale = Math.min(1, d.scale + dt*3.2);
+    let tx, ty;
+    if(engaging){
+      // distribute the whole army across every living enemy so multiple
+      // pockets of enemies each get surrounded by their own mob
+      const target = enemies[i % n];
+      const ct = chargeTarget(d, target);
+      tx = ct.x; ty = ct.y;
+    } else {
+      const ft = formationTarget(i,total);
+      tx = player.x + ft.dx; ty = player.y + ft.dy;
+    }
+    const dx=tx-d.x, dy=ty-d.y;
+    const dist = Math.hypot(dx,dy) || 1;
+    const maxSpeed = engaging ? 240 : 165; // hard speed cap — no more instant warping across the screen
+    const desired = Math.min(maxSpeed, dist*7); // still eases in as it nears its spot
+    d.vx = (dx/dist)*desired; d.vy = (dy/dist)*desired;
+    d.x += d.vx*dt; d.y += d.vy*dt;
+    d.bob += dt*6;
+    if(d.hopT<1){ d.hopT += dt*2.4; }
+    if(d.atkCd>0) d.atkCd -= dt;
+    if(d.hitCd>0) d.hitCd -= dt;
+    if(!bossActive && d.hp<d.maxHp) d.hp = Math.min(d.maxHp, d.hp + dt*3); // the army patches itself up between hits, but not mid-boss-fight
+  }
+
+  // combat: only first N dandans (nearest to action) run attack logic for perf
+  const fighters = Math.min(total, DEBUG_CONFIG.maxActiveFighters);
+  for(let i=0;i<fighters;i++){
+    const d = dandans[i];
+    if(d.atkCd>0) continue;
+    let target=null, best=99999;
+    for(let j=0;j<enemies.length;j++){
+      const en = enemies[j];
+      if(!en.alive) continue;
+      const dd = dist2(d.x,d.y,en.x,en.y);
+      if(dd<best){ best=dd; target=en; }
+    }
+    if(target && best < (target.r+90)*(target.r+90)){
+      let dmg = rand(5,10);
+      if(target.type==='boss'){
+        const st = bossStageFor(target);
+        if(st===4) dmg *= 1.8;       // last stand — the army finishes it fast once staggered
+        else if(st===3) dmg *= 1.3;
+      }
+      target.hp -= dmg;
+      target.hitFlash = 0.08;
+      const ang = Math.atan2(target.y-d.y, target.x-d.x);
+      target.knockX += Math.cos(ang)*30; target.knockY += Math.sin(ang)*30;
+      spawnDmg(target.x+rand(-10,10), target.y-target.r, Math.round(dmg));
+      d.atkCd = rand(0.35,0.55);
+      if(Math.random()<0.15) playSfx('attack');
+    }
+  }
+
+  // player attack (strong, auto)
+  if(player.alive){
+    if(player.atkCd>0) player.atkCd -= dt;
+    if(player.atkCd<=0){
+      let target=null, best=99999;
+      for(let j=0;j<enemies.length;j++){
+        const en=enemies[j]; if(!en.alive) continue;
+        const dd = dist2(player.x,player.y,en.x,en.y);
+        if(dd<best){best=dd;target=en;}
+      }
+      if(target && best < (target.r+90)*(target.r+90)){
+        const dmg = rand(14,22);
+        target.hp -= dmg; target.hitFlash=0.1;
+        const ang=Math.atan2(target.y-player.y,target.x-player.x);
+        target.knockX += Math.cos(ang)*60; target.knockY += Math.sin(ang)*60;
+        spawnDmg(target.x, target.y-target.r-10, Math.round(dmg), true);
+        player.atkCd = 0.4;
+        playSfx('hit');
+      }
+    }
+  }
+
+  // --- enemies update ---
+  for(let i=enemies.length-1;i>=0;i--){
+    const en = enemies[i];
+    if(!en.alive) continue;
+    if(en.hitFlash>0) en.hitFlash -= dt;
+    en.knockX *= 0.85; en.knockY *= 0.85;
+
+    if(en.type==='boss'){
+      updateBoss(en, dt);
+    } else {
+      // Enemies are player-focused commanders' hunters first — they only
+      // get distracted by the army when the player is genuinely far away,
+      // and even then only if a dandan is meaningfully closer. This keeps
+      // the crowd from being farmed the instant it gets big.
+      const distToPlayer2 = dist2(en.x,en.y,player.x,player.y);
+      let tx=player.x, ty=player.y, bestD=distToPlayer2, targetingDandan=false;
+      if(distToPlayer2 > 300*300){
+        for(let k=0;k<Math.min(dandans.length,60);k++){
+          const d=dandans[k];
+          const dd=dist2(en.x,en.y,d.x,d.y);
+          if(dd < bestD*0.55){ bestD=dd; tx=d.x; ty=d.y; targetingDandan=true; }
+        }
+      }
+      const dx=tx-en.x, dy=ty-en.y, dd=Math.hypot(dx,dy)||1;
+      if(dd>en.r+40){
+        en.x += (dx/dd)*en.spd*dt; en.y += (dy/dd)*en.spd*dt;
+      } else {
+        // attack nearest valid target
+        if(!en.atkCd || en.atkCd<=0){
+          if(!targetingDandan){
+            if(player.alive){ player.hp -= en.dmg; if(player.hp<=0) onPlayerDeath(); }
+          } else {
+            // pick the closest dandan that isn't already reeling from a recent hit,
+            // and damage it (HP-based) instead of an instant, guaranteed kill
+            let victim=-1, victimD=99999;
+            for(let k=0;k<dandans.length;k++){
+              const cand = dandans[k];
+              if(cand.hitCd>0) continue;
+              const rr = dist2(en.x,en.y,cand.x,cand.y);
+              if(rr < (en.r+40)*(en.r+40) && rr<victimD){ victimD=rr; victim=k; }
+            }
+            if(victim>=0){
+              const cand = dandans[victim];
+              cand.hp -= en.dmg;
+              cand.hitCd = 1.1;
+              if(cand.hp<=0) removeDandanAt(victim);
+            }
+          }
+          en.atkCd = 1.5; // slower attack cadence than before — one hit doesn't cascade
+        }
+      }
+      if(en.atkCd>0) en.atkCd -= dt;
+    }
+    en.x += en.knockX*dt; en.y += en.knockY*dt;
+
+    if(en.hp<=0){
+      en.alive=false;
+      onEnemyDeath(en);
+      if(en.type==='boss'){ bossDefeated(); }
+      enemies.splice(i,1);
+    }
+  }
+  if(bossRef && bossActive){
+    document.getElementById('boss-hp-fill').style.width = Math.max(0,(bossRef.hp/bossRef.maxHp*100))+'%';
+  }
+
+  // --- items ---
+  for(let i=items.length-1;i>=0;i--){
+    const it = items[i];
+    it.t += dt;
+    const dx=player.x-it.x, dy=player.y-it.y, dd=Math.hypot(dx,dy);
+    if(dd<260){ it.x += (dx/dd)*300*dt; it.y += (dy/dd)*300*dt; }
+    else { it.y += Math.sin(it.t*4)*10*dt; }
+    if(dd<50){
+      for(let g=0; g<it.gain; g++) spawnDandan(player.x, player.y);
+      spawnBurst(it.x,it.y,'#ffe066',8);
+      spawnBurst(it.x,it.y,'#ffffff',5);
+      playSfx('join');
+      items.splice(i,1);
+      updateHud();
+      if(!celebratedMilestones[10] && dandans.length>=10) triggerMilestone(10, false);
+      else if(!celebratedMilestones[50] && dandans.length>=50) triggerMilestone(50, false);
+      else if(!celebratedMilestones[100] && dandans.length>=100) triggerMilestone(100, true);
+    }
+  }
+
+  // --- particles ---
+  for(let i=particles.length-1;i>=0;i--){
+    const p=particles[i]; p.t+=dt; p.x+=p.vx*dt; p.y+=p.vy*dt; p.vx*=0.92; p.vy*=0.92;
+    if(p.t>=p.life) particles.splice(i,1);
+  }
+  for(let i=dmgNumbers.length-1;i>=0;i--){
+    const n=dmgNumbers[i];
+    n.t+=dt;
+    n.vy += 240*dt; // gravity — quick upward pop, then eases back down
+    n.y += n.vy*dt;
+    if(n.t>0.7) dmgNumbers.splice(i,1);
+  }
+
+  updateHud();
+}
+
+function updateCamera(dt){
+  if(showcaseZoomTimer>0) showcaseZoomTimer -= dt;
+  const n = dandans.length;
+  let tz = 1;
+  if(n>250) tz = 0.58; else if(n>100) tz = 0.68; else if(n>50) tz = 0.8; else if(n>20) tz = 0.92;
+  if(bossActive) tz = Math.min(tz, 0.78);
+  if(showcaseZoomTimer>0) tz = Math.min(tz, 0.6); // 100-army & post-boss showcase pull the camera out further
+  camera.targetZoom = tz;
+  camera.zoom += (camera.targetZoom-camera.zoom)*Math.min(1,dt*2.2);
+  let fx=player.x, fy=player.y;
+  if(bossActive && bossRef) { fx=(player.x+bossRef.x)/2; fy=(player.y+bossRef.y)/2; }
+  camera.focusX += (fx-camera.focusX)*Math.min(1,dt*3);
+  camera.focusY += (fy-camera.focusY)*Math.min(1,dt*3);
+  if(camera.shakeTime>0){ camera.shakeTime -= dt; if(camera.shakeTime<=0) camera.shakeMag=0; }
+}
+
+function removeDandanAt(idx){
+  dandans.splice(idx,1);
+  spawnBurst(player.x,player.y,'#ff8888',6);
+}
+
+function onPlayerDeath(){
+  player.alive=false;
+  if(dandans.length===0){
+    triggerGameOver();
+  } else {
+    // army fights on for a while, then game over
+    setTimeout(()=>{ if(state===STATE.PLAY) triggerGameOver(); }, 4000);
+  }
+}
+function triggerGameOver(){
+  state = STATE.OVER;
+  const h1 = document.querySelector('#gameover-screen h1');
+  h1.textContent = 'GAME OVER';
+  h1.style.color = '#ff4d4d';
+  h1.style.textShadow = '0 0 20px rgba(255,50,50,0.7)';
+  document.getElementById('gameover-stats').textContent = 'SCORE '+score+' / 味方 ×'+dandans.length;
+  document.getElementById('gameover-screen').classList.remove('hidden');
+}
+
+// A full, decisive win: the boss is down and the run is complete.
+function triggerResult(){
+  state = STATE.RESULT;
+  const h1 = document.querySelector('#gameover-screen h1');
+  h1.textContent = 'CLEAR!!';
+  h1.style.color = '#3ddc84';
+  h1.style.textShadow = '0 0 24px rgba(80,255,140,0.8)';
+  document.getElementById('gameover-stats').textContent = 'SCORE '+score+' / 味方 ×'+dandans.length+' 到達！';
+  document.getElementById('gameover-screen').classList.remove('hidden');
+}
+
+const BOSS_PHASES = {
+  1: { atkMin:3.0, atkMax:4.0, aoe:260, dmg:6,  killChance:0.02 }, // safe warm-up — the army barely notices
+  2: { atkMin:2.2, atkMax:2.8, aoe:280, dmg:9,  killChance:0.06 }, // frequency & damage tick up
+  3: { atkMin:1.5, atkMax:2.0, aoe:320, dmg:13, killChance:0.15 }, // clearly dangerous — the army visibly thins
+  4: { atkMin:1.0, atkMax:1.4, aoe:340, dmg:18, killChance:0.30 }  // last stand — a hit here usually drops whoever it touches
+};
+function bossStageFor(en){
+  const ratio = en.hp/en.maxHp;
+  if(ratio>0.7) return 1;
+  if(ratio>0.4) return 2;
+  if(ratio>0.1) return 3;
+  return 4;
+}
+function updateBoss(en, dt){
+  if(en.phase==='enter'){
+    en.y += 90*dt;
+    if(en.y>=VH*0.28){ en.phase='fight'; }
+    return;
+  }
+  const stage = bossStageFor(en);
+  if(stage !== en.lastStage){
+    en.lastStage = stage;
+    if(stage===2){ showBanner('ボスが怒り出した！'); shakeCamera(12,0.3); }
+    else if(stage===3){ showBanner('ボス本気モード！！', true); shakeCamera(16,0.35); screenFlash(0.3,300); }
+    else if(stage===4){ showBanner('ラストスパート！！', true); shakeCamera(20,0.4); screenFlash(0.4,350); }
+  }
+  const cfg = BOSS_PHASES[stage];
+
+  // slow chase + periodic area attack
+  const dx=player.x-en.x, dy=player.y-en.y, dd=Math.hypot(dx,dy)||1;
+  if(dd>240){ en.x += (dx/dd)*en.spd*dt; en.y += (dy/dd)*en.spd*dt; }
+  en.atkTimer -= dt;
+  if(en.atkTimer<=0.45 && en.atkTimer>0.4){
+    // brief telegraph flash right before the slam lands
+    spawnBurst(en.x,en.y,'#ffffff',8);
+  }
+  if(en.atkTimer<=0){
+    const beforeCount = dandans.length;
+    en.atkTimer = rand(cfg.atkMin,cfg.atkMax);
+    spawnBurst(en.x,en.y,'#ff5555',40+stage*8);
+    shakeCamera(16+stage*3, 0.3+stage*0.03);
+    screenFlash(0.28+stage*0.05, 300);
+    playSfx('hit');
+    const AOE = cfg.aoe;
+    for(let i=dandans.length-1;i>=0;i--){
+      const d=dandans[i];
+      if(dist2(d.x,d.y,en.x,en.y) < AOE*AOE){
+        const ang = Math.atan2(d.y-en.y,d.x-en.x);
+        d.hp -= cfg.dmg;
+        d.hitCd = 1.0;
+        const kill = d.hp<=0 || Math.random()<cfg.killChance; // late phases are far more likely to drop a hit dandan outright
+        if(kill){
+          // visibly fling the dandan off screen instead of just deleting it
+          particles.push({ x:d.x, y:d.y, vx:Math.cos(ang)*rand(500,900), vy:Math.sin(ang)*rand(500,900)-160,
+            life:0.7, t:0, color:'#5ac8fa', r:14, spin:true });
+          dandans.splice(i,1);
+        } else {
+          d.x += Math.cos(ang)*140; d.y += Math.sin(ang)*140;
+        }
+      }
+    }
+    if(dandans.length < beforeCount){
+      showBanner('やばい！');
+    }
+    if(dist2(player.x,player.y,en.x,en.y) < AOE*AOE && player.alive){
+      player.hp -= en.dmg;
+      if(player.hp<=0) onPlayerDeath();
+    }
+  }
+}
+
+/* ---------------- Rendering ---------------- */
+function drawSprite(imgKey, x,y, size, fallbackColor, hitFlash){
+  const {sx,sy} = toCanvasScale();
+  const img = images[imgKey];
+  const w = size*sx, h = size*sy;
+  ctx.save();
+  ctx.translate(x*sx, y*sy);
+  if(img){
+    if(hitFlash>0){ ctx.filter='brightness(2) saturate(0)'; }
+    ctx.drawImage(img, -w/2, -h/2, w, h);
+  } else {
+    ctx.fillStyle = hitFlash>0 ? '#fff' : fallbackColor;
+    ctx.beginPath(); ctx.arc(0,0, w/2, 0, Math.PI*2); ctx.fill();
+  }
+  ctx.restore();
+}
+
+function render(){
+  const w=canvas.width, h=canvas.height;
+  // sky/ground background
+  const g = ctx.createLinearGradient(0,0,0,h);
+  g.addColorStop(0,'#8fd8f0'); g.addColorStop(0.6,'#bff0c4'); g.addColorStop(1,'#9fe6a8');
+  ctx.fillStyle=g; ctx.fillRect(0,0,w,h);
+
+  if(state===STATE.TITLE) return;
+
+  const {sx,sy} = toCanvasScale();
+
+  // camera: zoom out as the army grows / during boss & celebration moments,
+  // plus a short shake on big impacts. Kept subtle to avoid motion sickness.
+  ctx.save();
+  const cx = canvas.width/2, cy = canvas.height/2;
+  let shx=0, shy=0;
+  if(camera.shakeTime>0){ shx = rand(-camera.shakeMag,camera.shakeMag); shy = rand(-camera.shakeMag,camera.shakeMag); }
+  ctx.translate(cx+shx, cy+shy);
+  ctx.scale(camera.zoom, camera.zoom);
+  ctx.translate(-camera.focusX*sx, -camera.focusY*sy);
+
+  // items — glowing baby-dandan pickups so "this becomes a teammate" reads instantly
+  for(const it of items){
+    const pulse = 1 + Math.sin(it.t*10)*0.12;
+    ctx.save();
+    ctx.translate(it.x*sx, it.y*sy);
+    ctx.shadowColor='#fff17a'; ctx.shadowBlur=22;
+    ctx.globalAlpha=0.35;
+    ctx.fillStyle='#ffe066';
+    ctx.beginPath(); ctx.arc(0,0,26*sx*pulse,0,Math.PI*2); ctx.fill();
+    ctx.restore();
+    drawSprite('dandan', it.x, it.y, 40*pulse, '#ffe066', 0);
+  }
+
+  // dandans (LOD based on count)
+  const lod = dandans.length>400 ? 2 : dandans.length>150 ? 1 : 0;
+  for(const d of dandans){
+    const hopBounce = d.hopT<1 ? Math.sin(d.hopT*Math.PI)*-26 : 0; // pop-in hop when newly joined
+    const bob = lod<2 ? Math.sin(d.bob)*4 : 0;
+    const glow = d.hopT<1;
+    const size = (56*d.scale) * (d.hopT<1 ? (1+Math.sin(d.hopT*Math.PI)*0.4) : 1);
+    if(glow){
+      ctx.save();
+      ctx.globalAlpha = 0.5*(1-d.hopT);
+      ctx.fillStyle='#fff700'; ctx.shadowColor='#fff700'; ctx.shadowBlur=18;
+      ctx.beginPath(); ctx.arc(d.x*sx,(d.y+hopBounce)*sy,size*0.7*sx,0,Math.PI*2); ctx.fill();
+      ctx.restore();
+    }
+    drawSprite('dandan', d.x, d.y+bob+hopBounce, size, '#5ac8fa', 0);
+  }
+
+  // player
+  if(player.alive){
+    drawSprite('player', player.x, player.y, 88, '#ff9f43', 0);
+  }
+
+  // enemies
+  for(const en of enemies){
+    if(en.type==='boss'){
+      drawSprite('boss', en.x, en.y, en.r*2.1, '#8b2e2e', en.hitFlash);
+    } else {
+      const key = en.type==='zako' ? 'enemy' : 'enemy2';
+      drawSprite(key, en.x, en.y, en.r*1.9, en.type==='zako'?'#e05656':'#8b2fbf', en.hitFlash);
+    }
+  }
+
+  // particles
+  for(const p of particles){
+    ctx.save();
+    ctx.globalAlpha = Math.max(0,1-p.t/p.life);
+    ctx.fillStyle = p.color;
+    ctx.beginPath(); ctx.arc(p.x*sx,p.y*sy,p.r*sx,0,Math.PI*2); ctx.fill();
+    ctx.restore();
+  }
+
+  // damage numbers — sized up for short-form video legibility, with a quick
+  // pop-scale on spawn so hits read instantly even when many overlap
+  ctx.textAlign='center';
+  for(const n of dmgNumbers){
+    const popScale = n.t<0.12 ? 1 + (0.12-n.t)/0.12*0.55 : 1;
+    const isBig = n.crit || n.val>=18;
+    const fontSize = n.crit ? 48 : (n.val>=18 ? 42 : 38);
+    ctx.save();
+    ctx.globalAlpha = Math.max(0,1-n.t/0.7);
+    ctx.translate(n.x*sx, n.y*sy);
+    ctx.scale(popScale, popScale);
+    ctx.font = 'bold '+fontSize+'px sans-serif';
+    ctx.strokeStyle = 'rgba(0,0,0,0.8)';
+    ctx.lineWidth = n.crit ? 7 : 5;
+    ctx.fillStyle = n.crit ? '#ffea00' : (n.val>=18 ? '#ff8a3d' : '#ffffff');
+    ctx.strokeText(String(n.val), 0, 0);
+    ctx.fillText(String(n.val), 0, 0);
+    ctx.restore();
+  }
+
+  // player hp bar (small)
+  if(player.alive){
+    const bw=110*sx;
+    ctx.save();
+    ctx.translate(player.x*sx-bw/2, (player.y-70)*sy);
+    ctx.fillStyle='rgba(0,0,0,0.4)'; ctx.fillRect(0,0,bw,10*sy);
+    ctx.fillStyle='#3ddc84'; ctx.fillRect(0,0,bw*clamp(player.hp/player.maxHp,0,1),10*sy);
+    ctx.restore();
+  }
+
+  ctx.restore(); // end camera transform
+}
+
+/* ---------------- Settings panel ---------------- */
+const settingsPanel = document.getElementById('settings-panel');
+document.getElementById('gear-btn').addEventListener('click', ()=>{
+  settingsPanel.style.display='flex';
+  for(const key of Object.keys(ASSETS)){
+    const img = images[key];
+    const prev = document.getElementById('prev-'+key);
+    if(img) prev.src = img.src;
+  }
+});
+document.getElementById('settings-close').addEventListener('click', ()=>{ settingsPanel.style.display='none'; });
+document.getElementById('settings-reset').addEventListener('click', ()=>{
+  for(const key of Object.keys(ASSETS)) localStorage.removeItem('dadandan_img_'+key);
+  initAssets();
+  settingsPanel.style.display='none';
+});
+settingsPanel.querySelectorAll('input[type=file]').forEach(inp=>{
+  inp.addEventListener('change', e=>{
+    const key = inp.dataset.key;
+    const file = e.target.files[0];
+    if(!file) return;
+    const reader = new FileReader();
+    reader.onload = async ()=>{
+      const dataUrl = reader.result;
+      try{ localStorage.setItem('dadandan_img_'+key, dataUrl); }catch(err){ /* storage full, ignore persist */ }
+      await loadImage(key, dataUrl);
+      document.getElementById('prev-'+key).src = dataUrl;
+    };
+    reader.readAsDataURL(file);
+  });
+});
+
+/* ---------------- Boot ---------------- */
+initAssets().then(()=>{
+  requestAnimationFrame(loop);
+});
+
+})();
+</script>
+</body>
+</html>
 
