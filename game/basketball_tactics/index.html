@@ -1,1 +1,2262 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<meta name="theme-color" content="#050a1e">
+<title>BASKETBALL TACTICS 〜コートの支配者〜</title>
+<style>
+:root{--navy:#050a1e;--navy2:#0b1636;--blue:#2ea8ff;--blue2:#1f6bff;--orange:#ff8a1f;--yellow:#ffd23f;--red:#ff3b4a;--green:#35ff8a;--ink:#e8f1ff}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent;-webkit-user-select:none;user-select:none}
+html,body{margin:0;height:100%;background:var(--navy);color:var(--ink);font-family:-apple-system,"Hiragino Kaku Gothic ProN","Hiragino Sans","Noto Sans JP","Yu Gothic",Meiryo,system-ui,sans-serif;overflow:hidden;touch-action:manipulation;overscroll-behavior:none}
+button{font-family:inherit;color:inherit;border:0;cursor:pointer}
+#app{position:fixed;inset:0;background:radial-gradient(120% 80% at 50% 0%,#12307a 0%,#0a1740 38%,#050a1e 78%)}
+.screen{display:none;position:absolute;top:0;bottom:0;left:50%;width:100%;max-width:560px;transform:translateX(-50%);flex-direction:column;padding:calc(env(safe-area-inset-top) + 6px) 10px calc(env(safe-area-inset-bottom) + 8px)}
+.screen.active{display:flex}
+/* ---------- title ---------- */
+#scTitle{align-items:center;justify-content:center;gap:12px;overflow-y:auto}
+.title-bg{position:absolute;inset:0;pointer-events:none;opacity:.5;background:
+ radial-gradient(circle at 50% 108%,transparent 0 30%,rgba(46,168,255,.55) 30.4% 31%,transparent 31.4%),
+ linear-gradient(90deg,transparent 0 33%,rgba(46,168,255,.35) 33% 33.4%,transparent 33.4% 66.6%,rgba(46,168,255,.35) 66.6% 67%,transparent 67%)}
+.logo-box{text-align:center;position:relative;margin-top:4px}
+.logo1{font:900 italic clamp(34px,11vw,58px)/1 "Arial Black",Impact,sans-serif;letter-spacing:2px;color:#fff;text-shadow:0 0 8px var(--blue),0 0 22px var(--blue2),0 3px 0 #0a2a80}
+.logo2{font:900 italic clamp(40px,14vw,72px)/1 "Arial Black",Impact,sans-serif;letter-spacing:4px;background:linear-gradient(180deg,#fff27a,var(--orange));-webkit-background-clip:text;background-clip:text;color:transparent;filter:drop-shadow(0 0 10px rgba(255,138,31,.8))}
+.sub{margin-top:6px;font-weight:800;letter-spacing:3px;color:#9fd8ff;font-size:clamp(12px,3.6vw,16px)}
+.rank-card{position:relative;width:100%;background:linear-gradient(180deg,rgba(18,48,122,.7),rgba(8,18,52,.8));border:1px solid rgba(46,168,255,.6);box-shadow:0 0 18px rgba(46,168,255,.25) inset;border-radius:14px;padding:10px 14px}
+.rank-top{display:flex;justify-content:space-between;align-items:baseline;gap:8px}
+.rank-name{font:900 italic 22px/1 "Arial Black",Impact,sans-serif}
+.rank-sub{font-size:12px;color:#9fc3ff}
+.xpbar{height:8px;border-radius:6px;background:rgba(255,255,255,.12);overflow:hidden;margin-top:7px}
+.xpbar i{display:block;height:100%;width:0;background:linear-gradient(90deg,var(--blue),var(--yellow));box-shadow:0 0 10px var(--yellow);transition:width .6s}
+.menu{position:relative;width:100%;display:grid;gap:10px}
+.mbtn{position:relative;text-align:left;border-radius:14px;padding:12px 14px 12px 64px;min-height:68px;background:linear-gradient(180deg,#143a9a,#0c2160);border:2px solid var(--blue);box-shadow:0 0 14px rgba(46,168,255,.45),inset 0 0 18px rgba(46,168,255,.2);transition:transform .08s}
+.mbtn:active{transform:scale(.97)}
+.mbtn .ic{position:absolute;left:12px;top:50%;transform:translateY(-50%);font-size:30px;width:42px;text-align:center}
+.mbtn b{display:block;font:900 italic 20px/1.1 "Arial Black",Impact,sans-serif;letter-spacing:1px}
+.mbtn span{display:block;font-weight:800;font-size:14px;margin-top:2px}
+.mbtn small{display:block;font-size:11px;color:#a9c8ff;margin-top:2px}
+.m1{border-color:var(--orange);box-shadow:0 0 16px rgba(255,138,31,.55),inset 0 0 18px rgba(255,138,31,.2);background:linear-gradient(180deg,#a14a08,#5c2603)}
+.m3{border-color:var(--yellow);box-shadow:0 0 16px rgba(255,210,63,.5),inset 0 0 18px rgba(255,210,63,.16);background:linear-gradient(180deg,#7a5f00,#3f3000)}
+.mini-row{position:relative;display:flex;gap:10px;width:100%}
+.minibtn{flex:1;min-height:44px;border-radius:12px;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.25);font-weight:800;font-size:14px}
+/* ---------- game ---------- */
+#hud{flex:none}
+.hud-top{display:flex;align-items:center;gap:6px}
+.hud-logo{flex:1;font:900 italic 15px/1 "Arial Black",Impact,sans-serif;letter-spacing:1px;color:#fff;text-shadow:0 0 8px var(--blue)}
+.hud-logo em{font-style:italic;color:var(--orange)}
+.iconbtn{width:38px;height:34px;border-radius:10px;background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.25);font-size:16px}
+.chips{display:grid;grid-template-columns:1.25fr 1fr 1fr 1.25fr;gap:5px;margin-top:5px}
+.chip{background:linear-gradient(180deg,rgba(20,58,154,.85),rgba(8,24,70,.85));border:1px solid rgba(46,168,255,.55);border-radius:9px;padding:3px 6px;font-size:10px;font-weight:800;color:#9fc3ff;line-height:1.15;text-align:center;min-width:0;white-space:nowrap}
+.chip b{display:block;font:900 15px/1.1 "Arial Black",Impact,sans-serif;color:#fff}
+.chip.combo b{color:var(--orange)}
+.chip.rank b{font-size:12px;letter-spacing:.5px}
+#hud .xpbar{margin-top:5px;height:6px}
+#courtWrap{flex:1;min-height:0;display:flex;align-items:center;justify-content:center;margin:6px 0}
+#courtBox{position:relative;border-radius:10px;overflow:hidden;box-shadow:0 0 0 2px rgba(46,168,255,.7),0 0 22px rgba(46,168,255,.5)}
+#court{display:block;width:100%;height:100%}
+#fxLayer{position:absolute;inset:0;pointer-events:none}
+#courtBox.flash-good{animation:fg .9s}
+#courtBox.flash-bad{animation:fb .9s}
+@keyframes fg{0%{box-shadow:0 0 0 3px #fff,0 0 60px 14px rgba(255,210,63,.95)}100%{box-shadow:0 0 0 2px rgba(46,168,255,.7),0 0 22px rgba(46,168,255,.5)}}
+@keyframes fb{0%{box-shadow:0 0 0 3px #ffb061,0 0 40px 8px rgba(255,138,31,.7)}100%{box-shadow:0 0 0 2px rgba(46,168,255,.7),0 0 22px rgba(46,168,255,.5)}}
+.burst{position:absolute;left:50%;top:40%;transform:translate(-50%,-50%);white-space:nowrap;font:900 italic clamp(30px,9.5vw,56px)/1 "Arial Black",Impact,sans-serif;color:#fff;text-shadow:0 0 6px var(--yellow),0 0 22px var(--orange),0 3px 0 #7a3b00;animation:pop 1.25s ease-out forwards}
+.burst.miss{font-size:clamp(22px,7vw,38px);color:#ffe3c2;text-shadow:0 0 8px var(--orange),0 2px 0 #5a2a00}
+.burst.combo{top:16%;font-size:clamp(20px,6vw,32px);color:var(--yellow)}
+@keyframes pop{0%{opacity:0;transform:translate(-50%,-50%) scale(.3) rotate(-6deg)}18%{opacity:1;transform:translate(-50%,-50%) scale(1.25) rotate(2deg)}32%{transform:translate(-50%,-50%) scale(1)}78%{opacity:1}100%{opacity:0;transform:translate(-50%,-80%) scale(1)}}
+#panel{flex:none;background:linear-gradient(180deg,rgba(14,36,96,.92),rgba(6,14,40,.96));border:1px solid rgba(46,168,255,.55);border-radius:14px;padding:8px 10px;box-shadow:0 0 16px rgba(46,168,255,.25)}
+.qhead{display:flex;align-items:center;gap:6px}
+.qtag{flex:none;font:900 italic 10px/1 "Arial Black",Impact,sans-serif;background:var(--orange);color:#1a0b00;padding:3px 7px;border-radius:6px;letter-spacing:.5px}
+.qtheme{font-weight:900;font-size:13px;color:var(--yellow);min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.qtext{margin:5px 0 4px;font-weight:800;font-size:14px;line-height:1.4}
+.qchips{display:flex;flex-wrap:wrap;gap:4px;min-height:19px}
+.qchips span{font-size:10px;font-weight:800;padding:2px 7px;border-radius:20px;background:rgba(46,168,255,.18);border:1px solid rgba(46,168,255,.5);color:#bfe2ff}
+.qhint{font-size:12px;font-weight:800;color:var(--green);line-height:1.35}
+.opts{display:grid;grid-template-columns:1fr 1fr;gap:7px;margin-top:6px}
+.opt{display:flex;align-items:center;gap:7px;text-align:left;min-height:54px;padding:6px 9px;border-radius:12px;background:linear-gradient(180deg,#1b4fd0,#102f8c);border:2px solid #5aa9ff;box-shadow:0 3px 0 #08184f,0 0 12px rgba(46,168,255,.35);font-weight:900;font-size:14px;line-height:1.25;transition:transform .08s}
+.opt:active{transform:translateY(2px);box-shadow:0 1px 0 #08184f}
+.opt i{flex:none;width:24px;height:24px;border-radius:50%;background:var(--yellow);color:#1a1200;font:900 13px/24px "Arial Black",Impact,sans-serif;text-align:center;font-style:normal}
+.opt.picked{border-color:var(--yellow);box-shadow:0 0 18px var(--yellow)}
+.opt:disabled{opacity:.55}
+.prow{display:flex;gap:8px;margin-top:7px}
+.hintbtn{flex:1;min-height:38px;border-radius:10px;background:rgba(53,255,138,.14);border:1.5px solid var(--green);color:#c9ffe0;font-weight:900;font-size:13px}
+.hintbtn:disabled{opacity:.5}
+.reshead{display:flex;align-items:baseline;gap:8px}
+.restitle{font:900 italic 22px/1 "Arial Black",Impact,sans-serif}
+.restitle.good{color:var(--green);text-shadow:0 0 12px rgba(53,255,138,.8)}
+.restitle.bad{color:var(--orange);text-shadow:0 0 12px rgba(255,138,31,.7)}
+.resxp{font-weight:900;color:var(--yellow);font-size:14px}
+.ressub{font-size:12px;font-weight:800;margin-top:3px;color:#ffd9b0;line-height:1.35}
+.ressub b{color:var(--green)}
+.exp{margin-top:5px;display:grid;gap:4px}
+.exp div{font-size:12px;line-height:1.4;font-weight:600;color:#dbe9ff}
+.exp b{display:inline-block;margin-right:4px;color:var(--yellow);font-weight:900}
+.resbtns{display:flex;gap:6px;margin-top:7px}
+.rbtn{flex:1;min-height:46px;border-radius:12px;font-weight:900;font-size:13px;background:rgba(255,255,255,.1);border:1.5px solid rgba(255,255,255,.35);line-height:1.2}
+.rbtn.main{flex:1.4;background:linear-gradient(180deg,#ff9d3d,#e3640a);border-color:#ffd08a;color:#2a1100;font-size:15px;box-shadow:0 3px 0 #7b3a05}
+.rbtn:disabled{opacity:.4}
+.hide{display:none!important}
+/* ---------- stats ---------- */
+#scStats{overflow-y:auto;gap:10px}
+.stitle{font:900 italic 24px/1 "Arial Black",Impact,sans-serif;text-align:center;margin:8px 0 2px;color:var(--yellow);text-shadow:0 0 12px var(--orange)}
+.card{background:linear-gradient(180deg,rgba(18,48,122,.7),rgba(8,18,52,.8));border:1px solid rgba(46,168,255,.55);border-radius:14px;padding:10px 12px}
+.grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;text-align:center}
+.grid3 b{display:block;font:900 22px/1.1 "Arial Black",Impact,sans-serif;color:#fff}
+.grid3 span{font-size:11px;color:#9fc3ff;font-weight:800}
+.trow{display:grid;grid-template-columns:1fr 70px 46px;gap:6px;align-items:center;font-size:12px;font-weight:700;margin-top:6px}
+.tbar{height:7px;border-radius:5px;background:rgba(255,255,255,.12);overflow:hidden}
+.tbar i{display:block;height:100%;background:linear-gradient(90deg,var(--blue),var(--green))}
+/* ---------- overlays ---------- */
+.overlay{position:fixed;inset:0;z-index:50;display:none;align-items:flex-end;justify-content:center;background:rgba(3,6,20,.82)}
+.overlay.show{display:flex}
+.overlay.center{align-items:center}
+.sheet{width:100%;max-width:560px;background:linear-gradient(180deg,#10286c,#07123a);border:2px solid var(--blue);border-bottom:0;border-radius:20px 20px 0 0;padding:16px 14px calc(env(safe-area-inset-bottom) + 16px);box-shadow:0 -6px 30px rgba(46,168,255,.35)}
+.sheet h2{margin:0 0 4px;font:900 italic 22px/1.1 "Arial Black",Impact,sans-serif;color:var(--yellow)}
+.sheet p{margin:0 0 10px;font-size:13px;color:#b7d3ff;font-weight:700}
+.lvrow{display:flex;flex-wrap:wrap;gap:7px;margin-bottom:12px}
+.lv{min-width:58px;min-height:44px;padding:4px 10px;border-radius:12px;background:rgba(255,255,255,.1);border:2px solid rgba(255,255,255,.3);font-weight:900;font-size:14px;line-height:1.1}
+.lv small{display:block;font-size:9px;font-weight:700;color:#9fc3ff}
+.lv.sel{background:linear-gradient(180deg,#ff9d3d,#e3640a);border-color:#ffd08a;color:#2a1100}
+.lv.sel small{color:#4a2200}
+.lv:disabled{opacity:.4}
+.catlist{display:grid;gap:8px;margin-bottom:10px}
+.cat{display:flex;align-items:center;gap:10px;text-align:left;min-height:54px;padding:8px 12px;border-radius:12px;background:linear-gradient(180deg,#1b4fd0,#102f8c);border:2px solid #5aa9ff;font-weight:900;font-size:15px}
+.cat span{font-size:22px;width:30px;text-align:center}
+.cat small{display:block;font-size:11px;font-weight:700;color:#bcd6ff}
+.bigbtn{width:100%;min-height:54px;border-radius:14px;font:900 italic 18px/1 "Arial Black",Impact,sans-serif;background:linear-gradient(180deg,#ff9d3d,#e3640a);border:2px solid #ffd08a;color:#2a1100;box-shadow:0 4px 0 #7b3a05;letter-spacing:1px}
+.bigbtn.sec{background:rgba(255,255,255,.12);color:#fff;border-color:rgba(255,255,255,.4);box-shadow:none;margin-top:8px;font-size:15px;min-height:46px;font-style:normal;font-family:inherit}
+#ovMsg .box{position:relative;width:min(92%,420px);text-align:center;padding:26px 18px 18px;border-radius:20px;border:2px solid var(--yellow);background:radial-gradient(circle at 50% 0,#27439a,#07123a 70%);box-shadow:0 0 40px rgba(255,210,63,.55);overflow:hidden}
+#ovMsg .rays{position:absolute;left:50%;top:70px;width:520px;height:520px;margin:-260px 0 0 -260px;background:repeating-conic-gradient(rgba(255,210,63,.22) 0 8deg,transparent 8deg 20deg);animation:spin 9s linear infinite;pointer-events:none;border-radius:50%;-webkit-mask-image:radial-gradient(circle,#000 0,transparent 68%);mask-image:radial-gradient(circle,#000 0,transparent 68%)}
+@keyframes spin{to{transform:rotate(360deg)}}
+#ovMsg .mt{position:relative;font:900 italic 36px/1.05 "Arial Black",Impact,sans-serif;color:#fff;text-shadow:0 0 14px var(--yellow),0 3px 0 #7a5200;animation:pulse 1s ease-in-out infinite alternate}
+@keyframes pulse{to{transform:scale(1.07)}}
+#ovMsg .mr{position:relative;font:900 italic 30px/1.1 "Arial Black",Impact,sans-serif;margin:12px 0 6px}
+#ovMsg .mb{position:relative;font-size:14px;font-weight:700;color:#d9e8ff;line-height:1.5;margin-bottom:14px}
+.toast{position:fixed;left:50%;top:calc(env(safe-area-inset-top) + 10px);transform:translateX(-50%);z-index:60;background:#0b1f5a;border:2px solid var(--yellow);padding:8px 14px;border-radius:12px;font-weight:900;font-size:13px;box-shadow:0 0 18px rgba(255,210,63,.6)}
+
+/* ---------- scenario mode ---------- */
+#scoreBar{display:none;flex:none;margin-top:5px;align-items:stretch;gap:5px}
+.scn #scoreBar{display:flex}
+.sb-team{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;border-radius:12px;padding:3px 6px 1px;border:2px solid;position:relative;transition:transform .2s,box-shadow .2s;min-width:0}
+.sb-team .nm{font:900 italic 12px/1 "Arial Black",Impact,sans-serif;letter-spacing:1px;white-space:nowrap}
+.sb-team .nm small{display:block;font:800 9px/1.2 sans-serif;letter-spacing:0;opacity:.85;margin-top:1px}
+.sb-team b{font:900 34px/1.05 "Arial Black",Impact,sans-serif;min-width:34px;text-align:center}
+.sb-team.red{background:linear-gradient(180deg,rgba(255,59,74,.32),rgba(120,10,25,.5));border-color:#ff6a77;color:#ffd5d9}
+.sb-team.blue{background:linear-gradient(180deg,rgba(46,168,255,.34),rgba(10,40,120,.55));border-color:#5aa9ff;color:#d7ecff}
+.sb-team.ball{box-shadow:0 0 16px currentColor;transform:scale(1.03)}
+.sb-team.pulse{animation:sbpulse .55s ease-in-out 3}
+@keyframes sbpulse{50%{transform:scale(1.14);box-shadow:0 0 30px currentColor,0 0 0 3px #fff}}
+.sb-mid{flex:.8;text-align:center;border-radius:12px;border:1.5px solid rgba(255,210,63,.7);background:rgba(8,18,52,.88);padding:2px 3px;line-height:1.1;display:flex;flex-direction:column;justify-content:center;min-width:0}
+.sb-mid .p{font:900 italic 9px/1.1 "Arial Black",Impact,sans-serif;color:var(--yellow);letter-spacing:1px}
+.sb-mid .dash{font:900 24px/1 "Arial Black",Impact,sans-serif;color:#fff}
+.sb-mid .c{font:900 15px/1.1 "Arial Black",Impact,sans-serif;color:#fff;font-variant-numeric:tabular-nums;text-shadow:0 0 8px var(--blue)}
+.sb-mid .c i{font:800 10px sans-serif;font-style:normal;color:#9fd8ff}
+.sb-mid .o{font-size:9px;font-weight:900;color:#9fd8ff;white-space:nowrap}
+.sb-mid.last{border-color:var(--red);animation:lastp .6s ease-in-out infinite alternate}
+.sb-mid.last .c{color:#ff8a93;text-shadow:0 0 10px var(--red)}
+@keyframes lastp{to{box-shadow:0 0 16px var(--red)}}
+.scn.def #courtBox{box-shadow:0 0 0 2px rgba(255,90,100,.9),0 0 26px rgba(255,59,74,.55)}
+.scn.def #panel{border-color:rgba(255,106,119,.8);box-shadow:0 0 16px rgba(255,59,74,.3)}
+.scn.def .sb-mid{border-color:#ff6a77}
+.phase{position:absolute;left:0;right:0;top:30%;text-align:center;opacity:0;pointer-events:none;z-index:5;padding:10px 0;background:linear-gradient(90deg,transparent,rgba(5,10,30,.82) 18%,rgba(5,10,30,.82) 82%,transparent)}
+.phase b{display:block;font:900 italic clamp(26px,8.6vw,46px)/1 "Arial Black",Impact,sans-serif;letter-spacing:2px}
+.phase span{display:inline-block;margin-top:6px;padding:3px 14px;border-radius:20px;font-weight:900;font-size:14px;color:#fff}
+.phase.red b{color:#ff8a93;text-shadow:0 0 10px #ff3b4a,0 0 26px #ff3b4a}
+.phase.red span{background:rgba(255,59,74,.85)}
+.phase.blue b{color:#9fd8ff;text-shadow:0 0 10px #2ea8ff,0 0 26px #2ea8ff}
+.phase.blue span{background:rgba(31,107,255,.9)}
+.phase.show{animation:phasein 1.9s ease-out forwards}
+@keyframes phasein{0%{opacity:0;transform:translateX(-60%) scale(.8)}16%{opacity:1;transform:translateX(0) scale(1.06)}26%{transform:scale(1)}82%{opacity:1}100%{opacity:0;transform:translateX(30%)}}
+.burst.team{top:64%;font-size:clamp(24px,7.4vw,40px)}
+.burst.team-red{color:#ffd5d9;text-shadow:0 0 8px #ff3b4a,0 0 24px #ff3b4a,0 3px 0 #6a0010}
+.burst.team-blue{color:#d7ecff;text-shadow:0 0 8px #2ea8ff,0 0 24px #2ea8ff,0 3px 0 #002a80}
+#panelS{display:none}
+.scn #panelS{display:block}
+.scn #panelQ,.scn #panelR{display:none!important}
+.sfeed{margin:4px 0 2px;min-height:34px}
+.fhead{font:900 italic 20px/1.1 "Arial Black",Impact,sans-serif}
+.fhead.good{color:var(--green);text-shadow:0 0 12px rgba(53,255,138,.7)}
+.fhead.bad{color:var(--orange);text-shadow:0 0 12px rgba(255,138,31,.7)}
+.fhead.ok{color:var(--yellow)}
+.fline{font-size:13px;font-weight:800;line-height:1.4;margin-top:2px}
+.fcoach{font-size:11px;font-weight:700;color:#9fd8ff;margin-top:2px;line-height:1.35}
+.fopp{font-size:12px;font-weight:900;color:#ffd5d9;margin-top:3px}
+.opt .ic{flex:none;font-size:20px;width:26px;text-align:center}
+.opt small{display:block;font-size:10px;font-weight:700;color:#bcd6ff}
+.snext{width:100%;margin-top:7px;min-height:50px;border-radius:12px;font:900 italic 17px/1 "Arial Black",Impact,sans-serif;background:linear-gradient(180deg,#ff9d3d,#e3640a);border:2px solid #ffd08a;color:#2a1100;box-shadow:0 3px 0 #7b3a05}
+.evtlayer{position:absolute;left:0;right:0;top:6px;display:flex;flex-direction:column;align-items:center;gap:4px;pointer-events:none;z-index:3}
+.evt{display:flex;align-items:center;gap:7px;padding:4px 12px;border-radius:20px;background:linear-gradient(90deg,rgba(255,138,31,.95),rgba(255,59,74,.92));border:1.5px solid #fff;box-shadow:0 0 16px rgba(255,138,31,.9);animation:evin 2.6s ease-out forwards;white-space:nowrap}
+.evt b{font:900 italic 13px/1 "Arial Black",Impact,sans-serif;color:#fff;letter-spacing:1px}
+.evt span{font-weight:900;font-size:12px;color:#fff6d6}
+@keyframes evin{0%{opacity:0;transform:translateY(-14px) scale(.7)}12%{opacity:1;transform:translateY(0) scale(1.08)}20%{transform:scale(1)}85%{opacity:1}100%{opacity:0;transform:translateY(-6px)}}
+#courtBox{transition:transform .5s ease}
+#courtBox.cam{transform:scale(1.045)}
+.badges{position:relative;display:flex;flex-wrap:wrap;gap:6px;justify-content:center;margin:2px 0 12px}
+.badge{padding:4px 10px;border-radius:20px;background:rgba(255,210,63,.16);border:1.5px solid var(--yellow);font-weight:900;font-size:12px;color:#fff6d6}
+.badge b{color:var(--yellow);font-size:14px}
+.badge.soft{background:rgba(159,216,255,.12);border-color:#9fd8ff;color:#d7ecff}
+.catlist .cat.alt{background:linear-gradient(180deg,#143a9a,#0c2160);border-color:var(--blue)}
+.xpnote{position:relative;font:900 italic 22px/1 "Arial Black",Impact,sans-serif;color:var(--yellow);margin:2px 0 8px}
+@media (max-height:640px){.qtext{font-size:13px;margin:3px 0}.opt{min-height:46px;font-size:13px}.exp div{font-size:11px}.hud-logo{font-size:13px}}
+</style>
+</head>
+<body>
+<div id="app">
+
+<!-- ================= TITLE ================= -->
+<section id="scTitle" class="screen active">
+  <div class="title-bg"></div>
+  <div class="logo-box">
+    <div class="logo1">BASKETBALL</div>
+    <div class="logo2">TACTICS</div>
+    <div class="sub">〜コートの支配者〜</div>
+  </div>
+  <div class="rank-card" id="titleRank"></div>
+  <div class="menu">
+    <button class="mbtn m1" data-mode="scenario"><div class="ic">🏆</div><b>GAME SCENARIO</b><span>ゲームシナリオ</span><small>しあいを さいごまで プレー！ えらんで、あいてが うごく！</small></button>
+    <button class="mbtn" data-mode="training"><div class="ic">🎯</div><b>TRAINING</b><span>トレーニング</span><small>1もんずつ れんしゅう</small></button>
+    <button class="mbtn m3" data-mode="chal2"><div class="ic">🔥</div><b>10 CHALLENGE</b><span>10ポゼッション チャレンジ</span><small>10かいの こうげきで なんてん とれるかな？</small></button>
+  </div>
+  <div class="mini-row">
+    <button class="minibtn" id="btnStats">📊 せいせき</button>
+    <button class="minibtn" id="btnSoundT">🔊 おと ON</button>
+  </div>
+</section>
+
+<!-- ================= GAME ================= -->
+<section id="scGame" class="screen">
+  <header id="hud">
+    <div class="hud-top">
+      <div class="hud-logo">BASKETBALL <em>TACTICS</em></div>
+      <button class="iconbtn" id="btnSound" aria-label="おと">🔊</button>
+      <button class="iconbtn" id="btnMenu" aria-label="メニュー">✕</button>
+    </div>
+    <div class="chips">
+      <div class="chip">STAGE<b id="hudStage">1</b></div>
+      <div class="chip combo">COMBO<b id="hudCombo">0</b></div>
+      <div class="chip">XP<b id="hudXp">0</b></div>
+      <div class="chip rank">RANK<b id="hudRank">ROOKIE</b></div>
+    </div>
+    <div class="xpbar"><i id="xpFill"></i></div>
+  </header>
+  <div id="scoreBar"><div class="sb-team blue" id="sbBlue"><span class="nm">BLUE TEAM<small>きみの チーム</small></span><b id="sbUs">0</b></div><div class="sb-mid" id="sbMid"><div class="p" id="sbPeriod">FINAL</div><div class="dash">-</div><div class="c"><span id="sbClock">15.0</span> <i>sec</i></div><div class="o" id="sbPoss">🏀 BLUE ATTACK</div></div><div class="sb-team red" id="sbRed"><span class="nm">RED TEAM<small>あいての チーム</small></span><b id="sbThem">0</b></div></div>
+  <div id="courtWrap"><div id="courtBox"><canvas id="court"></canvas><div id="fxLayer"></div><div class="evtlayer" id="evtLayer"></div><div class="phase" id="phaseBanner"><b></b><span></span></div></div></div>
+  <div id="panel">
+    <div id="panelQ">
+      <div class="qhead"><span class="qtag" id="qTag">MISSION</span><span class="qtheme" id="qTheme"></span></div>
+      <div class="qtext" id="qText"></div>
+      <div class="qchips" id="qChips"></div>
+      <div class="qhint hide" id="qHint"></div>
+      <div class="opts" id="opts"></div>
+      <div class="prow"><button class="hintbtn" id="btnHint">💡 ヒント（XPが すこし へるよ）</button></div>
+    </div>
+    <div id="panelS">
+      <div class="qhead"><span class="qtag" id="sTag">SCENARIO 01</span><span class="qtheme" id="sTheme"></span></div>
+      <div class="qchips" id="sChips"></div>
+      <div class="sfeed" id="sFeed"></div>
+      <div class="qtext" id="sText"></div>
+      <div class="opts" id="sOpts"></div>
+      <button class="snext hide" id="sNext">つぎへ ▶</button>
+      <div class="prow"><button class="hintbtn" id="btnSHint">💡 ヒント（みどりの せんが チャンス）</button></div>
+    </div>
+    <div id="panelR" class="hide">
+      <div class="reshead"><div class="restitle good" id="resTitle">GOOD!</div><div class="resxp" id="resXp"></div></div>
+      <div class="ressub" id="resSub"></div>
+      <div class="exp" id="resExp"></div>
+      <div class="resbtns">
+        <button class="rbtn" id="btnWatch">▶ せいかいを みる</button>
+        <button class="rbtn" id="btnRetry">↻ もういちど</button>
+        <button class="rbtn main" id="btnNext">つぎへ ▶</button>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ================= STATS ================= -->
+<section id="scStats" class="screen">
+  <div class="stitle">PLAYER STATS</div>
+  <div class="card" id="stRank"></div>
+  <div class="card"><div class="grid3" id="stNums"></div></div>
+  <div class="card" id="stScn"></div>
+  <div class="card" id="stThemes"></div>
+  <button class="bigbtn sec" id="btnStBack">◀ タイトルへ</button>
+  <button class="bigbtn sec" id="btnReset" style="font-size:12px;min-height:38px">きろくを ぜんぶ けす</button>
+</section>
+
+<!-- ================= OVERLAYS ================= -->
+<div class="overlay" id="ovSetup"><div class="sheet" id="sheetBody"></div></div>
+<div class="overlay center" id="ovMsg"><div class="box"><div class="rays"></div><div class="mt" id="ovTitle"></div><div class="mr" id="ovRank"></div><div class="mb" id="ovBody"></div><button class="bigbtn" id="ovOk">OK</button><button class="bigbtn sec hide" id="ovOk2"></button></div></div>
+</div>
+
+<!-- ============================================================
+     ENGINE  (問題生成ロジック: 描画から完全に分離)
+     ============================================================ -->
+<script id="engine">
+'use strict';
+/* ---------- basic utils ---------- */
+const W=100,H=88,GOAL={x:50,y:9},FREE_D=11,SEP=8,XMIN=8,XMAX=92,YMIN=13,YMAX=82;
+const rnd=(a,b)=>a+Math.random()*(b-a);
+const pick=a=>a[Math.floor(Math.random()*a.length)];
+const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
+const dist=(a,b)=>Math.hypot(a.x-b.x,a.y-b.y);
+const sd=()=>Math.random()<.5?-1:1;
+const P=(x,y)=>({x,y});
+function shuffle(a){a=a.slice();for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]];}return a;}
+function segPoint(p,a,b){const vx=b.x-a.x,vy=b.y-a.y,l2=vx*vx+vy*vy;let t=l2?((p.x-a.x)*vx+(p.y-a.y)*vy)/l2:0;t=Math.max(0,Math.min(1,t));return {x:a.x+vx*t,y:a.y+vy*t,t};}
+function segDist(p,a,b){const q=segPoint(p,a,b);return Math.hypot(p.x-q.x,p.y-q.y);}
+function nearest(list,pos){let d=999,f=null;for(const o of list){const k=dist(o,pos);if(k<d){d=k;f=o;}}return {d,f};}
+function minSeg(list,a,b){let d=999,f=null;for(const o of list){const k=segDist(o,a,b);if(k<d){d=k;f=o;}}return {d,f};}
+const sw=p=>p.x<44?'左':p.x>56?'右':'まんなか';
+const opp=s=>s==='左'?'右':s==='右'?'左':'はんたい';
+const lerpP=(a,b,t)=>P(a.x+(b.x-a.x)*t,a.y+(b.y-a.y)*t);
+function posWord(p){return dist(p,GOAL)<17?'ゴールの下':sw(p);}
+
+/* ---------- level config ---------- */
+const LEVELS={1:{foes:2,mates:1},2:{foes:3,mates:2},3:{foes:3,mates:2},4:{foes:4,mates:2},5:{foes:5,mates:4}};
+
+/* ---------- evaluation (状況評価: 正解は距離だけで決めない) ---------- */
+// シュートの打ちやすさ: ゴールまでの距離 × ディフェンスとの距離 × シュートコースの邪魔
+function shotQ(foes,pos){
+  const d=dist(pos,GOAL);
+  const ds=d<=12?100:d<=20?100-(d-12)*3.5:d<=32?72-(d-20)*3.5:d<=42?30-(d-32)*2:6;
+  const nd=nearest(foes,pos).d;
+  let os=nd>=14?100:nd<=5?10:10+(nd-5)*10;
+  for(const f of foes){if(segDist(f,pos,GOAL)<5&&dist(f,GOAL)<d){os*=.6;break;}}
+  return ds*(0.35+0.65*os/100);
+}
+// パスを受ける価値: パスコース・距離・受け手のフリー度・受け手のシュート
+function recvEval(foes,hp,q){
+  const m=minSeg(foes,hp,q),pd=dist(hp,q),open=nearest(foes,q).d;
+  const laneClear=m.d>=6.5&&pd<=55&&pd>=6;
+  let score=28+0.45*shotQ(foes,q)+2.2*Math.min(open,14)-0.2*pd;
+  if(open<FREE_D)score=Math.min(score,40);
+  if(!laneClear)score=Math.min(score,10);
+  return {score,lane:m.d,lf:m.f,pd,open,laneClear};
+}
+function evalShoot(sc){
+  const p=sc.me,f=sc.foes,sq=shotQ(f,p),nd=nearest(f,p).d,d=dist(p,GOAL);
+  let out,why='';
+  if(sq>=60)out='score';
+  else if(nd<9.8){out='block';why='てきが ちかくて ブロックされそう';}
+  else if(sq<35){out='miss';why=d>30?'ゴールから とおくて はいりにくいよ':'まだ いい チャンスじゃ ないよ';}
+  else{out='weak';why='うてるけど、もっと いい ばしょが あるよ';}
+  return {score:sq,out,why,type:'shoot'};
+}
+function evalPass(sc,k){
+  const m=sc.mates[k],p=sc.me,r=recvEval(sc.foes,p,m);
+  let out='ok',why='';
+  if(!r.laneClear){
+    if(r.pd>55){out='steal';why='とおすぎて ボールが とどかないよ';}
+    else if(r.lf&&dist(r.lf,m)<FREE_D-0.5&&dist(r.lf,m)<dist(r.lf,p)){out='covered';why='みかたに てきが ついているよ';}
+    else{out='steal';why='パスの とちゅうに てきが いて とられそう';}
+  }else if(r.open<FREE_D){out='covered';why='みかたに てきが ついているよ';}
+  return {...r,out,why,type:'pass'};
+}
+function dribbleSpots(sc){
+  const p=sc.me,out={},d=dist(p,GOAL);
+  if(d>=20){const t=Math.min(16,d-10)/d;out.goal=P(p.x+(GOAL.x-p.x)*t,p.y+(GOAL.y-p.y)*t);}
+  for(const [k,s] of [['left',-1],['right',1]]){const x=clamp(p.x+s*18,XMIN+2,XMAX-2);if(Math.abs(x-p.x)>=10)out[k]=P(x,Math.max(YMIN,p.y-6));}
+  return out;
+}
+function evalDribble(sc,dir,spot){
+  const p=sc.me;
+  const dirS=dir==='right'?1:dir==='left'?-1:0;
+  const skip=(sc.screen&&dirS===sc.screen.side)?sc.screen.foe:-1;
+  const list=sc.foes.filter((f,i)=>i!==skip);
+  const path=minSeg(list,p,spot),dm=dist(p,spot);
+  let margin=999,stopper=null;
+  for(const f of list){const m=dist(f,spot)-dm;if(m<margin){margin=m;stopper=f;}}
+  const open=nearest(list,spot).d;
+  let score,out='ok',why='';
+  if(path.d<6||margin<2.5){
+    out='stop';score=14+Math.max(-6,Math.min(margin,2.5));
+    stopper=path.d<6?path.f:stopper;
+    why=path.d<6?'まえに てきが いて ぶつかりそう':'てきが さきに まわりこんで とめられそう';
+  }else{
+    score=30+Math.min(margin,12)*1.8+Math.min(open,14)*1.2+0.4*shotQ(list,spot);
+    if(skip>=0)score+=8;
+  }
+  return {score,out,why,spot,stopper,margin,open,type:'dribble',screened:skip>=0};
+}
+function offSpots(sc){
+  const p=sc.me,h=sc.mates[sc.holder],out={},d=dist(p,GOAL);
+  if(d>16){const t=Math.min(22,d-9)/d;out.cut=P(p.x+(GOAL.x-p.x)*t,p.y+(GOAL.y-p.y)*t);}
+  for(const [k,s] of [['left',-1],['right',1]]){const x=clamp(p.x+s*18,XMIN+2,XMAX-2);if(Math.abs(x-p.x)>=10)out[k]=P(x,Math.max(YMIN,p.y-2));}
+  const dh=dist(p,h);
+  if(dh>=22){const t=14/dh;out.ball=P(p.x+(h.x-p.x)*t,p.y+(h.y-p.y)*t);}
+  out.stay=P(p.x,p.y);
+  return out;
+}
+function evalOff(sc,key,spot){
+  const p=sc.me,h=sc.mates[sc.holder],foes=sc.foes;
+  const hp=sc.drive?sc.drive.to:h;
+  const r=recvEval(foes,hp,spot);
+  let score=r.score,out='ok',why='';
+  const pf=key==='stay'?{d:99,f:null}:minSeg(foes,p,spot);
+  let driveBlock=false;
+  if(sc.drive){const dd=segDist(spot,sc.drive.from,sc.drive.to);if(dd<12){driveBlock=true;score-=(12-dd)*3+15;}}
+  if(pf.d<5){score-=18;}
+  if(key==='stay')score-=4;
+  if(key==='ball')score-=4;
+  if(driveBlock){out='drive';why='みかたの ドリブルの じゃまに なっちゃうよ';}
+  else if(pf.d<5){out='bump';why='はしる みちに てきが いて ぶつかりそう';}
+  else if(!r.laneClear){
+    if(r.lf&&dist(r.lf,spot)<FREE_D-0.5){out='covered';why='そこは てきが ちかくて パスを もらいにくいよ';}
+    else{out='steal';why='みかたから パスが とどくまえに てきに とられそう';}
+  }else if(r.open<FREE_D){out='covered';why=key==='stay'?'その ばしょは てきが ちかくて パスが もらえないよ':'そこは てきが ちかくて パスを もらいにくいよ';}
+  return {score,out,why,spot,lane:r.lane,lf:r.lf,open:r.open,laneClear:r.laneClear,pd:r.pd,pathFoe:pf.f,type:'off'};
+}
+function evaluateAll(sc){
+  const ev={};
+  if(sc.holder==='me'){
+    ev.shoot=evalShoot(sc);
+    sc.mates.forEach((m,i)=>{ev['pass'+i]=evalPass(sc,i);});
+    const sp=dribbleSpots(sc);
+    for(const k in sp)ev['dribble_'+k]=evalDribble(sc,k,sp[k]);
+  }else{
+    const sp=offSpots(sc);
+    for(const k in sp)ev['off_'+k]=evalOff(sc,k,sp[k]);
+  }
+  return ev;
+}
+// 「出題意図(正解)」が本当に最良か、唯一の正解か、成立しているかを検証
+function checkIntent(ev,intent){
+  const arr=Object.entries(ev).sort((a,b)=>b[1].score-a[1].score);
+  if(arr.length<3)return false;
+  if(arr[0][0]!==intent)return false;
+  if(arr[0][1].score-arr[1][1].score<10)return false;
+  const e=ev[intent];
+  if(e.score<48)return false;
+  if(intent==='shoot')return e.out==='score';
+  if(intent.startsWith('pass')||intent.startsWith('off_'))return e.out==='ok'&&e.open>=FREE_D&&e.laneClear;
+  return e.out==='ok';
+}
+
+/* ---------- scenario placement helpers ---------- */
+function inCourt(p){return p.x>=XMIN&&p.x<=XMAX&&p.y>=YMIN&&p.y<=YMAX;}
+function baseLegal(sc){
+  const all=[sc.me,...sc.mates,...sc.foes];
+  for(const p of all)if(!inCourt(p))return false;
+  for(let i=0;i<all.length;i++)for(let j=i+1;j<all.length;j++)if(dist(all[i],all[j])<SEP)return false;
+  return true;
+}
+function legalAt(sc,p){
+  if(!inCourt(p))return false;
+  if(dist(p,sc.me)<SEP)return false;
+  for(const o of sc.mates)if(dist(o,p)<SEP)return false;
+  for(const o of sc.foes)if(dist(o,p)<SEP)return false;
+  return true;
+}
+const inProtect=(p,z)=>z.some(c=>dist(p,c)<c.r);
+function addFillers(sc,nF,nM,prot,noPass){
+  let t=0;
+  while(sc.mates.length<nM&&t++<80){
+    const p=P(rnd(10,90),rnd(16,76));
+    if(legalAt(sc,p)&&!inProtect(p,prot)&&!(noPass&&recvEval(sc.foes,sc.me,p).score>=30))sc.mates.push({x:p.x,y:p.y,filler:true});
+  }
+  if(sc.mates.length<nM)return false;
+  t=0;
+  while(sc.foes.length<nF&&t++<140){
+    const un=sc.mates.find(m=>m.filler&&!m.guarded);
+    if(un){
+      const dx=GOAL.x-un.x,dy=GOAL.y-un.y,l=Math.hypot(dx,dy)||1,r=rnd(8.4,10);
+      const p=P(un.x+dx/l*r+rnd(-1.2,1.2),un.y+dy/l*r+rnd(-1.2,1.2));
+      if(legalAt(sc,p)&&!inProtect(p,prot)&&dist(p,un)<FREE_D-0.4){sc.foes.push(p);un.guarded=true;}
+      else{un.tries=(un.tries||0)+1;if(un.tries>6)un.guarded=true;}
+    }else{
+      const p=P(rnd(10,90),rnd(14,76));
+      if(legalAt(sc,p)&&!inProtect(p,prot))sc.foes.push(p);
+    }
+  }
+  return sc.foes.length>=nF;
+}
+function assignNumbers(sc){
+  const pool=shuffle([4,5,6,8,9,10,11,12,13,14,15]);
+  sc.me.num=7;
+  sc.mates.forEach(m=>{m.num=pool.pop();});
+  const fp=shuffle([4,5,6,7,8,9,10,11,12,13,14,15]);
+  sc.foes.forEach(f=>{f.num=fp.pop();});
+}
+
+/* ---------- tactic templates (将来はここへ追加するだけ) ---------- */
+// build(nF,nM,level) -> 状況の「核」を意味のある配置で作る。残りは addFillers が埋める。
+// intent: 想定する正解キー / valid: 追加の整合チェック / ex: 解説(状況・理由・コツ)
+const TACTICS=[
+{id:'pass_free',name:'フリーの みかたを さがせ！',cat:['pass','free'],lv:[1,5],w:1.3,
+ hint:'みかたの まわりに てきが いるか みてみよう。みどりの せんは パスが とおるよ！',
+ build(){const s=sd(),me=P(50+rnd(-14,14),rnd(44,60)),G=P(me.x+rnd(-3,3),me.y-rnd(8.2,9.5)),M=P(50+s*rnd(16,32),rnd(24,46));
+  return {me,mates:[M],foes:[G],holder:'me',intent:'pass0',protect:[{x:M.x,y:M.y,r:15}],vars:{s}};},
+ ex(sc){const m=sc.mates[0];return [
+  `きみは ボールを もっているよ。まえに てきが いて、ゴールまでは とおいね。${sw(m)}の ${m.num}ばんは、まわりに てきが いないよ！`,
+  `てきが いない みかたに パスすれば、あんぜんに チャンスを つくれるよ。`,
+  `まず ぐるっと コートを みて「だれが フリーかな？」と さがそう！`];}},
+{id:'draw_pass',name:'てきを ひきつけて パス！',cat:['pass','free'],lv:[2,5],w:1,
+ hint:'てきが きみの ところに あつまっているね。そのぶん、だれが あいているかな？',
+ build(){const s=sd(),me=P(50+rnd(-14,14),rnd(40,56)),G1=P(me.x+rnd(-3,3),me.y-rnd(8.2,9.5)),G2=P(me.x+s*rnd(8.2,9.5),me.y+rnd(-1,3)),M=P(50-s*rnd(18,32),rnd(24,44));
+  return {me,mates:[M],foes:[G1,G2],holder:'me',intent:'pass0',protect:[{x:M.x,y:M.y,r:15}],vars:{s}};},
+ ex(sc){const m=sc.mates[0];return [
+  `てきが ふたり、きみの ところに あつまってきたよ。そのぶん、${sw(m)}の ${m.num}ばんが ひとり あいているね！`,
+  `てきを ひきつけてから パスすると、あいた みかたが チャンスに なるよ。`,
+  `ひとりで がんばらない！てきが あつまったら「だれか あいた？」と かんがえよう。`];}},
+{id:'dribble_space',name:'あいている スペースへ ドリブル！',cat:['dribble','defense'],lv:[3,5],w:1.6,
+ hint:'まえと よこに てきが いるね。ドリブルで すすめる ひろい ばしょは どっち？',
+ build(){const s=sd(),me=P(50+rnd(-10,10),rnd(44,58)),B=P(me.x+s*rnd(3.5,5),me.y-rnd(8.2,9.5)),C=P(me.x+s*rnd(10.5,13),me.y-rnd(0,6));
+  return {me,mates:[],foes:[B,C],holder:'me',noPass:true,intent:'dribble_'+(s>0?'left':'right'),protect:[{x:me.x-s*18,y:me.y-6,r:14}],vars:{s}};},
+ ex(sc){const s=sc.vars.s>0?'右':'左';return [
+  `まえと ${s}がわに てきが いるよ。${opp(s)}がわは ひろく あいているね！`,
+  `てきの いない スペースに ドリブルすると、ぬきやすいし、つぎの プレーも しやすいよ。`,
+  `ドリブルは「てきの いない ほう」へ。かおを あげて スペースを さがそう！`];}},
+{id:'cut_in',name:'ゴールへ カットイン！',cat:['defense'],lv:[4,5],w:1.2,
+ hint:'てきが ボールと きみの あいだに いるね。ゴールの ほうは どうなっているかな？',
+ build(){const hs=sd(),H=P(50+hs*rnd(8,16),rnd(58,68)),me=P(50+hs*rnd(22,30),rnd(36,46)),D=P(me.x+(H.x-me.x)*.3+rnd(-1,1),me.y+(H.y-me.y)*.3+rnd(-1,1));
+  const d=dist(me,GOAL),t=Math.min(22,d-9)/d,c=P(me.x+(GOAL.x-me.x)*t,me.y+(GOAL.y-me.y)*t);
+  return {me,mates:[H],foes:[D],holder:0,intent:'off_cut',protect:[{x:c.x,y:c.y,r:13},{x:(me.x+c.x)/2,y:(me.y+c.y)/2,r:8}],vars:{hs}};},
+ ex(sc){return [
+  `きみは ボールを もっていないよ。てきが きみと ボールの あいだに いて、パスが とおらないね。ゴールの ほうは あいているよ！`,
+  `てきの うしろを とおって ゴールへ はしると、パスを もらって シュートの チャンスだよ。`,
+  `ボールが ないときも とまらない！てきの うしろへ サッと カットインしよう。`];}},
+{id:'under_shoot',name:'ゴールの ちかくで シュート！',cat:['shoot'],lv:[1,5],w:1.1,
+ hint:'ゴールは すぐ ちかく。てきは どこに いるかな？ジャマされないなら…？',
+ build(){const me=P(50+rnd(-11,11),rnd(15,23)),F=P(me.x+rnd(-20,20),me.y+rnd(12,18));
+  return {me,mates:[],foes:[F],holder:'me',intent:'shoot',protect:[],vars:{}};},
+ ex(){return [
+  `きみは ゴールの すぐ ちかくに いるよ。てきは すこし はなれていて、ジャマされないね！`,
+  `ちかくて あいているなら、じぶんで シュートが いちばん はいりやすいよ。`,
+  `シュートの チャンスは にがさない！ゴールを みて、おちついて うとう。`];}},
+{id:'avoid_bad_shot',name:'むりな シュートは やめよう！',cat:['shoot','pass','dribble'],lv:[1,5],w:1.3,
+ hint:'ゴールまで ちょっと とおいし、てきも ちかい…。ほんとうに うって いいかな？',
+ build(nF,nM,level){
+  const me=P(50+rnd(-16,16),rnd(31,42)),G=P(me.x+rnd(-2,2),me.y-rnd(8.2,9.5)),s=sd();
+  if(level<3||Math.random()<.5){const M=P(50+s*rnd(20,34),rnd(22,40));
+   return {me,mates:[M],foes:[G],holder:'me',intent:'pass0',protect:[{x:M.x,y:M.y,r:15}],vars:{flavor:'A'}};}
+  const C=P(me.x+s*rnd(10.5,13),me.y-rnd(0,6));
+  return {me,mates:[],foes:[G,C],holder:'me',intent:'dribble_'+(s>0?'left':'right'),protect:[{x:me.x-s*18,y:me.y-6,r:14}],vars:{flavor:'B',s}};},
+ ex(sc){
+  if(sc.vars.flavor==='A'){const m=sc.mates[0];return [
+   `ゴールまで ちょっと とおいし、てきが すぐ まえに いるよ。${sw(m)}の ${m.num}ばんが フリーだね！`,
+   `むりに うつと ブロックされやすいよ。フリーの みかたに パスが いいね！`,
+   `てきが ちかい ときの シュートは がまん。「もっと いい人」を さがそう。`];}
+  const s=sc.vars.s>0?'右':'左';return [
+   `てきが ちかくて シュートは むずかしいよ。${opp(s)}がわが あいているね。`,
+   `むりに うたず、あいている ところへ ドリブルして チャンスを つくろう。`,
+   `てきが ちかい ときの シュートは がまん。「もっと いい人」を さがそう。`];}},
+{id:'find_lane',name:'パスの みちを さがせ！',cat:['pass','free'],lv:[2,5],w:1.3,
+ hint:'ふたりとも あいて いるように みえるよ。でも、パスの みちに てきが いない？',
+ valid(sc,ev){return ev.pass0.out==='steal'&&ev.pass0.open>=FREE_D;},
+ build(){const s=sd(),me=P(50+rnd(-10,10),rnd(46,58)),G=P(me.x+rnd(-3,3),me.y-rnd(8.2,9.5)),
+  A=P(me.x-s*rnd(22,32),me.y-rnd(14,26)),B=P(me.x+s*rnd(18,28),me.y-rnd(8,22)),
+  L=P((me.x+A.x)/2+rnd(-2,2),(me.y+A.y)/2+rnd(-2,2));
+  return {me,mates:[A,B],foes:[L,G],holder:'me',intent:'pass1',protect:[{x:B.x,y:B.y,r:15},{x:A.x,y:A.y,r:13}],vars:{s}};},
+ ex(sc){const a=sc.mates[0],b=sc.mates[1];return [
+  `${sw(a)}の ${a.num}ばんは あいて いるように みえるけど、あいだに てきが いて パスが とおらないよ。${sw(b)}の ${b.num}ばんなら ボールが とどくね！`,
+  `パスは「だれが あいてるか」と「あいだに てきが いないか」の りょうほうを みよう。`,
+  `パスを だす まえに、ボールの とおる みちを めで たどって かくにん！`];}},
+{id:'opposite',name:'てきの ぎゃくを つこう！',cat:['dribble','defense'],lv:[3,5],w:1.4,
+ hint:'まえの てきは どっちに よっているかな？てきの ぎゃくは…？',
+ build(){const s=sd(),me=P(50+rnd(-8,8),rnd(42,56)),D=P(me.x+s*rnd(3,5),me.y-rnd(8.2,9.5));
+  return {me,mates:[],foes:[D],holder:'me',intent:'dribble_'+(s>0?'left':'right'),protect:[{x:me.x-s*18,y:me.y-6,r:14}],vars:{s}};},
+ ex(sc){const s=sc.vars.s>0?'右':'左';return [
+  `てきが ${s}がわに よっているよ。だから ${opp(s)}がわが あいているね！`,
+  `てきの ぎゃくを つくと、おいつかれにくくて ぬきやすいよ。`,
+  `てきの からだの むきを よく みて、はんたいに うごこう！`];}},
+{id:'use_screen',name:'スクリーンを つかおう！',cat:['dribble','defense'],lv:[3,5],w:1.5,
+ hint:'みかたが てきの よこに たっているよ。てきは その「かべ」を よけないと うごけないね。',
+ build(){const sc=sd(),me=P(50+rnd(-8,8),rnd(46,58)),D=P(me.x+rnd(-1,1),me.y-rnd(8.4,9.5)),S=P(me.x+sc*rnd(8.6,9.5),me.y-rnd(10.5,12));
+  return {me,mates:[S],foes:[D],holder:'me',screen:{foe:0,side:sc,mate:0},intent:'dribble_'+(sc>0?'right':'left'),protect:[{x:me.x+sc*18,y:me.y-6,r:13}],vars:{s:sc}};},
+ valid(sc,ev){const k='dribble_'+(sc.screen.side>0?'left':'right');return !ev[k]||ev[k].out==='stop';},
+ ex(sc){return [
+  `みかたが てきの よこに たって、スクリーン（かべ）に なってくれているよ。てきは その かべに ジャマされるね！`,
+  `かべの よこを とおれば、てきが おいかけて これないから ぬきやすいよ。`,
+  `「スクリーン」は みかたの かべ。かべの そばを ぴったり とおろう！`];}},
+{id:'get_open',name:'あいている ばしょへ うごけ！',cat:['free','defense'],lv:[4,5],w:1.4,
+ hint:'きみの ちかくには てきが いるよ。みどりの わが パスを もらえる ばしょだよ。',
+ build(){const s=sd(),t=sd(),H=P(50+rnd(-8,8),rnd(58,68)),me=P(50+s*rnd(8,14),rnd(40,50)),MD=P(me.x+rnd(-2,2),me.y-rnd(8.2,9.5)),
+  tx=me.x+t*18,ty=me.y-2,F=P(me.x-t*18+rnd(-2,2),me.y-2+rnd(-3,3));
+  return {me,mates:[H],foes:[MD,F],holder:0,intent:t>0?'off_right':'off_left',protect:[{x:tx,y:ty,r:15}],vars:{t}};},
+ ex(sc){const w=sc.vars.t>0?'右':'左';return [
+  `きみは ボールを もっていないよ。いまの ばしょは てきが ちかいね。${w}がわの スペースは てきも いなくて、パスも とどくよ！`,
+  `てきの いない ばしょへ うごくと、みかたが パスを だしやすいよ。`,
+  `ボールが ないときも「あいている ばしょ」を さがして うごこう！`];}},
+{id:'make_space',name:'スペースを つくろう！',cat:['defense','free'],lv:[4,5],w:1.5,
+ hint:'あおい やじるしが みかたの ドリブルの みち。きみは その みちに いるね…。',
+ build(){const hs=sd(),H=P(50+hs*rnd(12,20),rnd(52,62)),e=lerpP(H,P(50,22),.6),lp=lerpP(H,e,.55),me=P(lp.x+rnd(-4,4),lp.y+rnd(-3,3));
+  const t=sd(),F=P(me.x+t*18+rnd(-2,2),me.y-2+rnd(-3,3));
+  const prot=[{x:me.x-t*18,y:me.y-2,r:15},{x:e.x,y:e.y,r:10}];
+  for(let i=0;i<=4;i++){const q=lerpP(H,e,i/4);prot.push({x:q.x,y:q.y,r:9});}
+  return {me,mates:[H],foes:[F],holder:0,drive:{from:H,to:e},intent:t>0?'off_left':'off_right',protect:prot,vars:{t}};},
+ ex(sc){const h=sc.mates[sc.holder];return [
+  `${h.num}ばんが ドリブルで ゴールへ つっこむよ。きみは その みちに たっていて、じゃまに なりそう！`,
+  `みちを あけて ひろがると、${h.num}ばんが ドリブルしやすいし、あとで パスも もらえるよ。`,
+  `みかたが つっこむ ときは「みちを あける」。そして パスを もらえる ばしょへ ひろがろう！`];}},
+{id:'avoid_crowd',name:'てきの かたまりを さけよう！',cat:['pass','free'],lv:[2,5],w:1.3,
+ hint:'てきが ひとつの ばしょに かたまっているね。そこから はなれた みかたは…？',
+ build(nF){const s=sd(),me=P(50-s*rnd(0,8),rnd(44,58)),X=P(50+s*rnd(20,30),rnd(30,46)),Y=P(50-s*rnd(18,30),rnd(24,42)),C=P(X.x+rnd(-2,2),X.y-9.5);
+  const cl=[P(C.x-5,C.y+rnd(-1,3)),P(C.x+5,C.y+rnd(-1,3))];if(nF>=3)cl.push(P(me.x+rnd(-2,2),me.y-rnd(8.2,9.5)));if(nF>=4)cl.push(P(C.x,C.y-6.5));
+  return {me,mates:[X,Y],foes:cl,holder:'me',intent:'pass1',protect:[{x:Y.x,y:Y.y,r:16}],vars:{s}};},
+ ex(sc){const y=sc.mates[1],c=sc.vars.s>0?'右':'左';return [
+  `てきが ${c}がわに かたまっているよ。${sw(y)}の ${y.num}ばんは てきから はなれて フリーだね！`,
+  `てきが かたまっている ところは さけて、あいている ほうへ ボールを まわそう。`,
+  `てきが ひとつの ばしょに あつまったら、はんたいがわが あくよ！`];}}
+];
+const CATS={pass:['pass'],dribble:['dribble'],shoot:['shoot'],free:['free'],defense:['defense']};
+const THEME_BY_ID=Object.fromEntries(TACTICS.map(t=>[t.id,t]));
+function catMinLevel(cat){return Math.min(...TACTICS.filter(t=>t.cat.includes(cat)).map(t=>t.lv[0]));}
+
+/* ---------- labels / prompt / chips ---------- */
+function labelFor(sc,key,themeId){
+  if(key==='shoot')return 'シュートを うつ';
+  if(key.startsWith('pass')){const m=sc.mates[+key.slice(4)];return `${posWord(m)}の ${m.num}ばんに パス`;}
+  if(key==='dribble_left')return 'ドリブルで 左へ';
+  if(key==='dribble_right')return 'ドリブルで 右へ';
+  if(key==='dribble_goal')return 'ドリブルで ゴールへ';
+  if(key==='off_cut')return 'ゴールへ カットイン！';
+  if(key==='off_ball')return 'ボールを もらいに いく';
+  if(key==='off_stay')return themeId==='make_space'?'その場に とどまる':'その まま まつ';
+  if(key==='off_left')return themeId==='make_space'?'左へ ひろがる':'左の あいてる ところへ';
+  if(key==='off_right')return themeId==='make_space'?'右へ ひろがる':'右の あいてる ところへ';
+  return key;
+}
+function buildPrompt(sc,th){
+  if(sc.holder!=='me'){
+    const h=sc.mates[sc.holder];
+    if(th.id==='make_space')return `${h.num}ばんが ドリブルで ゴールへ つっこむよ！きみは どう うごく？`;
+    return `いま ${h.num}ばんが ボールを もっているよ。きみは ボールを もっていないよ。どう うごく？`;
+  }
+  if(th.id==='use_screen')return 'みかたが てきの よこに たって、かべ（スクリーン）に なってくれたよ。どうする？';
+  return {holding:'きみは ボールを もっているよ。どうする？',dribbling:'きみは いま ドリブルしているよ。どうする？',received:'きみは いま パスを もらったよ！どうする？'}[sc.flavor]||'どうする？';
+}
+function buildChips(sc){
+  const c=[],f=sc.foes;
+  c.push(sc.holder==='me'?({holding:'ボールを もっている',dribbling:'ドリブルちゅう',received:'パスを もらった ところ'}[sc.flavor]||'ボールを もっている'):'ボールを もっていない');
+  const d=dist(sc.me,GOAL);c.push(d<18?'ゴールに ちかい':d>34?'ゴールから とおい':'ゴールまで ふつう');
+  const n=f.filter(o=>dist(o,sc.me)<11).length;
+  if(n>=2)c.push(`てきに かこまれている`);else if(n===1)c.push('てきが ちかい');
+  const hasFree=sc.mates.some((m,i)=>i!==sc.holder&&nearest(f,m).d>=FREE_D);
+  if(hasFree)c.push('フリーの みかたが いる');
+  return c.slice(0,4);
+}
+function buildHint(sc,ev){
+  const out=[],col=e=>e.out==='ok'?'#35ff8a':e.out==='covered'?'#ffd23f':'#ff4d5e';
+  for(const k in ev){
+    const e=ev[k];
+    if(k==='shoot')out.push({t:'line',a:sc.me,b:GOAL,c:e.out==='score'?'#35ff8a':e.out==='weak'?'#ffd23f':'#ff4d5e',dash:false});
+    else if(k.startsWith('pass'))out.push({t:'line',a:sc.me,b:sc.mates[+k.slice(4)],c:col(e),dash:false});
+    else if(k.startsWith('dribble'))out.push({t:'line',a:sc.me,b:e.spot,c:e.out==='ok'?'#35ff8a':'#ff4d5e',dash:true});
+    else if(k!=='off_stay'){const h=sc.drive?sc.drive.to:sc.mates[sc.holder];out.push({t:'line',a:h,b:e.spot,c:col(e),dash:true},{t:'ring',p:e.spot,c:col(e)});}
+  }
+  return out;
+}
+
+/* ---------- question generator ---------- */
+const HIST={themes:[],sigs:[]};
+function chooseTheme(pool,level){
+  const w=pool.map(t=>{let x=t.w||1;if(HIST.themes.slice(-3).includes(t.id))x*=.12;if(HIST.themes[HIST.themes.length-1]===t.id)x*=.3;if(level>=4&&t.build.length===0&&false)x*=1;return x;});
+  let r=Math.random()*w.reduce((a,b)=>a+b,0);
+  for(let i=0;i<pool.length;i++){r-=w[i];if(r<=0)return pool[i];}
+  return pool[pool.length-1];
+}
+function tryTheme(th,level,tries){
+  const L=LEVELS[level];
+  for(let a=0;a<tries;a++){
+    const core=th.build(L.foes,L.mates,level);
+    if(!core)continue;
+    const sc={me:{...core.me},mates:core.mates.map(m=>({...m})),foes:core.foes.map(f=>({...f})),holder:core.holder,
+      screen:core.screen||null,drive:core.drive?{from:core.mates[core.holder],to:core.drive.to}:null,vars:core.vars||{},themeId:th.id,level};
+    if(sc.foes.length>L.foes||sc.mates.length>L.mates)continue;
+    if(!baseLegal(sc))continue;
+    if(!addFillers(sc,L.foes,L.mates,core.protect||[],core.noPass))continue;
+    if(sc.drive){sc.drive.from=sc.mates[sc.holder];if(!inCourt(sc.drive.to))continue;}
+    const ev=evaluateAll(sc);
+    if(!checkIntent(ev,core.intent))continue;
+    if(th.valid&&!th.valid(sc,ev))continue;
+    const sig=`${th.id}|${Math.round(sc.me.x/12)}|${Math.round(sc.me.y/12)}|${core.intent}`;
+    if(HIST.sigs.includes(sig)&&a<tries*.6)continue;
+    // options
+    const correct=core.intent,nOpt=level===1?3:4;
+    const cat=k=>k==='shoot'?'s':k.startsWith('pass')?'p':k.startsWith('dribble')?'d':'o';
+    const others=shuffle(Object.keys(ev).filter(k=>k!==correct)),chosen=[],used=new Set([cat(correct)]);
+    for(const k of others)if(chosen.length<nOpt-1&&!used.has(cat(k))){chosen.push(k);used.add(cat(k));}
+    for(const k of others)if(chosen.length<nOpt-1&&!chosen.includes(k))chosen.push(k);
+    if(chosen.length<2)continue;
+    // フレーバー(主人公の状況)
+    sc.flavor=sc.holder==='me'?pick(['holding','holding','dribbling','received']):null;
+    assignNumbers(sc);
+    const options=shuffle([correct,...chosen]).map(k=>({key:k,label:labelFor(sc,k,th.id)}));
+    const ex=th.ex(sc,ev);
+    HIST.sigs.push(sig);if(HIST.sigs.length>8)HIST.sigs.shift();
+    HIST.themes.push(th.id);if(HIST.themes.length>6)HIST.themes.shift();
+    return {themeId:th.id,themeName:th.name,level,sc,evals:ev,correct,options,
+      reason:`テーマ「${th.name}」: ${labelFor(sc,correct,th.id)} が いちばん チャンス（ひょうか ${Math.round(ev[correct].score)}てん）`,
+      explain:{situ:ex[0],why:ex[1],tip:ex[2]},prompt:buildPrompt(sc,th),chips:buildChips(sc),hintText:th.hint,hintDraw:buildHint(sc,ev)};
+  }
+  return null;
+}
+function makeQuestion(level,opts){
+  opts=opts||{};
+  let pool=TACTICS.filter(t=>level>=t.lv[0]&&level<=t.lv[1]);
+  if(opts.cats){const p2=pool.filter(t=>t.cat.some(c=>opts.cats.includes(c)));if(p2.length)pool=p2;}
+  for(let i=0;i<14;i++){const q=tryTheme(chooseTheme(pool,level),level,i<10?160:500);if(q)return q;}
+  for(const th of shuffle(pool)){const q=tryTheme(th,level,1500);if(q)return q;}
+  throw new Error('question generation failed: level '+level);
+}
+</script>
+
+<!-- ============================================================
+     APP  (描画・アニメーション・UI・ゲーム進行)
+     ============================================================ -->
+<script id="scn">
+'use strict';
+/* ===== SCENARIO ENGINE A: state / options / defense reaction / resolve ===== */
+const SCN={cost:{pass:2,drive:3,hold:3,shoot:1.2},maxDecisions:8};
+const SCN_ZERO=()=>({decisions:0,good:0,smart:0,pass:0,drive:0,assist:0,score:0,pts:0,clutch:0,turnover:0,buzzer:0,dstop:0,dsteal:0});
+function cloneSt(st){return Object.assign({},st,{off:st.off.map(p=>({...p})),foes:st.foes.map(f=>({...f})),stats:{...st.stats},screen:st.screen?{...st.screen}:null,lastPass:st.lastPass?{...st.lastPass}:null,seen:{...st.seen},end:null});}
+function stepTo(f,t,cap){const d=dist(f,t);if(d<=cap){f.x=t.x;f.y=t.y;}else if(d>0){f.x+=(t.x-f.x)/d*cap;f.y+=(t.y-f.y)/d*cap;}}
+function goalSide(man,d){const dx=GOAL.x-man.x,dy=GOAL.y-man.y,l=Math.hypot(dx,dy)||1;return {x:man.x+dx/l*d,y:man.y+dy/l*d};}
+function scnLegal(st,q,skip){
+  if(!inCourt(q))return false;
+  for(let i=0;i<st.off.length;i++)if(i!==skip&&dist(st.off[i],q)<SEP+.5)return false;
+  for(const f of st.foes)if(dist(f,q)<SEP+.5)return false;
+  return true;
+}
+function scnAssignMen(st,thr){
+  const pairs=[];
+  st.foes.forEach((f,i)=>st.off.forEach((o,j)=>pairs.push({i,j,d:dist(f,o)})));
+  pairs.sort((a,b)=>a.d-b.d);
+  const fu=new Set(),ou=new Set();
+  st.foes.forEach(f=>{f.man=-1;});
+  for(const p of pairs){if(p.d>thr)break;if(fu.has(p.i)||ou.has(p.j))continue;st.foes[p.i].man=p.j;fu.add(p.i);ou.add(p.j);}
+}
+/* adapter: 既存の評価関数は「sc.me がボール保持者」前提なので、保持者から見た形に変換する */
+function scnAdapter(st,h){
+  const mates=[],map=[];
+  st.off.forEach((p,i)=>{if(i!==h){mates.push(p);map.push(i);}});
+  const sc={me:st.off[h],mates,foes:st.foes,holder:'me',screen:null,drive:null};
+  if(st.screen&&st.screen.active)sc.screen={foe:st.screen.foe,side:st.screen.side,mate:0};
+  return {sc,map};
+}
+function scnEvalAll(st){const a=scnAdapter(st,st.h);return {ev:evaluateAll(a.sc),map:a.map,sc:a.sc};}
+function scnPassLabel(st,oi){const m=st.off[oi];return oi===0?'きみ（'+m.num+'ばん）に パス':posWord(m)+'の '+m.num+'ばんに パス';}
+function scnOptions(st){
+  const {ev,map}=scnEvalAll(st),h=st.off[st.h];
+  const shoot={key:'shoot',cat:'shoot',score:ev.shoot.score,ic:'🎯',label:dist(h,GOAL)>34?'とおくから シュート':'シュートを うつ',ev:ev.shoot};
+  const pass=map.map((oi,j)=>({key:'pass'+j,cat:'pass',to:oi,score:ev['pass'+j].score,ic:'🔁',label:scnPassLabel(st,oi),ev:ev['pass'+j]})).sort((a,b)=>b.score-a.score);
+  const drv=[];
+  for(const [k,l] of [['dribble_goal','ゴールへ ドライブ'],['dribble_left','左へ ドライブ'],['dribble_right','右へ ドライブ']])
+    if(ev[k])drv.push({key:k,cat:'drive',score:ev[k].score,ic:'⚡',label:l,ev:ev[k]});
+  drv.sort((a,b)=>b.score-a.score);
+  const best=Math.max(shoot.score,pass[0]?pass[0].score:0,drv[0]?drv[0].score:0);
+  const hold=st.turn>=1?{key:'hold',cat:'hold',score:best<45?36:14,ic:'✋',label:'いったん とまる',ev:{out:'ok',why:''}}:null;
+  const nMax=st.level<=1?3:4,pick=[shoot];
+  if(pass[0])pick.push(pass[0]);
+  if(drv[0])pick.push(drv[0]);
+  const rest=[pass[1],drv[1],hold].filter(Boolean).sort((a,b)=>b.score-a.score);
+  while(pick.length<nMax&&rest.length)pick.push(rest.shift());
+  if(hold&&hold.score>=best&&!pick.includes(hold))pick[pick.length-1]=hold;
+  return shuffle(pick);
+}
+function scnHintDraw(st){
+  const {ev,map}=scnEvalAll(st),h=st.off[st.h],out=[];
+  const col=e=>e.out==='ok'?'#35ff8a':e.out==='covered'?'#ffd23f':'#ff4d5e';
+  out.push({t:'line',a:h,b:GOAL,c:ev.shoot.out==='score'?'#35ff8a':ev.shoot.out==='weak'?'#ffd23f':'#ff4d5e',dash:false});
+  map.forEach((oi,j)=>out.push({t:'line',a:h,b:st.off[oi],c:col(ev['pass'+j]),dash:false}));
+  for(const k of ['dribble_goal','dribble_left','dribble_right'])if(ev[k])out.push({t:'line',a:h,b:ev[k].spot,c:ev[k].out==='ok'?'#35ff8a':'#ff4d5e',dash:true},{t:'ring',p:ev[k].spot,c:ev[k].out==='ok'?'#35ff8a':'#ff4d5e'});
+  return out;
+}
+function scnOpenMates(st){
+  const h=st.off[st.h],r=[];
+  st.off.forEach((p,i)=>{if(i===st.h)return;const e=recvEval(st.foes,h,p);if(e.open>=FREE_D&&e.laneClear)r.push(i);});
+  return r;
+}
+/* ---------- defense reaction ---------- */
+function scnSeparate(st){
+  for(let it=0;it<8;it++)st.foes.forEach((f,i)=>{
+    for(const o of st.off){const d=dist(f,o);if(d<SEP){if(d<.01){f.x+=1;continue;}const k=(SEP-d)/d;f.x+=(f.x-o.x)*k;f.y+=(f.y-o.y)*k;}}
+    st.foes.forEach((g,j)=>{if(j===i)return;const d=dist(f,g);if(d<SEP){if(d<.01){f.x+=1;return;}const k=(SEP-d)/d*.5;f.x+=(f.x-g.x)*k;f.y+=(f.y-g.y)*k;}});
+    f.x=clamp(f.x,XMIN,XMAX);f.y=clamp(f.y,YMIN,YMAX);
+  });
+}
+function scnFoesOk(st){
+  for(const f of st.foes){
+    if(!inCourt(f))return false;
+    for(const o of st.off)if(dist(f,o)<SEP-.6)return false;
+    for(const g of st.foes)if(g!==f&&dist(f,g)<SEP-.6)return false;
+  }
+  return true;
+}
+function scnReact(st,ctx){
+  const h=st.off[st.h],style=st.style,press=style==='pressure'?8.2:8.8,keep=st.foes.map(f=>({x:f.x,y:f.y}));
+  const onb=st.foes.findIndex(f=>f.man===st.h),dG=dist(h,GOAL);
+  const tg=st.foes.map((f,i)=>{
+    const man=st.off[f.man];
+    if(i===onb){
+      if(ctx.mode==='drive'){
+        const o=ctx.foeStart[i],l=dist(o,h)||1;
+        let cap=24;
+        if(st.screen&&st.screen.active&&ctx.dir===st.screen.side&&st.screen.foe===i){cap=8;st.screen.active=false;}
+        return {x:h.x+(o.x-h.x)/l*9.2,y:h.y+(o.y-h.y)/l*9.2,cap};
+      }
+      const g=goalSide(h,press);return {x:g.x,y:g.y,cap:ctx.mode==='pass'?7:12};
+    }
+    if(man){const g=goalSide(man,press);return {x:g.x,y:g.y,cap:ctx.mode==='pass'?10:8};}
+    return {x:f.x,y:f.y,cap:0};
+  });
+  const needHelp=style!=='pressure'&&((ctx.mode==='drive'&&dG<(style==='normal'?24:30))||dG<(style==='normal'?15:20)||(style==='double'&&dG<34));
+  if(needHelp){
+    const n=style==='double'&&st.foes.length>=4&&dG<26?2:1,base=Math.atan2(GOAL.y-h.y,GOAL.x-h.x);
+    const cand=st.foes.map((f,i)=>({i,d:dist(f,h)+(f.man>=0&&f.man!==st.h?0:12)})).filter(c=>c.i!==onb).sort((a,b)=>a.d-b.d).slice(0,n);
+    let first=0;
+    cand.forEach((c,k)=>{
+      const f=st.foes[c.i];
+      let s=Math.sign(Math.cos(base)*(f.y-h.y)-Math.sin(base)*(f.x-h.x))||1;
+      if(k===1)s=-first;else first=s;
+      const a=base+s*1.0,r=style==='double'?8.4:9;
+      tg[c.i]={x:h.x+Math.cos(a)*r,y:h.y+Math.sin(a)*r,cap:ctx.mode==='drive'?26:20};
+      c.moved=true;
+    });
+    ctx.helpers=cand.map(c=>c.i);
+  }
+  st.foes.forEach((f,i)=>stepTo(f,tg[i],tg[i].cap));
+  scnSeparate(st);
+  if(!scnFoesOk(st)){scnSeparate(st);scnSeparate(st);}
+  if(!scnFoesOk(st))st.foes.forEach((f,i)=>{f.x=keep[i].x;f.y=keep[i].y;});
+}
+function scnMoveMates(st,count){
+  const h=st.off[st.h],idx=st.off.map((_,i)=>i).filter(i=>i!==st.h);
+  idx.sort((a,b)=>nearest(st.foes,st.off[a]).d-nearest(st.foes,st.off[b]).d);
+  let moved=0;
+  for(const i of idx){
+    if(moved>=count)break;
+    const p=st.off[i];
+    if(nearest(st.foes,p).d>=FREE_D+4)continue;
+    const cur=recvEval(st.foes,h,p).score;let best=null,bs=cur+4;
+    for(let a=0;a<14;a++){
+      const ang=Math.random()*6.283,r=rnd(8,15),q={x:clamp(p.x+Math.cos(ang)*r,XMIN+1,XMAX-1),y:clamp(p.y+Math.sin(ang)*r,YMIN+1,YMAX-1)};
+      if(!scnLegal(st,q,i))continue;
+      const sc=recvEval(st.foes,h,q).score;
+      if(sc>bs){bs=sc;best=q;}
+    }
+    if(best){p.x=best.x;p.y=best.y;moved++;}
+  }
+  return moved;
+}
+/* ---------- resolve one decision ---------- */
+function scnJudge(options,opt){
+  const best=Math.max(...options.map(o=>o.score)),gap=best-opt.score;
+  return gap<=7?'great':gap<=20?'good':'weak';
+}
+function scnResolve(st,opt,options){
+  const s=cloneSt(st),steps=[],q=scnJudge(options,opt),{map}=scnEvalAll(st);
+  const hOld={x:st.off[st.h].x,y:st.off[st.h].y};
+  const cost=SCN.cost[opt.cat]||3;
+  s.turn++;s.time=Math.max(0,+(s.time-cost).toFixed(1));
+  s.stats.decisions++;if(q!=='weak')s.stats.good++;if(q==='great')s.stats.smart++;
+  const startFoes=st.foes.map(f=>({x:f.x,y:f.y}));
+  const snap=()=>({off:s.off.map(p=>({x:p.x,y:p.y})),foes:s.foes.map(f=>({x:f.x,y:f.y}))});
+  const info={opt,q,helpers:[],turnover:false};
+  const nearestFoeIdx=p=>{let d=999,k=0;st.foes.forEach((f,i)=>{const e=dist(f,p);if(e<d){d=e;k=i;}});return k;};
+  const turnover=(fi,at,say)=>{steps.push({k:'steal',foe:fi,at:{x:at.x,y:at.y},say});s.end={type:'steal'};s.stats.turnover++;info.turnover=true;};
+  const shoot=()=>{
+    const p=s.off[s.h],qq=shotQ(s.foes,p),nd=nearest(s.foes,p),pBlock=nd.d<9.8?Math.min(.5,(9.8-nd.d)/9.8*.55):0,pMake=clamp(.08+qq*.011,.08,.95);
+    let res;
+    if(Math.random()<pBlock)res='block';else if(Math.random()<pMake)res='made';else res=qq>=35?'rim':'miss';
+    steps.push({k:'shot',who:s.h,mode:res==='made'?'swish':res,foe:res==='block'?s.foes.indexOf(nd.f):-1});
+    s.end={type:res==='made'?'made':res,pts:res==='made'?(dist(p,GOAL)>42?3:2):0,by:s.h,q:qq,assist:res==='made'&&!!s.lastPass&&s.lastPass.to===s.h,buzzer:res==='made'&&s.time<=.05};
+  };
+  if(opt.cat==='shoot'){shoot();}
+  else if(opt.cat==='pass'){
+    const e=opt.ev,to=opt.to;
+    if(e.out==='steal'&&Math.random()<.8){
+      const fi=e.lf?st.foes.indexOf(e.lf):nearestFoeIdx(lerpP(hOld,st.off[to],.5)),pt=segPoint(st.foes[fi],hOld,st.off[to]);
+      turnover(fi,pt,'パスを とられた！');
+    }else{
+      steps.push({k:'pass',from:s.h,to});
+      s.lastPass={from:s.h,to,turn:s.turn};s.h=to;s.stats.pass++;
+      const ctx={mode:'pass',foeStart:startFoes};scnReact(s,ctx);info.helpers=ctx.helpers||[];scnMoveMates(s,s.level>=4?2:1);
+      steps.push({k:'move',...snap(),ms:640,dribble:false});
+    }
+  }else if(opt.cat==='drive'){
+    const e=opt.ev,sp=e.spot,dir=opt.key==='dribble_right'?1:opt.key==='dribble_left'?-1:0;
+    if(e.out==='stop'&&Math.random()<.65){
+      const fi=e.stopper?st.foes.indexOf(e.stopper):nearestFoeIdx(sp),mid=lerpP(hOld,sp,.5);
+      s.off[s.h].x=mid.x;s.off[s.h].y=mid.y;
+      steps.push({k:'move',...snap(),ms:520,dribble:true});
+      turnover(fi,mid,'ドリブルを とめられた！');
+    }else{
+      const tg0=e.out==='stop'?lerpP(hOld,sp,.5):sp,tgt={x:clamp(tg0.x,XMIN,XMAX),y:clamp(tg0.y,YMIN,YMAX)};
+      s.off[s.h].x=tgt.x;s.off[s.h].y=tgt.y;s.stats.drive++;
+      const ctx={mode:'drive',dir,foeStart:startFoes};scnReact(s,ctx);info.helpers=ctx.helpers||[];scnMoveMates(s,s.level>=4?2:1);
+      steps.push({k:'move',...snap(),ms:820,dribble:true,drive:true});
+      info.pressed=e.out==='stop';
+    }
+  }else{ // hold
+    const near=s.foes.filter(f=>dist(f,hOld)<11);
+    if(near.length>=2&&Math.random()<.18){const fi=st.foes.indexOf(nearest(st.foes,hOld).f);turnover(fi,hOld,'ボールを とられた！');}
+    else{const ctx={mode:'hold',foeStart:startFoes};scnReact(s,ctx);scnMoveMates(s,3);steps.push({k:'move',...snap(),ms:640,dribble:false});}
+  }
+  if(!s.end&&opt.cat!=='shoot'){
+    if(s.time<=0){s.end={type:'timeup'};steps.push({k:'say',text:'ブザー！ じかんぎれ',cls:'miss'});}
+    else if(s.turn>=s.maxTurns||s.turn>=SCN.maxDecisions){
+      s.time=Math.max(0,+(s.time-SCN.cost.shoot).toFixed(1));
+      const hh=s.off[s.h],d0=dist(hh,GOAL);
+      if(d0>16){
+        const mv=Math.min(12,d0-12),t=mv/d0,to={x:hh.x+(GOAL.x-hh.x)*t,y:hh.y+(GOAL.y-hh.y)*t};
+        if(scnLegal(s,to,s.h)){
+          const fs=s.foes.map(f=>({x:f.x,y:f.y}));hh.x=to.x;hh.y=to.y;
+          scnReact(s,{mode:'drive',dir:0,foeStart:fs});steps.push({k:'move',...snap(),ms:560,dribble:true});
+        }
+      }
+      steps.push({k:'say',text:'そのまま シュート！',cls:'combo'});shoot();
+    }
+  }
+  info.map=map;
+  return {st:s,steps,info};
+}
+
+/* ===== SCENARIO ENGINE B: generation / events / wrap-up / narration ===== */
+const SCN_LV={
+ 1:{depth:[1],times:[20,25],styles:['normal'],diffs:[-1,0,1,-2]},
+ 2:{depth:[2],times:[25,30],styles:['normal','help'],diffs:[-1,0,-2,1]},
+ 3:{depth:[2],times:[25,30],styles:['normal','help'],diffs:[-1,0,-1,1]},
+ 4:{depth:[3,3,4],times:[25,30],styles:['help','double','pressure'],diffs:[-1,0,-1,1]},
+ 5:{depth:[4,5],times:[20,25,30],styles:['help','double','pressure','normal'],diffs:[-1,0,-1,-2,1]}
+};
+const SCN_OK=['pass_free','draw_pass','dribble_space','under_shoot','avoid_bad_shot','find_lane','opposite','use_screen','avoid_crowd'];
+const SCN_TAG={pass_free:'フリーを さがせ',draw_pass:'ひきつけて パス',dribble_space:'スペースへ',under_shoot:'ゴールの ちかく',avoid_bad_shot:'むりは しない',find_lane:'パスの みち',opposite:'てきの ぎゃく',use_screen:'スクリーン',avoid_crowd:'みつを さけろ',fast_break:'そくこう',help_kick:'よせて パス'};
+const SCN_CUSTOM={
+ fast_break:{lv:2,w:1.2,build(){
+  const me=P(50+rnd(-8,8),rnd(56,64)),A=P(me.x-rnd(15,20),me.y-rnd(8,14)),B=P(me.x+rnd(15,20),me.y-rnd(8,14)),
+   D1=P(me.x+rnd(-6,6),me.y-rnd(14,18)),D2=P(50+rnd(-9,9),rnd(16,24));
+  return {me,mates:[A,B],foes:[D1,D2],thr:20,flags:{fast:true}};}},
+ help_kick:{lv:2,w:1.4,build(){
+  const s=sd(),me=P(50+s*rnd(20,28),rnd(36,44)),D=P(me.x-s*rnd(3,6),me.y-rnd(7.8,9)),
+   A=P(50+s*rnd(33,39),rnd(22,30)),B=P(50-s*rnd(8,16),rnd(46,56));
+  const DA=goalSide(A,rnd(8.6,9.4)),DB=goalSide(B,rnd(8.6,9.4));
+  return {me,mates:[A,B],foes:[D,DA,DB],thr:13,must:'dribble_goal'};}}
+};
+const SCN_CNT={1:{foes:2,mates:1},2:{foes:3,mates:2},3:{foes:3,mates:2},4:{foes:4,mates:2},5:{foes:4,mates:3}};
+const SCN_HIST=[];
+function scnPoolFor(level,force){
+  const cl=clamp(level,1,5),pool=[];
+  for(const id of SCN_OK){const t=TACTICS.find(x=>x.id===id);if(t&&cl>=t.lv[0]&&cl<=t.lv[1])pool.push({id,w:t.w||1,t});}
+  for(const id in SCN_CUSTOM){const c=SCN_CUSTOM[id];if(cl>=c.lv)pool.push({id,w:c.w,c});}
+  if(force){const f=pool.find(p=>p.id===force);if(f)return [f];}
+  return pool.map(p=>({...p,w:p.w*(SCN_HIST.slice(-3).includes(p.id)?.15:1)}));
+}
+function scnValid(st,must){
+  const all=[...st.off,...st.foes];
+  for(const p of all)if(!inCourt(p))return false;
+  for(let i=0;i<all.length;i++)for(let j=i+1;j<all.length;j++)if(dist(all[i],all[j])<SEP-.01)return false;
+  const opts=scnOptions(st);
+  if(opts.length<3)return false;
+  const {ev}=scnEvalAll(st);
+  let best=0;for(const k in ev)best=Math.max(best,ev[k].score);
+  if(best<(must?38:45))return false;
+  if(must&&!(ev[must]&&ev[must].out==='ok'))return false;
+  return true;
+}
+function scnBuildStart(level,pick,o){
+  const cl=clamp(level,1,5),L=SCN_CNT[cl];
+  for(let a=0;a<400;a++){
+    let me,mates,foes,screen=null,thr=13,flags={},must=null;
+    if(pick.t){
+      const core=pick.t.build(L.foes,L.mates,cl);
+      const sc={me:{...core.me},mates:core.mates.map(m=>({...m})),foes:core.foes.map(f=>({...f})),holder:core.holder,screen:core.screen||null,drive:null,vars:core.vars||{}};
+      if(core.holder!=='me'||sc.foes.length>L.foes||sc.mates.length>L.mates||!baseLegal(sc))continue;
+      if(!addFillers(sc,L.foes,L.mates,core.protect||[],core.noPass))continue;
+      ({me,mates,foes}=sc);screen=sc.screen;
+    }else{
+      const core=pick.c.build();
+      const sc={me:{...core.me},mates:core.mates.map(m=>({...m})),foes:core.foes.map(f=>({...f}))};
+      if(!baseLegal(sc))continue;
+      ({me,mates,foes}=sc);thr=core.thr;flags=core.flags||{};must=core.must||null;
+    }
+    const sc2={me,mates,foes};assignNumbers(sc2);
+    const st={phase:'off',off:[me,...mates].map(p=>({x:p.x,y:p.y,num:p.num})),foes:foes.map(f=>({x:f.x,y:f.y,num:f.num,man:-1})),h:0,
+      screen:screen?{foe:screen.foe,side:screen.side,mate:1,active:true}:null,flags,themeId:pick.id,level:cl,style:o.style,
+      time:o.time,us:o.us,them:o.them,turn:0,maxTurns:o.depth,poss:o.poss||0,single:!!o.single,stats:o.stats||SCN_ZERO(),seen:{},lastPass:null,end:null};
+    scnAssignMen(st,thr);
+    if(!scnValid(st,must))continue;
+    return st;
+  }
+  return null;
+}
+function scnPick(arr){return arr[Math.floor(Math.random()*arr.length)];}
+function scnDepthFor(level,time){const d=scnPick(SCN_LV[clamp(level,1,5)].depth);return Math.max(1,Math.min(d,Math.floor((time-1.5)/3)));}
+function scnStart(level,o){
+  o=o||{};const cl=clamp(level,1,5),cfg=SCN_LV[cl];
+  const time=o.time!=null?o.time:scnPick(cfg.times),diff=o.diff!=null?o.diff:scnPick(cfg.diffs),style=o.style||scnPick(cfg.styles);
+  const base=o.us!=null?o.us:Math.floor(rnd(6,17)),us=base,them=o.them!=null?o.them:base-diff;
+  const depth=o.depth||scnDepthFor(cl,time);
+  for(let t=0;t<30;t++){
+    const pool=scnPoolFor(cl,t<12?o.theme:null);
+    let r=Math.random()*pool.reduce((s,p)=>s+p.w,0),pick=pool[pool.length-1];
+    for(const p of pool){r-=p.w;if(r<=0){pick=p;break;}}
+    const st=scnBuildStart(cl,pick,{time,style,us,them,depth,poss:o.poss,single:o.single,stats:o.stats});
+    if(st){
+      st.diff0=us-them;st.tags=scnTags(st);
+      st.start={off:st.off.map(p=>({...p})),foes:st.foes.map(f=>({...f})),screen:st.screen?{...st.screen}:null,time,us,them,maxTurns:depth,style,themeId:st.themeId,flags:st.flags,poss:st.poss,single:st.single,level:cl};
+      SCN_HIST.push(st.themeId);if(SCN_HIST.length>8)SCN_HIST.shift();
+      return st;
+    }
+  }
+  throw new Error('scenario generation failed: level '+cl);
+}
+function scnReplay(st){
+  const s=st.start;
+  return Object.assign({},st,{off:s.off.map(p=>({...p})),foes:s.foes.map(f=>({...f})),screen:s.screen?{...s.screen}:null,time:s.time,us:s.us,them:s.them,turn:0,maxTurns:s.maxTurns,poss:s.poss,h:0,stats:SCN_ZERO(),seen:{},lastPass:null,end:null,tags:scnTags(Object.assign({},st,{time:s.time,us:s.us,them:s.them}))});
+}
+function scnNextPossession(st){
+  const nx=scnStart(st.level,{time:st.time,us:st.us,them:st.them,diff:null,style:st.phase==='def'?null:st.style,depth:null,poss:st.poss,stats:st.stats,single:st.single});
+  return nx;
+}
+function scnTags(st){
+  const t=[],d=st.us-st.them;
+  t.push('のこり '+Math.ceil(st.time)+'びょう');
+  t.push(d===0?'どうてん':d>0?d+'てん リード':(-d)+'てん ビハイン'+'ド');
+  t.push(SCN_TAG[st.themeId]||'');
+  if(st.style==='double')t.push('ダブルチーム');else if(st.style==='help')t.push('ヘルプ あり');else if(st.style==='pressure')t.push('プレッシャー');
+  return t.filter(Boolean);
+}
+/* ---------- events ---------- */
+function scnEvents(st){
+  const ev=[],h=st.off[st.h],key=id=>{if(st.seen[id])return false;st.seen[id]=1;return true;};
+  const near=st.foes.filter(f=>dist(f,h)<11).length;
+  if(st.flags&&st.flags.fast&&st.turn===0&&key('fast'))ev.push({id:'FAST BREAK',t:'そくこう チャンス！',ic:'🏃'});
+  if(st.screen&&st.screen.active&&st.turn===0&&key('screen'))ev.push({id:'SCREEN',t:'みかたが スクリーン！',ic:'🧱'});
+  if(near>=2&&key('dbl'+st.turn))ev.push({id:'DOUBLE TEAM',t:'2人 きた！',ic:'⚠️'});
+  const open=scnOpenMates(st);
+  if(open.length&&(st.turn>0||st.poss>0)&&key('open'+st.turn))ev.push({id:'OPEN!',t:'みかたが フリー！',ic:'✨'});
+  if(near>=1&&dist(nearest(st.foes,h).f,h)<7&&near<2&&st.turn>0&&key('stl'+st.turn))ev.push({id:'STEAL',t:'とられそう！',ic:'🖐️'});
+  if(st.time<=5&&key('last'))ev.push({id:'LAST SECOND',t:'のこり '+Math.max(1,Math.ceil(st.time))+'びょう！',ic:'⏱️'});
+  const d=st.us-st.them;
+  if(d<=0&&d+2>=0&&st.time<=12&&key('clutch'))ev.push({id:'CLUTCH',t:d<0?'ここで きめれば ぎゃくてん！':'ここで きめれば リード！',ic:'🔥'});
+  return ev.slice(0,2);
+}
+/* ---------- wrap-up after a possession ends ---------- */
+function scnWrap(s){
+  const e=s.end,r={gameOver:false,again:false,rebound:false,opp:null,clutch:false};
+  const before=s.us-s.them;
+  s.poss++;
+  if(e.type==='made'){
+    s.us+=e.pts;s.stats.score++;s.stats.pts+=e.pts;if(e.assist)s.stats.assist++;if(e.buzzer)s.stats.buzzer++;
+    if(before<=0&&s.us-s.them>=0&&before+3>=0&&s.time<=12){s.stats.clutch++;r.clutch=true;}
+  }
+  if(e.type==='timeup'||s.single){r.gameOver=true;return r;}
+  if((e.type==='miss'||e.type==='rim')&&s.time>=5&&s.poss<7&&Math.random()<.3){r.rebound=true;r.again=true;s.time=Math.max(0,+(s.time-1).toFixed(1));return r;}
+  if(s.time<2.5||s.poss>=7){r.gameOver=true;return r;}
+  r.defense=true;r.again=true;
+  return r;
+}
+function scnResult(st){return st.us>st.them?'WIN':st.us===st.them?'DRAW':'LOSE';}
+function scnSummary(st){
+  const k=st.stats,res=scnResult(st);
+  const xp=(res==='WIN'?60:res==='DRAW'?40:20)+k.good*8+k.smart*4+k.score*15+k.assist*15+k.clutch*40+k.buzzer*30+k.dstop*12+k.dsteal*10+st.level*5;
+  const badges=[];
+  if(k.smart)badges.push({t:'SMART PLAY',n:k.smart,ic:'🧠'});
+  if(k.good)badges.push({t:'GOOD DECISION',n:k.good,ic:'👍'});
+  if(k.pass)badges.push({t:'PASS',n:k.pass,ic:'🔁'});
+  if(k.drive)badges.push({t:'DRIVE',n:k.drive,ic:'⚡'});
+  if(k.dstop)badges.push({t:'GREAT DEFENSE',n:k.dstop,ic:'🛡️'});
+  if(k.dsteal)badges.push({t:'STEAL',n:k.dsteal,ic:'🖐️'});
+  if(k.assist)badges.push({t:'ASSIST',n:k.assist,ic:'🤝'});
+  if(k.score)badges.push({t:'SCORE',n:k.score,ic:'🏀'});
+  if(k.clutch)badges.push({t:'CLUTCH',n:k.clutch,ic:'🔥'});
+  if(k.buzzer)badges.push({t:'BUZZER BEATER',n:k.buzzer,ic:'⏱️'});
+  if(k.turnover)badges.push({t:'TURNOVER',n:k.turnover,ic:'💡',soft:true});
+  return {res,xp,badges};
+}
+/* ---------- narration (short, kid-friendly) ---------- */
+const SCN_COACH={
+ pass:['パスは ひとりで がんばらない ための ぶき！','フリーの みかたを みつけるのが だいじ！'],
+ drive:['ドライブで てきを ひきつけると、みかたが あくよ。','てきの いない ほうへ すすもう！'],
+ shoot:['ちかくて あいて いたら シュートの チャンス！','てきが とおい ときは おちついて うとう！'],
+ hold:['あわてない！ みかたが あくのを まつのも だいじ。','ボールを まもって みかたを さがそう。'],
+ bad:['しっぱいしても だいじょうぶ。つぎ いかそう！','「どこが あいてる？」を みるくせを つけよう。'],
+ time:['のこり じかんを みて えらぼう。']
+};
+function scnNarrate(prev,res,wrap){
+  const s=res.st,opt=res.info.opt,q=res.info.q,e=s.end,out={head:'GOOD!',cls:'good',line:'',coach:'',open:[]};
+  const recv=opt.cat==='pass'?prev.off[opt.to]:null;
+  const nOpen=e?[]:scnOpenMates(s);out.open=nOpen;
+  const was=scnOpenMates(prev),newly=nOpen.filter(i=>!was.includes(i));
+  const openTxt=i=>posWord(s.off[i])+'の '+s.off[i].num+'ばん';
+  const openLine=newly.length?'てきが よってきた！ '+openTxt(newly[0])+'が フリー！':nOpen.length?openTxt(nOpen[0])+'が フリーだよ！':'';
+  if(e){
+    if(e.type==='made'){
+      out.head=wrap&&wrap.clutch?'CLUTCH!!':e.buzzer?'BUZZER BEATER!!':e.pts===3?'SWISH! 3POINT!':'SWISH!';
+      out.line=(e.assist?'ナイスパス！ ':'')+'シュートが きまった！ +'+e.pts+'てん！';
+      out.coach=e.assist?'パスで つくった チャンス！ みんなで とった 1てん だね。':pick(SCN_COACH.shoot);
+    }else if(e.type==='rim'||e.type==='miss'){
+      out.head='おしい！';out.cls='bad';out.line=e.type==='rim'?'ゴールに あたった！ もうすこし！':'すこし とおかったね。つぎは もっと ちかくで！';out.coach=pick(SCN_COACH.bad);
+    }else if(e.type==='block'){
+      out.head='ブロックされた！';out.cls='bad';out.line='てきが ちかくて じゃま されたよ。';out.coach='てきが ちかい ときは パスも かんがえよう。';
+    }else if(e.type==='steal'){
+      out.head='しまった！';out.cls='bad';out.line=opt.cat==='pass'?'パスの みちに てきが いたよ。':opt.cat==='drive'?'てきに おいつかれちゃった。':'ボールを とられたよ。';out.coach=pick(SCN_COACH.bad);
+    }else{out.head='ブザー！';out.cls='bad';out.line='じかんが なくなっちゃった…';out.coach=pick(SCN_COACH.time);}
+    return out;
+  }
+  if(opt.cat==='pass'){
+    out.head=q==='great'?'NICE PASS!':q==='good'?'GOOD!':'つながった！';if(q==='weak')out.cls='ok';
+    const free=recv&&nearest(prev.foes,recv).d>=FREE_D;
+    out.line=(free?'フリーの '+recv.num+'ばんへ パス！ ':recv.num+'ばんに つないだ！ ')+(openLine||'');
+    out.coach=pick(SCN_COACH.pass);
+  }else if(opt.cat==='drive'){
+    out.head=res.info.pressed?'つかまりそう！':q==='weak'?'ドライブ！':'NICE DRIVE!';if(res.info.pressed||q==='weak')out.cls='ok';
+    out.line=(res.info.pressed?'てきが さきに まわりこんだ！ ':'ドライブで ぐいぐい すすむ！ ')+(openLine||'');
+    out.coach=pick(SCN_COACH.drive);
+  }else{
+    out.head=nOpen.length?'ナイス がまん！':'まもった！';out.line='ボールを まもって、みかたの うごきを まつ。 '+(openLine||'');out.coach=pick(SCN_COACH.hold);
+  }
+  return out;
+}
+function scnIntro(st){
+  const h=st.off[st.h],n=st.foes.filter(f=>dist(f,h)<11);
+  if(st.flags&&st.flags.fast)return 'そくこう！ みかたが ふたり、てきは ふたりだけ！';
+  if(n.length>=2)return 'てきが ふたり きみの ちかくに いるよ！';
+  if(n.length===1)return 'ディフェンダーが まえに いるよ！';
+  return 'きみの まわりは あいているよ！';
+}
+
+/* ===== DEFENSE ENGINE: 相手(RED)の攻撃を主人公(BLUE)が守る =====
+   st.off = 相手の攻撃選手(RED)  /  st.foes = 守備側(BLUE)  /  st.hi = 主人公の守備index(0)
+   既存の評価関数(scnEvalAll など)は「off=攻撃側」前提なので、そのまま相手AIの判断に再利用できる */
+const DFN_TURNS={1:1,2:2,3:2,4:3,5:3};
+const DFN_OPTS={
+ drive:[['front','🛡️','前に出る'],['slide','↔️','横についていく'],['trust','👥','味方にまかせる']],
+ pass:[['deny','🛡️','パスコースを守る'],['ball','🏃','ボールへ行く'],['help','👥','味方を助ける']],
+ shot:[['check','🖐️','シュートチェック'],['reb','🏀','リバウンド準備'],['chase','🏃','ボールを追う']],
+ help:[['help','🦸','ヘルプに行く'],['stay','🛡️','自分のマークを守る'],['back','🥅','ゴールを守る']],
+ two:[['front','🛡️','ボールを止める'],['cut','🚧','カットをふさぐ'],['sag','👀','ふたりを見る']]
+};
+function dfnPairs(st,n){
+  let t=0;
+  while(n>0&&t++<80){
+    const r=P(rnd(12,88),rnd(22,68)),d=goalSide(r,rnd(8.6,9.4));
+    if(!inCourt(r)||!inCourt(d))continue;
+    const all=[...st.off,...st.foes];
+    if(all.some(p=>dist(p,r)<SEP+.5||dist(p,d)<SEP+.5)||dist(r,d)<8.2)continue;
+    if(dist(r,st.off[st.h])<14)continue;
+    st.off.push(r);st.foes.push(d);n--;
+  }
+  return n===0;
+}
+const DFN_TPL={
+ dr(){const s=sd(),H=P(50+s*rnd(4,14),rnd(40,48)),hero=goalSide(H,rnd(8.6,9.4)),R2=P(50-s*rnd(14,24),rnd(26,36)),D2=goalSide(R2,rnd(8.6,9.4));
+  return {off:[H,R2],foes:[hero,D2],pat:'drive',kind:'drive',flags:{}};},
+ pass(){const s=sd(),H=P(50+s*rnd(10,20),rnd(42,52)),D1=goalSide(H,rnd(8.6,9.4)),R2=P(50-s*rnd(16,26),rnd(32,44)),hero=goalSide(R2,rnd(8.6,9.4)),
+   R3=P(50+s*rnd(24,32),rnd(24,34)),D3=goalSide(R3,rnd(8.6,9.4));
+  return {off:[H,R2,R3],foes:[hero,D1,D3],pat:'pass',kind:'pass',flags:{passTo:Math.random()<.55?1:2}};},
+ help(){const s=sd(),H=P(50+s*rnd(2,10),rnd(20,26)),D1=P(H.x+s*rnd(4,6),H.y+rnd(7.8,8.6)),R2=P(50-s*rnd(14,22),rnd(30,38)),hero=goalSide(R2,rnd(8.6,9.4)),
+   R3=P(50+s*rnd(26,32),rnd(44,52)),D3=goalSide(R3,rnd(8.6,9.4));
+  return {off:[H,R2,R3],foes:[D1,hero,D3],hiSwap:true,pat:'help',kind:'shoot',flags:{beaten:true}};},
+ two(){const s=sd(),H=P(50+s*rnd(8,16),rnd(40,48)),hero=goalSide(H,rnd(8.6,9.4)),R2=P(50-s*rnd(8,14),rnd(28,34)),D2=goalSide(R2,rnd(8.6,9.4));
+  return {off:[H,R2],foes:[hero,D2],pat:'two',kind:'drive',flags:{two:true}};}
+};
+function dfnPlayers(st){
+  const rp=shuffle([4,5,6,8,9,10,11,12,13,14,15]),bp=shuffle([4,5,6,8,9,10,11,12,13,14,15]);
+  st.off.forEach(p=>{p.num=rp.pop();});
+  st.foes.forEach((p,i)=>{p.num=i===st.hi?7:bp.pop();});
+}
+function dfnStart(level,o){
+  o=o||{};const cl=clamp(level,1,5);
+  const ids=cl===1?['dr']:cl===2?['pass']:cl===3?['help']:cl===4?['two']:['dr','pass','help','two'];
+  for(let a=0;a<300;a++){
+    const id=scnPick(ids),c=DFN_TPL[id]();
+    const extra=cl===4?2:cl===5?(id==='pass'||id==='help'?1:2):0;
+    const st={phase:'def',off:c.off.map(p=>({...p})),foes:c.foes.map(p=>({...p,man:-1})),h:0,hi:c.hiSwap?1:0,screen:null,
+      flags:{...c.flags},themeId:'def_'+id,level:cl,style:'normal',time:o.time,us:o.us,them:o.them,turn:0,poss:o.poss||0,single:false,
+      stats:o.stats||SCN_ZERO(),seen:{},lastPass:null,end:null};
+    if(!dfnPairs(st,extra))continue;
+    const all=[...st.off,...st.foes];let ok=true;
+    for(const p of all)if(!inCourt(p))ok=false;
+    for(let i=0;i<all.length&&ok;i++)for(let j=i+1;j<all.length;j++)if(dist(all[i],all[j])<SEP-.01){ok=false;break;}
+    if(!ok)continue;
+    dfnPlayers(st);scnAssignMen(st,13);
+    st.maxTurns=Math.max(1,Math.min(DFN_TURNS[cl],Math.floor((o.time-1.2)/3)));
+    dfnPrepare(st,c.kind);
+    if(!st.intent)continue;
+    st.tags=['RED TEAM ATTACK','のこり '+Math.ceil(st.time)+'びょう'];
+    return st;
+  }
+  throw new Error('defense generation failed: level '+cl);
+}
+/* ---------- 相手AI: 何をしてくるか決める ---------- */
+function dfnPrepare(st,force){
+  const {ev,map}=scnEvalAll(st),list=[];
+  list.push({k:'shoot',score:ev.shoot.score});
+  map.forEach((oi,j)=>list.push({k:'pass',to:oi,score:ev['pass'+j].score}));
+  for(const key of ['dribble_goal','dribble_left','dribble_right'])if(ev[key])list.push({k:'drive',key,spot:ev[key].spot,score:ev[key].score});
+  let pool=force?list.filter(x=>x.k===(force==='shoot'?'shoot':force)):list;
+  if(st.flags.passTo!=null&&force==='pass'){const t=pool.filter(x=>x.to===st.flags.passTo);if(t.length)pool=t;}
+  if(!pool.length)pool=list;
+  const w=pool.map(x=>force?1:Math.exp(x.score/18));
+  let r=Math.random()*w.reduce((a,b)=>a+b,0),pick0=pool[pool.length-1];
+  for(let i=0;i<pool.length;i++){r-=w[i];if(r<=0){pick0=pool[i];break;}}
+  st.intent=pick0;st.pat=dfnPattern(st,pick0);
+  if(st.pat==='drive'||st.pat==='two'||st.pat==='help'){if(!st.intent.spot&&st.intent.k==='drive')st.intent.spot=st.off[st.h];}
+}
+function dfnPattern(st,it){
+  if(st.flags.beaten)return 'help';
+  if(it.k==='shoot')return 'shot';
+  if(it.k==='pass')return 'pass';
+  if(st.flags.two&&st.turn===0)return 'two';
+  return dist(st.foes[st.hi],st.off[st.h])>15?'help':'drive';
+}
+const dfnHelperNear=(st,p)=>st.foes.some((f,i)=>i!==st.hi&&dist(f,p)<13);
+function dfnP(st,key){
+  const H=st.off[st.h],hero=st.foes[st.hi],it=st.intent,pat=st.pat;
+  if(pat==='drive'||pat==='two'){
+    const sp=it.spot||H,straight=Math.abs(sp.x-H.x)<12,hn=dfnHelperNear(st,sp);
+    if(pat==='two')return key==='front'?(straight?.6:.42):key==='cut'?.48:(hn?.62:.5);
+    return key==='front'?(straight?.72:.3):key==='slide'?(straight?.5:.74):.26+(hn?.4:0);
+  }
+  if(pat==='pass'){
+    const mine=st.foes[st.hi].man===it.to;
+    return key==='deny'?(mine?.72:.28):key==='ball'?(mine?.42:.38):(mine?.25:.62);
+  }
+  if(pat==='shot'){
+    const dc=dist(hero,H);
+    return key==='check'?clamp(1.05-dc/20,.25,.85):key==='chase'?clamp(.9-dc/22,.2,.6)*.8:.5;
+  }
+  const dh=dist(hero,H);
+  return key==='help'?clamp(.85-dh/38,.3,.82):key==='stay'?.22:.5;
+}
+function dfnOptions(st){
+  const list=DFN_OPTS[st.pat].map(([key,ic,label])=>({key,ic,label,p:dfnP(st,key),cat:'def'}));
+  return shuffle(list);
+}
+const dfnDirWord=(st)=>{const H=st.off[st.h],sp=st.intent.spot||H,dx=sp.x-H.x;return Math.abs(dx)<12?'まっすぐ':dx>0?'右':'左';};
+function dfnPrompt(st){
+  const it=st.intent;
+  if(st.pat==='drive')return {head:'てきが つっこんできた！',line:'てきは '+dfnDirWord(st)+'へ ドライブ！ どうまもる？'};
+  if(st.pat==='two')return {head:'ふたりで せめてきた！',line:'ボールを もった てきが ドライブ！ もう ひとりは ゴールへ カット！'};
+  if(st.pat==='pass')return {head:'パスされそう！',line:'てきは '+st.off[it.to].num+'ばんへ パスしそう！'};
+  if(st.pat==='shot')return {head:'シュートされる！',line:'てきが シュートを うつよ！'};
+  return {head:'ぬかれた！',line:'ゴールの ちかくに てきが いる！ ヘルプに 行く？'};
+}
+function dfnHintText(st,options){
+  const b=options.slice().sort((x,y)=>y.p-x.p)[0];
+  const t={drive:'てきの すすむ ほうを みよう。',two:'あぶない ほうを みよう。',pass:'パスが いきそうな ひとを みよう。',shot:'シュートを うつ ひとに ちかい かな？',help:'ゴールに ちかい ひとを まもろう。'}[st.pat];
+  return t+' 「'+b.label+'」が いいかも！';
+}
+function dfnArrows(st){
+  const H=st.off[st.h],it=st.intent,a=[];
+  if(it.k==='drive'&&it.spot)a.push({a:{x:H.x,y:H.y},b:{x:it.spot.x,y:it.spot.y},c:'#ff6a77',dash:true,w:1});
+  else if(it.k==='pass')a.push({a:{x:H.x,y:H.y},b:{x:st.off[it.to].x,y:st.off[it.to].y},c:'#ff6a77',dash:true,w:1});
+  else if(it.k==='shoot')a.push({a:{x:H.x,y:H.y},b:{x:GOAL.x,y:GOAL.y},c:'#ff6a77',dash:true,w:1});
+  if(st.pat==='two'){const c=st.off[1];a.push({a:{x:c.x,y:c.y},b:{x:GOAL.x,y:GOAL.y+8},c:'#ff6a77',dash:true,w:.8});}
+  return a;
+}
+function dfnEvents(st){
+  const ev=[],key=id=>{if(st.seen[id])return false;st.seen[id]=1;return true;},d=st.us-st.them;
+  if(st.pat==='help'&&key('help'+st.turn))ev.push({id:'HELP!',t:'ヘルプの チャンス！',ic:'🦸'});
+  if(st.time<=5&&key('last'))ev.push({id:'LAST SECOND',t:'のこり '+Math.max(1,Math.ceil(st.time))+'びょう！',ic:'⏱️'});
+  if(d>=0&&d<=2&&st.time<=12&&key('clutch'))ev.push({id:'CLUTCH',t:'ここを まもれば しょうり！',ic:'🔥'});
+  return ev.slice(0,2);
+}
+
+/* ===== DEFENSE ENGINE 2: resolve / wrap / narrate ===== */
+function dfnResolve(st,opt,options){
+  const s=cloneSt(st);s.flags={...st.flags};s.intent={...st.intent};
+  const steps=[],best=Math.max(...options.map(o=>o.p)),gap=best-opt.p,q=gap<=.08?'great':gap<=.25?'good':'weak';
+  s.turn++;s.time=Math.max(0,+(s.time-3).toFixed(1));s.stats.decisions++;if(q!=='weak')s.stats.good++;if(q==='great')s.stats.smart++;
+  const ok=Math.random()<opt.p,pat=st.pat,it=st.intent,hi=s.hi,key=opt.key;
+  const H0={x:st.off[st.h].x,y:st.off[st.h].y},foeStart0=st.foes.map(f=>({x:f.x,y:f.y}));
+  const info={opt,q,ok,pat,head:'',line:''};
+  const snap=()=>({off:s.off.map(p=>({x:p.x,y:p.y})),foes:s.foes.map(f=>({x:f.x,y:f.y}))});
+  const mv=(ms,dribble)=>steps.push({k:'move',...snap(),ms,dribble:!!dribble});
+  const hero=()=>s.foes[hi];
+  const react=(mode,keep)=>{const hp={x:hero().x,y:hero().y};scnReact(s,{mode,foeStart:foeStart0,dir:0});if(keep){hero().x=hp.x;hero().y=hp.y;}};
+  const near=(p)=>{let d=999,k=0;s.foes.forEach((f,i)=>{const e=dist(f,p);if(e<d){d=e;k=i;}});return k;};
+  const goto8=(f,from,d)=>{const l=dist(f,from)||1;f.x=from.x+(f.x-from.x)/l*d;f.y=from.y+(f.y-from.y)/l*d;};
+  const shoot=(pm,o)=>{
+    o=o||{};const p=s.off[s.h];s.time=Math.max(0,+(s.time-1.2).toFixed(1));
+    const made=Math.random()<pm;
+    steps.push({k:'shot',who:s.h,mode:made?'swish':(o.block?'block':(Math.random()<.5?'rim':'miss')),opp:true});
+    s.end=made?{type:'rscore',pts:dist(p,GOAL)>42?3:2,by:s.h}:{type:'miss',block:!!o.block};
+    return made;
+  };
+  const steal=(idx,at,head,line)=>{steps.push({k:'steal',foe:idx,at:{x:at.x,y:at.y},say:'ボールを とった！'});s.end={type:'steal'};info.head=head;info.line=line;};
+  const passOut=(t)=>{
+    steps.push({k:'pass',from:s.h,to:t});s.lastPass={from:s.h,to:t,turn:s.turn};s.h=t;
+    react('pass',true);scnMoveMates(s,1);mv(640);
+  };
+  const baseMake=()=>clamp(.08+shotQ(s.foes,s.off[s.h])*.011,.08,.95);
+  if(pat==='drive'||pat==='two'){
+    const sp=it.spot||H0,spc={x:clamp(sp.x,XMIN,XMAX),y:clamp(sp.y,YMIN,YMAX)};
+    const h=hero();
+    if(key==='front'){const m=lerpP(h,H0,.2);h.x=m.x;h.y=m.y;goto8(h,H0,Math.max(8.1,dist(h,H0)-1.4));}
+    else if(key==='slide'){h.x=clamp(h.x+clamp(spc.x-H0.x,-14,14)*.8,XMIN,XMAX);}
+    else if(key==='trust'){const ti=s.foes.map((f,i)=>({i,d:dist(f,spc)})).filter(c=>c.i!==hi).sort((a,b)=>a.d-b.d)[0];if(ti){const t=s.foes[ti.i];goto8(t,spc,8.6);}}
+    else if(key==='cut'){const c=s.off[1];if(c){const m=lerpP(c,GOAL,.35);h.x=h.x+(m.x-h.x)*.6;h.y=h.y+(m.y-h.y)*.6;}}
+    else if(key==='sag'){h.x=h.x+(50-h.x)*.3;h.y=h.y+(20-h.y)*.25;}
+    mv(520);
+    if(ok){
+      const mid=lerpP(H0,spc,.35);s.off[s.h].x=mid.x;s.off[s.h].y=mid.y;mv(700,true);
+      info.head='GREAT DEFENSE!';
+      info.line=key==='front'?'前に出て ドライブを とめた！':key==='slide'?'よこに ついて ドライブを とめた！':key==='trust'?'ナイスヘルプ！ みかたが とめてくれた！':key==='cut'?'カットを ふさいで ドライブも とめた！':'ふたりを みて うまく とめた！';
+      const outs=scnOpenMates(s);
+      if(s.turn<s.maxTurns&&outs.length&&Math.random()<.5){
+        passOut(outs[0]);dfnPrepare(s);info.head='とめた！ でも…';info.line+=' パスで べつの てきが フリー！';
+      }else if(Math.random()<.55){steal(near(mid),mid,'GREAT DEFENSE!',info.line+' ボールを うばった！');}
+      else{shoot(.12);info.line+' むりに うたせた！';info.line+' むりに うたせた！';}
+    }else{
+      s.off[s.h].x=spc.x;s.off[s.h].y=spc.y;react('drive',true);mv(820,true);
+      info.head='ぬかれた！';info.line='てきに ドライブで ぬかれちゃった！';
+      if(s.turn>=s.maxTurns||s.time<=0){shoot(clamp(.08+shotQ(s.foes,s.off[s.h])*.011+.2,.1,.9));info.line='てきに ぬかれて、そのまま シュートされた！';}
+      else{s.flags.beaten=true;dfnPrepare(s,'shoot');info.line+=' ゴールが あぶない！';}
+    }
+  }else if(pat==='pass'){
+    const t=it.to,R=s.off[t],mine=st.foes[hi].man===t,h=hero();
+    if(key==='deny'){const m=lerpP(H0,R,.55);h.x=m.x;h.y=m.y;}
+    else if(key==='ball'){goto8(h,H0,8.4);}
+    else if(!mine){const g=goalSide(R,8.8);h.x=g.x;h.y=g.y;}
+    mv(520);
+    if(ok&&(key==='deny'||key==='ball'||mine)){
+      const pt=segPoint(h,H0,R);steal(hi,pt,key==='deny'?'PASS CUT!':'GREAT DEFENSE!',key==='deny'?'パスコースを ふさいだ！ パスカット！':'ボールへ とびこんで カット！');
+    }else if(ok){
+      steps.push({k:'pass',from:s.h,to:t});s.lastPass={from:s.h,to:t,turn:s.turn};s.h=t;react('pass',true);mv(560);
+      info.head='ナイスヘルプ！';info.line='パスは とおったけど、すぐ おさえた！';
+      if(s.turn<s.maxTurns&&s.time>0)dfnPrepare(s,'shoot');else shoot(.22);
+    }else{
+      passOut(t);info.head='パスが とおった！';info.line='てきに うまく パスされた！';
+      if(s.turn<s.maxTurns&&s.time>0)dfnPrepare(s,'shoot');else{shoot(.55);info.line='てきに うまく パスされて シュートされた！';}
+    }
+  }else if(pat==='shot'){
+    const H=s.off[s.h],h=hero();
+    if(key==='check')goto8(h,H,8.0);else if(key==='chase')goto8(h,H,8.3);else{const m=lerpP(h,P(50,17),.5);h.x=m.x;h.y=m.y;}
+    mv(520);
+    const base=baseMake(),pm=key==='check'?(ok?.1:Math.min(.9,base+.12)):key==='reb'?base*.85:(ok?base*.6:base*.8);
+    const made=shoot(pm,{block:key==='check'&&ok&&Math.random()<.4});
+    if(made){info.line=key==='check'?'シュートチェックが おくれた…':key==='reb'?'シュートを うたれた…':'おいつけなかった…';}
+    else{
+      const mine=key==='reb'?.8:key==='check'?(ok?1:.6):.55;
+      if(Math.random()>=mine&&Math.random()<.5){steps.push({k:'say',text:'リバウンドを とられた！',cls:'miss'});s.end={type:'rscore',pts:2,by:s.h};info.line='リバウンドを とられて いれられた…';}
+      else{info.head=key==='check'?(s.end.block?'SHOT BLOCK!':'SHOT CHECK!'):key==='reb'?'NICE REBOUND!':'GREAT DEFENSE!';info.line=key==='check'?'シュートを じゃました！':key==='reb'?'リバウンドを とった！':'シュートを はずさせた！';}
+    }
+  }else{ // help
+    const h=hero();
+    if(key==='help'){goto8(h,s.off[s.h],8.4);}
+    else if(key==='back'){const m=lerpP(h,P(50,18),.6);h.x=m.x;h.y=m.y;}
+    mv(520);
+    if(ok){
+      info.head='NICE HELP!';info.line=key==='help'?'ナイスヘルプ！ シュートを じゃました！':'ゴールを まもって シュートを じゃました！';
+      const man=st.foes[hi].man;
+      if(key==='help'&&s.turn<s.maxTurns&&s.time>0&&man>=0&&man!==s.h&&Math.random()<.45){
+        s.flags.beaten=false;passOut(man);dfnPrepare(s,'shoot');info.line='ヘルプで とめたけど、パスで ひとり フリーに！';info.head='とめた！ でも…';
+      }else{s.flags.beaten=false;const made=shoot(.15,{block:Math.random()<.4});if(made){info.line='じゃまは したけど、はいっちゃった…';}else if(s.end.block)info.head='BLOCK!';}
+    }else{
+      s.flags.beaten=false;shoot(.72);info.head='いれられた…';info.line=key==='stay'?'ヘルプに いかなかったから フリーで うたれた！':'ゴールの ちかくで シュートを うたれた！';
+    }
+  }
+  if(!s.end&&s.time<=0){steps.push({k:'say',text:'ブザー！',cls:'combo'});shoot(baseMake()*.8);info.line='じかんぎれ まぎわの シュート！';}
+  if(s.end){
+    if(s.end.type==='steal'){s.stats.dstop++;s.stats.dsteal++;if(q!=='great')s.stats.smart++;}
+    else if(s.end.type==='miss'){s.stats.dstop++;if(ok&&q==='weak')s.stats.good++;}
+  }else if(!s.intent){dfnPrepare(s);}
+  return {st:s,steps,info};
+}
+function dfnWrap(s){
+  const e=s.end,r={gameOver:false,again:false,clutch:false,scored:0};
+  s.poss++;
+  if(e.type==='rscore'){s.them+=e.pts;r.scored=e.pts;}
+  else if(s.us-s.them>=0&&s.us-s.them<=2&&s.time<=12){s.stats.clutch++;r.clutch=true;}
+  if(s.time<3||s.poss>=7)r.gameOver=true;else r.again=true;
+  return r;
+}
+const DFN_COACH={drive:'ドライブは「まえに でる」か「よこに つく」。てきの いく ほうを みよう！',pass:'ボールだけ みない！ パスコースも ふさごう。',shot:'シュートの ときは て を あげて チェック！',help:'ぬかれたら みんなで たすける。ヘルプは だいじ！',two:'ふたりの うごきを みて、あぶない ほうを まもろう。'};
+function dfnNarrate(prev,res,wrap){
+  const e=res.st.end,i=res.info,out={head:i.head||'GOOD!',cls:'good',line:i.line,coach:DFN_COACH[i.pat]};
+  if(e){
+    if(e.type==='rscore'){out.head='RED TEAM SCORE!';out.cls='bad';out.coach='ざんねん！ つぎは ちゃんと とめよう！';}
+    else if(wrap&&wrap.clutch)out.head='CLUTCH DEFENSE!!';
+  }else out.cls=i.ok?'good':'ok';
+  return out;
+}
+
+</script>
+
+<script id="app">
+'use strict';
+const $=id=>document.getElementById(id);
+/* ---------- save data ---------- */
+const SAVE_KEY='bbTactics.v1';
+const defSave=()=>({xp:0,answered:0,correct:0,bestCombo:0,themes:{},sound:true,challengeBest:0,scn:{plays:0,wins:0,smart:0,good:0,assist:0,score:0,clutch:0,turnover:0,chalBest:0,dstop:0,dsteal:0}});
+function loadSave(){try{const j=JSON.parse(localStorage.getItem(SAVE_KEY));if(j&&typeof j==='object')return Object.assign(defSave(),j);}catch(e){}return defSave();}
+let SAVE=loadSave();SAVE.scn=Object.assign(defSave().scn,SAVE.scn||{});
+function persist(){try{localStorage.setItem(SAVE_KEY,JSON.stringify(SAVE));}catch(e){}}
+const RANKS=[{n:'ROOKIE',xp:0,c:'#8fb4ff'},{n:'STARTER',xp:100,c:'#35ff8a'},{n:'ACE',xp:300,c:'#2ea8ff'},{n:'ALL STAR',xp:600,c:'#ff8a1f'},{n:'COURT MASTER',xp:1000,c:'#ffd23f'}];
+const UNLOCK=[0,5,12,22,35];
+const rankIdx=xp=>{let i=0;RANKS.forEach((r,k)=>{if(xp>=r.xp)i=k;});return i;};
+const unlockedLevel=c=>{let l=1;UNLOCK.forEach((u,i)=>{if(c>=u)l=i+1;});return l;};
+const CAT_DEF=[
+ {id:'pass',name:'パス',icon:'🔁',desc:'みかたに ボールを まわそう'},
+ {id:'dribble',name:'ドリブル',icon:'⚡',desc:'ドリブルで すすもう'},
+ {id:'shoot',name:'シュート',icon:'🎯',desc:'うつ？ うたない？'},
+ {id:'free',name:'フリーの みかたを さがす',icon:'👀',desc:'あいている人を みつけよう'},
+ {id:'defense',name:'ディフェンスを かわす',icon:'💨',desc:'てきを かわそう'}];
+
+/* ---------- sound ---------- */
+let AC=null;
+function sfx(kind){
+  if(!SAVE.sound)return;
+  try{
+    AC=AC||new (window.AudioContext||window.webkitAudioContext)();
+    const t=AC.currentTime;
+    const seq={good:[[660,0,.09],[880,.09,.09],[1175,.18,.16]],bad:[[330,0,.12],[262,.12,.18]],pass:[[520,0,.06]],swish:[[900,0,.05],[1200,.05,.05],[1500,.1,.12]],rank:[[523,0,.12],[659,.12,.12],[784,.24,.12],[1047,.36,.3]],tap:[[440,0,.04]]}[kind]||[];
+    seq.forEach(([f,d,l])=>{const o=AC.createOscillator(),g=AC.createGain();o.type=kind==='bad'?'sine':'triangle';o.frequency.value=f;g.gain.setValueAtTime(.0001,t+d);g.gain.exponentialRampToValueAtTime(.12,t+d+.01);g.gain.exponentialRampToValueAtTime(.0001,t+d+l);o.connect(g);g.connect(AC.destination);o.start(t+d);o.stop(t+d+l+.02);});
+  }catch(e){}
+}
+
+/* ---------- scene (描画用の状態) ---------- */
+let S=null;
+function ballPos(h){return {x:h.x+4.2,y:h.y+1.8};}
+function loadScene(sc){
+  const me={x:sc.me.x,y:sc.me.y,num:sc.me.num,kind:'me'};
+  const mates=sc.mates.map(m=>({x:m.x,y:m.y,num:m.num,kind:'mate'}));
+  const foes=sc.foes.map(f=>({x:f.x,y:f.y,num:f.num,kind:'foe'}));
+  const holder=sc.holder==='me'?me:mates[sc.holder];
+  S={me,mates,foes,ball:{x:holder.x,y:holder.y,h:0,holder,dribble:false},arrows:[],rings:[],hint:[],parts:[],t0:performance.now()};
+}
+/* ---------- renderer ---------- */
+const cv=$('court'),ctx=cv.getContext('2d');
+let SC=1,DPR=1,K=1,bg=null;
+function resizeCourt(){
+  const wrap=$('courtWrap'),cw=wrap.clientWidth,ch=wrap.clientHeight;
+  if(!cw||!ch)return;
+  SC=Math.min(cw/W,ch/H);
+  const pw=Math.floor(W*SC),ph=Math.floor(H*SC);
+  DPR=Math.min(window.devicePixelRatio||1,2.5);K=SC*DPR;
+  const box=$('courtBox');box.style.width=pw+'px';box.style.height=ph+'px';
+  cv.width=Math.round(pw*DPR);cv.height=Math.round(ph*DPR);
+  bg=document.createElement('canvas');bg.width=cv.width;bg.height=cv.height;
+  const b=bg.getContext('2d');if(b){b.setTransform(K,0,0,K,0,0);drawCourt(b);}
+}
+function drawCourt(c){
+  const g=c.createLinearGradient(0,0,0,H);g.addColorStop(0,'#10285f');g.addColorStop(1,'#071233');
+  c.fillStyle=g;c.fillRect(0,0,W,H);
+  c.globalAlpha=.07;c.fillStyle='#4aa8ff';for(let y=0;y<H;y+=8)if((y/8|0)%2)c.fillRect(0,y,W,8);c.globalAlpha=1;
+  c.fillStyle='rgba(255,138,31,.17)';c.fillRect(34,1,32,35);
+  c.save();c.beginPath();c.rect(1,1,98,86);c.clip();
+  c.fillStyle='rgba(46,168,255,.07)';c.beginPath();c.moveTo(9,1);c.lineTo(9,18.1);c.arc(50,9,42,2.923,.2185,true);c.lineTo(91,1);c.closePath();c.fill();c.restore();
+  c.save();c.strokeStyle='#8fd8ff';c.lineWidth=.55;c.shadowColor='#2ea8ff';c.shadowBlur=7*K;c.lineJoin='round';
+  c.strokeRect(1,1,98,86);
+  c.strokeRect(34,1,32,35);
+  c.beginPath();c.arc(50,36,11,0,Math.PI);c.stroke();
+  c.setLineDash([1.6,1.4]);c.beginPath();c.arc(50,36,11,Math.PI,Math.PI*2);c.stroke();c.setLineDash([]);
+  c.beginPath();c.arc(50,9,6,0,Math.PI);c.stroke();
+  c.beginPath();c.moveTo(9,1);c.lineTo(9,18.1);c.arc(50,9,42,2.923,.2185,true);c.lineTo(91,1);c.stroke();
+  c.beginPath();c.arc(50,87,12,Math.PI,Math.PI*2);c.stroke();
+  c.strokeStyle='#fff';c.lineWidth=.9;c.beginPath();c.moveTo(44,4.2);c.lineTo(56,4.2);c.stroke();
+  c.strokeStyle='#ff8a1f';c.shadowColor='#ff8a1f';c.lineWidth=.8;c.beginPath();c.moveTo(50,4.2);c.lineTo(50,6.6);c.stroke();
+  c.beginPath();c.arc(50,9,2.4,0,Math.PI*2);c.stroke();
+  c.restore();
+  c.font='bold 2.6px sans-serif';c.fillStyle='rgba(143,216,255,.35)';c.textAlign='center';
+  c.fillText('GOAL',50,2.9>0?-.5+4:4);
+}
+function arrow(c,a,b,col,dash,w){
+  const dx=b.x-a.x,dy=b.y-a.y,l=Math.hypot(dx,dy);if(l<2)return;
+  const ux=dx/l,uy=dy/l,sa={x:a.x+ux*4.6,y:a.y+uy*4.6},eb={x:b.x-ux*(dash===2?0:4.4),y:b.y-uy*(dash===2?0:4.4)};
+  c.save();c.strokeStyle=col;c.fillStyle=col;c.lineWidth=w||.9;c.shadowColor=col;c.shadowBlur=8*K;c.lineCap='round';
+  if(dash)c.setLineDash([2,1.6]);
+  c.beginPath();c.moveTo(sa.x,sa.y);c.lineTo(eb.x,eb.y);c.stroke();c.setLineDash([]);
+  const hs=3;c.beginPath();c.moveTo(eb.x+ux*1.2,eb.y+uy*1.2);c.lineTo(eb.x-ux*hs-uy*hs*.6,eb.y-uy*hs+ux*hs*.6);c.lineTo(eb.x-ux*hs+uy*hs*.6,eb.y-uy*hs-ux*hs*.6);c.closePath();c.fill();
+  c.restore();
+}
+function drawPlayer(c,p,t){
+  const me=p.kind==='me',r=me?4.4:3.9;
+  c.fillStyle='rgba(0,0,0,.35)';c.beginPath();c.ellipse(p.x,p.y+r*.75,r*.95,r*.4,0,0,7);c.fill();
+  if(me){const pu=1+Math.sin(t/260)*.07;c.save();c.shadowColor='#ffd23f';c.shadowBlur=14*K;c.strokeStyle='#ffd23f';c.lineWidth=1.1;c.beginPath();c.arc(p.x,p.y,(r+1.5)*pu,0,7);c.stroke();c.restore();}
+  const col=p.kind==='foe'?['#ff7a85','#d3182c']:['#5aa6ff','#1243cf'];
+  const g=c.createRadialGradient(p.x-r*.35,p.y-r*.4,r*.1,p.x,p.y,r);g.addColorStop(0,col[0]);g.addColorStop(1,col[1]);
+  c.fillStyle=g;c.beginPath();c.arc(p.x,p.y,r,0,7);c.fill();
+  c.lineWidth=.45;c.strokeStyle='rgba(255,255,255,.9)';c.stroke();
+  c.fillStyle='#fff';c.font='bold 4px sans-serif';c.textAlign='center';c.textBaseline='middle';c.fillText(String(p.num),p.x,p.y+.3);
+  if(me){c.fillStyle='#ffd23f';const w=9.6,h=3.8,x=p.x-w/2,y=p.y+r+2.4;c.beginPath();c.rect(x,y,w,h);c.fill();c.fillStyle='#1a1200';c.font='bold 3px sans-serif';c.fillText('YOU',p.x,y+h/2+.2);
+    c.fillStyle='#ffd23f';c.beginPath();c.moveTo(p.x-1.3,y);c.lineTo(p.x+1.3,y);c.lineTo(p.x,y-1.5);c.fill();}
+  c.textBaseline='alphabetic';
+}
+function drawBall(c,b,t){
+  let x=b.x,y=b.y,h=b.h;
+  if(b.holder){const p=ballPos(b.holder);x=p.x;y=p.y;if(b.dribble)h=Math.abs(Math.sin(t/110))*3.2;}
+  c.fillStyle='rgba(0,0,0,.35)';c.beginPath();c.ellipse(x,y+2.2,2,.9,0,0,7);c.fill();
+  const by=y-h*.6,r=2.2+h*.04;
+  c.save();c.shadowColor='#ff8a1f';c.shadowBlur=8*K;
+  const g=c.createRadialGradient(x-.7,by-.7,.3,x,by,r);g.addColorStop(0,'#ffb766');g.addColorStop(1,'#e5600b');
+  c.fillStyle=g;c.beginPath();c.arc(x,by,r,0,7);c.fill();c.restore();
+  c.strokeStyle='#5a2400';c.lineWidth=.25;c.beginPath();c.arc(x,by,r,0,7);c.moveTo(x-r,by);c.lineTo(x+r,by);c.moveTo(x,by-r);c.lineTo(x,by+r);c.stroke();
+}
+function frame(){
+  requestAnimationFrame(frame);
+  if(!S||!bg||!$('scGame').classList.contains('active'))return;
+  const t=performance.now()-S.t0;
+  ctx.setTransform(1,0,0,1,0,0);ctx.drawImage(bg,0,0);
+  ctx.setTransform(K,0,0,K,0,0);
+  for(const h of S.hint){
+    if(h.t==='line')arrow(ctx,h.a,h.b,h.c,h.dash,.6);
+    else{ctx.save();ctx.strokeStyle=h.c;ctx.lineWidth=.8;ctx.shadowColor=h.c;ctx.shadowBlur=8*K;ctx.setLineDash([1.6,1.2]);ctx.beginPath();ctx.arc(h.p.x,h.p.y,4.6,0,7);ctx.stroke();ctx.restore();}
+  }
+  for(const r of S.rings){const pu=1+Math.sin(t/180)*.12;ctx.save();ctx.strokeStyle=r.c;ctx.lineWidth=.9;ctx.shadowColor=r.c;ctx.shadowBlur=10*K;ctx.beginPath();ctx.arc(r.x,r.y,(r.r||5.8)*pu,0,7);ctx.stroke();ctx.restore();}
+  for(const a of S.arrows)arrow(ctx,a.a,a.b,a.c,a.dash,a.w);
+  const all=[...S.foes,...S.mates,S.me].sort((a,b)=>a.y-b.y);
+  for(const p of all)drawPlayer(ctx,p,t);
+  drawBall(ctx,S.ball,t);
+  for(let i=S.parts.length-1;i>=0;i--){const p=S.parts[i];p.x+=p.vx;p.y+=p.vy;p.vy+=.05;p.l-=1;if(p.l<=0){S.parts.splice(i,1);continue;}ctx.globalAlpha=Math.min(1,p.l/20);ctx.fillStyle=p.c;ctx.beginPath();ctx.arc(p.x,p.y,p.s,0,7);ctx.fill();}
+  ctx.globalAlpha=1;
+}
+function sparks(x,y,col,n){if(!S)return;for(let i=0;i<n;i++){const a=Math.random()*6.283,v=rnd(.3,1.4);S.parts.push({x,y,vx:Math.cos(a)*v,vy:Math.sin(a)*v-.4,l:rnd(24,50),c:pick([col,'#fff','#ffd23f','#ff8a1f']),s:rnd(.4,1)});}}
+function burst(text,cls){const d=document.createElement('div');d.className='burst '+(cls||'');d.textContent=text;$('fxLayer').appendChild(d);setTimeout(()=>d.remove(),1400);}
+function flash(kind){const b=$('courtBox');b.classList.remove('flash-good','flash-bad');void b.offsetWidth;b.classList.add(kind);}
+
+/* ---------- animation sim ---------- */
+let curSim=null;
+class Sim{
+  constructor(s){this.s=s;curSim=this;}
+  get dead(){return curSim!==this||this.s!==S;}
+  wait(ms){return new Promise(r=>setTimeout(r,this.dead?0:ms));}
+  tween(items,ms){return new Promise(res=>{
+    if(this.dead){res();return;}
+    const st=items.map(i=>({x:i.o.x,y:i.o.y})),t0=performance.now(),self=this;
+    (function f(){const k=Math.min(1,(performance.now()-t0)/ms),e=k<.5?2*k*k:1-Math.pow(-2*k+2,2)/2;
+      items.forEach((it,j)=>{it.o.x=st[j].x+(it.x-st[j].x)*e;it.o.y=st[j].y+(it.y-st[j].y)*e;});
+      if(k<1&&!self.dead)requestAnimationFrame(f);else res();})();});}
+  fly(to,ms,arc){return new Promise(res=>{
+    const b=this.s.ball;
+    if(b.holder){const p=ballPos(b.holder);b.x=p.x;b.y=p.y;b.holder=null;}
+    if(this.dead){b.x=to.x;b.y=to.y;res();return;}
+    const sx=b.x,sy=b.y,t0=performance.now(),self=this;
+    (function f(){const k=Math.min(1,(performance.now()-t0)/ms);b.x=sx+(to.x-sx)*k;b.y=sy+(to.y-sy)*k;b.h=Math.sin(Math.PI*k)*(arc||0);
+      if(k<1&&!self.dead)requestAnimationFrame(f);else{b.h=0;res();}})();});}
+  say(t,c){if(!this.dead)burst(t,c);}
+  spark(x,y,col,n){if(!this.dead)sparks(x,y,col,n);}
+}
+const drift=(foes,to,amt)=>foes.map(f=>{const l=dist(f,to)||1,m=Math.min(amt,Math.max(0,l-9));return {o:f,x:f.x+(to.x-f.x)/l*m,y:f.y+(to.y-f.y)/l*m};});
+const nearestObj=(list,p)=>nearest(list,p).f;
+async function passTo(sim,target){sfx('pass');await sim.fly(ballPos(target),520,5);sim.s.ball.holder=target;}
+async function doShot(sim,shooter,mode){
+  const s=sim.s,b=s.ball;
+  if(mode==='block'){
+    const f=nearestObj(SHOT_OPP?[s.me,...s.mates]:s.foes,shooter);
+    await sim.tween([{o:f,x:shooter.x+(GOAL.x-shooter.x)*.16,y:shooter.y+(GOAL.y-shooter.y)*.16}],260);
+    await sim.fly({x:shooter.x+rnd(-12,12),y:shooter.y+rnd(8,14)},420,5);
+    sim.say('ブロックされた！','miss');return;
+  }
+  sfx('pass');
+  if(mode==='swish'){
+    await sim.fly({x:GOAL.x,y:GOAL.y},780,16);
+    sim.spark(GOAL.x,GOAL.y,'#ffd23f',34);if(!sim.dead){sfx('swish');flash(SHOT_OPP?'flash-bad':'flash-good');}
+    await sim.fly({x:GOAL.x,y:GOAL.y+6},260,0);
+  }else if(mode==='rim'){
+    await sim.fly({x:GOAL.x+rnd(-2.5,2.5),y:GOAL.y+.5},760,15);
+    await sim.fly({x:GOAL.x+rnd(-12,12),y:GOAL.y+rnd(11,17)},460,6);
+    sim.say('はいらなかった…','miss');
+  }else{
+    await sim.fly({x:GOAL.x+rnd(-6,6),y:GOAL.y+rnd(-1,2)},760,15);
+    await sim.fly({x:GOAL.x+rnd(-18,18),y:GOAL.y+rnd(14,24)},520,7);
+    sim.say('はずれた…','miss');
+  }
+}
+async function playAction(sim,q,key,isCorrect,quiet){
+  const sc=q.sc,ev=q.evals[key],s=sim.s,me=s.me,b=s.ball;
+  s.arrows=[];s.hint=[];s.rings=[];
+  const say=(t,c)=>{if(!quiet)sim.say(t,c);};
+  const idx=f=>sc.foes.indexOf(f);
+  const foeObj=f=>s.foes[idx(f)]||nearestObj(s.foes,me);
+  if(key==='shoot'){
+    const mode=isCorrect?'swish':ev.out==='block'?'block':ev.out==='miss'?'miss':'rim';
+    await doShot(sim,me,mode);
+  }else if(key.startsWith('pass')){
+    const m=s.mates[+key.slice(4)];
+    if(ev.out==='steal'){
+      const f=ev.lf?foeObj(ev.lf):nearestObj(s.foes,lerpP(me,m,.5)),pt=segPoint(f,me,m);
+      const to={x:pt.x,y:pt.y};
+      await Promise.all([sim.fly(to,400,4),sim.tween([{o:f,x:to.x,y:to.y}],400)]);
+      b.holder=f;say('パスを とられた！','miss');
+    }else{
+      await Promise.all([passTo(sim,m),sim.tween(drift(s.foes,m,2.5),520)]);
+      if(isCorrect){
+        const d=dist(m,GOAL),mv=Math.min(9,Math.max(0,d-11)),t=mv/(d||1);
+        b.dribble=true;await sim.tween([{o:m,x:m.x+(GOAL.x-m.x)*t,y:m.y+(GOAL.y-m.y)*t},...drift(s.foes,GOAL,3)],560);b.dribble=false;
+        await doShot(sim,m,'swish');
+      }else if(ev.out==='covered'){
+        const f=nearestObj(s.foes,m),l=dist(f,m)||1;
+        await sim.tween([{o:f,x:m.x+(f.x-m.x)/l*8.4,y:m.y+(f.y-m.y)/l*8.4}],380);
+        say('てきに おさえられた！','miss');
+      }else{await sim.wait(300);say('つながったけど…','miss');}
+    }
+  }else if(key.startsWith('dribble')){
+    const sp=ev.spot;b.dribble=true;
+    if(isCorrect){
+      const chase=s.foes.map((f,i)=>{
+        if(sc.screen&&i===sc.screen.foe){const S0=s.mates[sc.screen.mate];let tx=f.x+(sp.x-f.x)*.3,ty=f.y+(sp.y-f.y)*.3;const l=dist({x:tx,y:ty},S0);if(l<8.2){tx=S0.x+(tx-S0.x)/(l||1)*8.2;ty=S0.y+(ty-S0.y)/(l||1)*8.2;}return {o:f,x:tx,y:ty};}
+        return drift([f],sp,5)[0];});
+      await sim.tween([{o:me,x:sp.x,y:sp.y},...chase],820);b.dribble=false;
+      if(dist(sp,GOAL)<=30)await doShot(sim,me,'swish');else sim.spark(me.x,me.y,'#35ff8a',22);
+    }else if(ev.out==='stop'){
+      const f=ev.stopper?foeObj(ev.stopper):nearestObj(s.foes,me),mid=lerpP(me,sp,.55),l=dist(f,mid)||1;
+      await sim.tween([{o:me,x:mid.x,y:mid.y},{o:f,x:mid.x+(f.x-mid.x)/l*8.4,y:mid.y+(f.y-mid.y)/l*8.4}],520);
+      b.dribble=false;b.holder=f;say('ドリブルを とめられた！','miss');
+    }else{
+      await sim.tween([{o:me,x:sp.x,y:sp.y},...drift(s.foes,sp,4)],760);b.dribble=false;say('すすめたけど…','miss');
+    }
+  }else{
+    const hold=s.mates[sc.holder],sp=ev.spot,drv=sc.drive,moveMe=key!=='off_stay';
+    if(drv&&ev.out==='drive'){
+      const mid=lerpP(drv.from,drv.to,.5),tasks=[];
+      b.dribble=true;
+      if(moveMe)tasks.push({o:me,x:sp.x,y:sp.y});
+      tasks.push({o:hold,x:mid.x,y:mid.y});
+      await sim.tween(tasks,700);
+      const f=nearestObj(s.foes,hold),l=dist(f,hold)||1;
+      await sim.tween([{o:f,x:hold.x+(f.x-hold.x)/l*8.4,y:hold.y+(f.y-hold.y)/l*8.4}],360);
+      b.dribble=false;b.holder=f;say('じゃまに なっちゃった！','miss');
+    }else if(ev.out==='bump'){
+      const pt=lerpP(me,sp,.5),f=ev.pathFoe?foeObj(ev.pathFoe):nearestObj(s.foes,pt);
+      const l=dist(f,pt)||1;
+      await sim.tween([{o:me,x:pt.x,y:pt.y},{o:f,x:pt.x+(f.x-pt.x)/l*8.4,y:pt.y+(f.y-pt.y)/l*8.4}],520);
+      say('ぶつかっちゃった！','miss');
+    }else{
+      const tasks=[];
+      if(moveMe)tasks.push({o:me,x:sp.x,y:sp.y});
+      if(drv){tasks.push({o:hold,x:drv.to.x,y:drv.to.y});b.dribble=true;}
+      if(tasks.length)await sim.tween([...tasks,...(moveMe?drift(s.foes,sp,2):[])],760);else await sim.wait(300);
+      b.dribble=false;
+      if(ev.out==='steal'){
+        const f=ev.lf?foeObj(ev.lf):nearestObj(s.foes,lerpP(hold,me,.5)),pt=segPoint(f,hold,me);
+        await Promise.all([sim.fly({x:pt.x,y:pt.y},400,4),sim.tween([{o:f,x:pt.x,y:pt.y}],400)]);
+        b.holder=f;say('パスを とられた！','miss');
+      }else{
+        await passTo(sim,me);
+        if(isCorrect){
+          const d=dist(me,GOAL),mv=Math.min(8,Math.max(0,d-11)),t=mv/(d||1);
+          if(mv>1){b.dribble=true;await sim.tween([{o:me,x:me.x+(GOAL.x-me.x)*t,y:me.y+(GOAL.y-me.y)*t},...drift(s.foes,GOAL,2)],480);b.dribble=false;}
+          await doShot(sim,me,'swish');
+        }else if(ev.out==='covered'){
+          const f=nearestObj(s.foes,me),l=dist(f,me)||1;
+          await sim.tween([{o:f,x:me.x+(f.x-me.x)/l*8.4,y:me.y+(f.y-me.y)/l*8.4}],380);say('てきに つかまった！','miss');
+        }else{await sim.wait(300);say('つながったけど…','miss');}
+      }
+    }
+  }
+  await sim.wait(isCorrect?500:300);
+}
+function questionArrows(q){const a=[];if(q.sc.drive)a.push({a:q.sc.drive.from,b:q.sc.drive.to,c:'#7fe3ff',dash:true,w:.9});return a;}
+function correctArrows(q){
+  const sc=q.sc,k=q.correct,ev=q.evals[k],a=[],rings=[];
+  if(k==='shoot')a.push({a:sc.me,b:GOAL,c:'#ff8a1f',dash:false});
+  else if(k.startsWith('pass')){const m=sc.mates[+k.slice(4)];a.push({a:sc.me,b:m,c:'#ff8a1f',dash:true});rings.push({x:m.x,y:m.y,c:'#35ff8a'});}
+  else if(k.startsWith('dribble')){a.push({a:sc.me,b:ev.spot,c:'#ffd23f',dash:false,w:1.1});rings.push({x:ev.spot.x,y:ev.spot.y,c:'#35ff8a',r:4});}
+  else{
+    const h=sc.drive?sc.drive.to:sc.mates[sc.holder];
+    if(sc.drive)a.push({a:sc.drive.from,b:sc.drive.to,c:'#7fe3ff',dash:true});
+    a.push({a:sc.me,b:ev.spot,c:'#ffd23f',dash:false,w:1.1},{a:h,b:ev.spot,c:'#ff8a1f',dash:true});rings.push({x:ev.spot.x,y:ev.spot.y,c:'#35ff8a',r:4});
+  }
+  return {a,rings};
+}
+
+/* ---------- game state / flow ---------- */
+let G=null;
+function showScreen(id){document.querySelectorAll('.screen').forEach(s=>s.classList.toggle('active',s.id===id));}
+function rankHTML(el){
+  const i=rankIdx(SAVE.xp),r=RANKS[i],nx=RANKS[i+1];
+  const pct=nx?Math.round((SAVE.xp-r.xp)/(nx.xp-r.xp)*100):100;
+  el.innerHTML=`<div class="rank-top"><div class="rank-name" style="color:${r.c};text-shadow:0 0 12px ${r.c}">${r.n}</div><div class="rank-sub">XP ${SAVE.xp}${nx?` ／ つぎの ランクまで あと ${nx.xp-SAVE.xp}`:'  MAX!'}</div></div><div class="xpbar"><i style="width:${pct}%"></i></div>`;
+}
+function updateTitle(){
+  rankHTML($('titleRank'));
+  $('btnSoundT').textContent=SAVE.sound?'🔊 おと ON':'🔇 おと OFF';
+  $('btnSound').textContent=SAVE.sound?'🔊':'🔇';
+}
+function updateHud(){
+  const i=rankIdx(SAVE.xp),r=RANKS[i],nx=RANKS[i+1];
+  $('hudStage').textContent=G.ch?`${G.ch.i}/${G.ch.total}`:`${G.qn} · LV${G.q?G.q.level:1}`;
+  $('hudCombo').textContent=G.combo;$('hudXp').textContent=SAVE.xp;
+  const hr=$('hudRank');hr.textContent=r.n;hr.style.color=r.c;
+  $('xpFill').style.width=(nx?Math.round((SAVE.xp-r.xp)/(nx.xp-r.xp)*100):100)+'%';
+}
+function pickLevel(){
+  const hi=unlockedLevel(SAVE.correct);
+  if(G.mode==='training'){const mn=catMinLevel(G.cat);return mn+Math.floor(Math.random()*(Math.max(mn,hi)-mn+1));}
+  if(G.mode==='challenge')return Math.max(1,hi-(Math.random()<.4?1:0));
+  if(G.level!=='auto')return Math.min(G.level,hi);
+  return Math.random()<.55?hi:1+Math.floor(Math.random()*hi);
+}
+function startGame(mode,opts){
+  opts=opts||{};
+  Z=null;$('scGame').classList.remove('scn');
+  G={mode,level:opts.level||'auto',cat:opts.cat||null,qn:0,combo:0,q:null,phase:'idle',hint:false,attempts:0,ch:mode==='challenge'?{i:0,total:10,ok:0,xp:0}:null};
+  showScreen('scGame');
+  requestAnimationFrame(()=>{resizeCourt();nextQuestion();});
+}
+function nextQuestion(){
+  const lv=pickLevel();G.qn++;if(G.ch)G.ch.i++;
+  G.q=makeQuestion(lv,{cats:G.cat?CATS[G.cat]:null});
+  G.phase='question';G.hint=false;G.attempts=0;
+  loadScene(G.q.sc);S.arrows=questionArrows(G.q);
+  showQuestionPanel();updateHud();
+}
+function showQuestionPanel(){
+  const q=G.q;
+  $('panelR').classList.add('hide');$('panelQ').classList.remove('hide');
+  $('qTag').textContent=G.mode==='challenge'?`Q ${G.ch.i}/10`:G.mode==='training'?'TRAINING':`MISSION ${String(G.qn).padStart(2,'0')}`;
+  $('qTheme').textContent=q.themeName;$('qText').textContent=q.prompt;
+  const ch=$('qChips');ch.innerHTML='';q.chips.forEach(t=>{const s=document.createElement('span');s.textContent=t;ch.appendChild(s);});
+  const hint=$('qHint');
+  if(G.hint){hint.textContent='💡 '+q.hintText;hint.classList.remove('hide');ch.classList.add('hide');}else{hint.classList.add('hide');ch.classList.remove('hide');}
+  const o=$('opts');o.innerHTML='';
+  q.options.forEach((op,i)=>{const b=document.createElement('button');b.className='opt';b.innerHTML=`<i>${'ABCD'[i]}</i><span></span>`;b.lastChild.textContent=op.label;b.onclick=()=>answer(op.key,b);o.appendChild(b);});
+  $('btnHint').disabled=G.hint;
+  setTimeout(resizeCourt,0);
+}
+function showHint(){
+  if(G.phase!=='question'||G.hint)return;
+  G.hint=true;sfx('tap');S.hint=G.q.hintDraw;
+  $('qHint').textContent='💡 '+G.q.hintText;$('qHint').classList.remove('hide');$('qChips').classList.add('hide');$('btnHint').disabled=true;
+  setTimeout(resizeCourt,0);
+}
+async function answer(key,btn){
+  if(G.phase!=='question')return;
+  G.phase='animating';sfx('tap');
+  document.querySelectorAll('#opts .opt').forEach(b=>{b.disabled=true;});btn.classList.add('picked');btn.disabled=false;
+  const q=G.q,ok=key===q.correct;
+  S.hint=[];S.arrows=[];
+  const sim=new Sim(S);
+  await playAction(sim,q,key,ok,false);
+  if(sim.dead)return;
+  const first=G.attempts===0;let gain=0;
+  const rankBefore=rankIdx(SAVE.xp),lvBefore=unlockedLevel(SAVE.correct);
+  if(first){
+    SAVE.answered++;const t=SAVE.themes[q.themeId]||(SAVE.themes[q.themeId]={a:0,c:0});t.a++;
+    if(ok){G.combo++;SAVE.correct++;t.c++;gain=Math.round((10+q.level*2+Math.min(G.combo-1,10)*2)*(G.hint?.7:1));if(G.combo>SAVE.bestCombo)SAVE.bestCombo=G.combo;if(G.ch)G.ch.ok++;}
+    else{G.combo=0;gain=2;}
+  }else gain=ok?4:0;
+  SAVE.xp+=gain;if(G.ch)G.ch.xp+=gain;persist();
+  const praise=key==='shoot'?pick(['SWISH!','EXCELLENT!']):G.combo>=4&&first?'PERFECT PLAY!':key.startsWith('pass')?pick(['NICE PASS!','GOOD!']):key==='off_cut'?pick(['EXCELLENT!','PERFECT PLAY!']):pick(['GOOD!','PERFECT PLAY!','EXCELLENT!']);
+  if(ok){burst(praise);sfx('good');flash('flash-good');if(first&&G.combo>=2)setTimeout(()=>burst(`COMBO x${G.combo}!`,'combo'),350);}
+  else{sfx('bad');flash('flash-bad');}
+  showResult(key,ok,gain,praise,first);
+  updateHud();
+  const rankAfter=rankIdx(SAVE.xp),lvAfter=unlockedLevel(SAVE.correct);
+  if(rankAfter>rankBefore){const r=RANKS[rankAfter];sfx('rank');showMsg({title:'RANK UP!',rank:r.n,color:r.c,body:'ランクが あがったよ！ すごい！'});}
+  if(lvAfter>lvBefore&&G.mode!=='training')showMsg({title:'NEW LEVEL!',rank:`LEVEL ${lvAfter}`,color:'#35ff8a',body:'あたらしい もんだいが かいほうされたよ！<br>てきと みかたが ふえて、むずかしく なるよ。'});
+}
+function showResult(key,ok,gain,praise,first){
+  const q=G.q,cl=q.options.find(o=>o.key===q.correct).label,my=q.options.find(o=>o.key===key).label;
+  S.arrows=[];S.rings=[];
+  const ca=correctArrows(q);
+  if(!ok){S.arrows=ca.a;S.rings=ca.rings;}
+  $('panelQ').classList.add('hide');$('panelR').classList.remove('hide');
+  const t=$('resTitle');t.textContent=ok?praise:'惜しい！';t.className='restitle '+(ok?'good':'bad');
+  $('resXp').textContent=gain?`+${gain} XP${first&&ok&&G.combo>=2?`  COMBO x${G.combo}`:''}`:'';
+  $('resSub').innerHTML=ok?(first?'せいかい！ いい はんだんだね！':'こんどは できたね！'):`「${my}」は… ${q.evals[key].why||'もっと いい チャンスが あったよ'}。<br>こっちなら もっと チャンスだった！ → <b>${cl}</b>`;
+  const e=q.explain;
+  $('resExp').innerHTML='';
+  [['① いまの じょうきょう',e.situ],['② なぜ いいの？',e.why],['③ ミニバスの コツ',e.tip]].forEach(([h,tx])=>{const d=document.createElement('div');const b=document.createElement('b');b.textContent=h;d.appendChild(b);d.appendChild(document.createTextNode(tx));$('resExp').appendChild(d);});
+  $('btnRetry').classList.toggle('hide',ok||!!G.ch);
+  $('btnWatch').textContent=ok?'▶ もういちど みる':'▶ せいかいを みる';
+  $('btnNext').textContent=G.ch&&G.ch.i>=G.ch.total?'けっかを みる ▶':'つぎへ ▶';
+  G.phase='result';
+  setTimeout(resizeCourt,0);
+}
+async function watchCorrect(){
+  if(G.phase!=='result')return;
+  G.phase='animating';
+  ['btnWatch','btnRetry','btnNext'].forEach(i=>$(i).disabled=true);
+  loadScene(G.q.sc);const sim=new Sim(S);
+  await playAction(sim,G.q,G.q.correct,true,true);
+  if(sim.dead)return;
+  const ca=correctArrows(G.q);S.arrows=ca.a;S.rings=ca.rings;
+  ['btnWatch','btnRetry','btnNext'].forEach(i=>$(i).disabled=false);G.phase='result';
+}
+function retry(){
+  if(G.phase!=='result')return;
+  G.attempts++;G.phase='question';loadScene(G.q.sc);S.arrows=questionArrows(G.q);
+  if(G.hint)S.hint=G.q.hintDraw;
+  showQuestionPanel();
+}
+function nextBtn(){
+  if(G.phase!=='result')return;
+  if(G.ch&&G.ch.i>=G.ch.total){endChallenge();return;}
+  nextQuestion();
+}
+function endChallenge(){
+  const n=G.ch.ok,i=n>=10?4:n>=8?3:n>=6?2:n>=4?1:0,r=RANKS[i];
+  if(n>SAVE.challengeBest){SAVE.challengeBest=n;}
+  const bonus=n*3;SAVE.xp+=bonus;persist();updateHud();sfx(n>=6?'rank':'good');
+  const mode=G.mode;
+  showMsg({title:'RESULT',rank:r.n,color:r.c,body:`10もん ちゅう <b style="color:#ffd23f;font-size:22px">${n}</b> もん せいかい！<br>ボーナス +${bonus} XP${n>=10?'<br>パーフェクト！ さいこうの コートの しはいしゃ！':''}`,ok:'もういちど ちょうせん',cb:()=>startGame('challenge',{}),ok2:'タイトルへ',cb2:()=>goTitle()});
+}
+function goTitle(){if(curSim)curSim=null;S=null;Z=null;$('scGame').classList.remove('scn');updateTitle();showScreen('scTitle');}
+
+/* ---------- overlays ---------- */
+const ovQ=[];let ovBusy=false;
+function showMsg(d){ovQ.push(d);pumpOv();}
+function pumpOv(){
+  if(ovBusy||!ovQ.length)return;
+  ovBusy=true;const d=ovQ.shift();
+  $('ovTitle').textContent=d.title;const r=$('ovRank');r.textContent=d.rank||'';r.style.color=d.color||'#fff';r.style.textShadow=`0 0 16px ${d.color||'#fff'}`;
+  $('ovBody').innerHTML=d.body||'';
+  $('ovOk').textContent=d.ok||'OK';
+  const b2=$('ovOk2');if(d.ok2){b2.textContent=d.ok2;b2.classList.remove('hide');}else b2.classList.add('hide');
+  $('ovOk').onclick=()=>{closeOv();if(d.cb)d.cb();};
+  b2.onclick=()=>{closeOv();if(d.cb2)d.cb2();};
+  $('ovMsg').classList.add('show');
+}
+function closeOv(){$('ovMsg').classList.remove('show');ovBusy=false;setTimeout(pumpOv,150);}
+function closeSetup(){$('ovSetup').classList.remove('show');}
+function openSetup(mode){
+  if(mode==='scenario'||mode==='chal2')return openScnSetup(mode);
+  const sh=$('sheetBody');sh.innerHTML='';
+  const hi=unlockedLevel(SAVE.correct);
+  const mk=(tag,cls,txt)=>{const e=document.createElement(tag);if(cls)e.className=cls;if(txt!=null)e.textContent=txt;return e;};
+  if(mode==='training'){
+    sh.appendChild(mk('h2','','TRAINING'));sh.appendChild(mk('p','','れんしゅうしたい テーマを えらんでね'));
+    const list=mk('div','catlist');
+    CAT_DEF.forEach(c=>{const b=mk('button','cat');const ic=mk('span','',c.icon);const w=mk('div');w.appendChild(document.createTextNode(c.name));w.appendChild(mk('small','',c.desc));b.appendChild(ic);b.appendChild(w);b.onclick=()=>{closeSetup();startGame('training',{cat:c.id});};list.appendChild(b);});
+    const extra=mk('div','catlist');
+    const b1=mk('button','cat alt');b1.appendChild(mk('span','','🎲'));const w1=mk('div');w1.appendChild(document.createTextNode('ランダム ミッション'));w1.appendChild(mk('small','','いろんな もんだいを 1もんずつ'));b1.appendChild(w1);b1.onclick=()=>{closeSetup();openSetup('mission');};extra.appendChild(b1);
+    const b2=mk('button','cat alt');b2.appendChild(mk('span','','📝'));const w2=mk('div');w2.appendChild(document.createTextNode('10もん クイズ'));w2.appendChild(mk('small','','10もん ぜんぶ せいかいを めざそう'));b2.appendChild(w2);b2.onclick=()=>{closeSetup();startGame('challenge',{});};extra.appendChild(b2);
+    list.appendChild(extra);
+    sh.appendChild(list);
+  }else{
+    sh.appendChild(mk('h2','',mode==='mission'?'MISSION':'10 CHALLENGE'));
+    sh.appendChild(mk('p','',mode==='mission'?'レベルを えらんでね（おまかせ＝じぶんに ちょうど いい むずかしさ）':'10もん れんぞくで ちょうせん！ まちがえても つぎへ すすむよ'));
+    if(mode==='mission'){
+      let sel='auto';const row=mk('div','lvrow');
+      const mkLv=(v,label,sub,locked)=>{const b=mk('button','lv'+(v===sel?' sel':''));b.appendChild(document.createTextNode(label));if(sub)b.appendChild(mk('small','',sub));b.disabled=!!locked;b.onclick=()=>{sel=v;row.querySelectorAll('.lv').forEach(x=>x.classList.remove('sel'));b.classList.add('sel');};row.appendChild(b);};
+      mkLv('auto','おまかせ','AUTO');
+      for(let l=1;l<=5;l++){const lock=l>hi;mkLv(l,'LV'+l,lock?`🔒 あと${UNLOCK[l-1]-SAVE.correct}もん`:'',lock);}
+      sh.appendChild(row);
+      const go=mk('button','bigbtn','START!');go.onclick=()=>{closeSetup();startGame('mission',{level:sel});};sh.appendChild(go);
+    }else{
+      sh.appendChild(mk('p','',`いまの かいほう レベル: LV${hi}　ベスト: ${SAVE.challengeBest}/10`));
+      const go=mk('button','bigbtn','START!');go.onclick=()=>{closeSetup();startGame('challenge',{});};sh.appendChild(go);
+    }
+  }
+  const cl=mk('button','bigbtn sec','とじる');cl.onclick=closeSetup;sh.appendChild(cl);
+  $('ovSetup').classList.add('show');
+}
+/* ---------- stats ---------- */
+function openStats(){
+  rankHTML($('stRank'));
+  fillScnStats();
+  const acc=SAVE.answered?Math.round(SAVE.correct/SAVE.answered*100):0;
+  $('stNums').innerHTML=`<div><b>${acc}%</b><span>せいかいりつ</span></div><div><b>${SAVE.bestCombo}</b><span>さいこう れんぞく</span></div><div><b>${SAVE.correct}/${SAVE.answered}</b><span>せいかい/ちょうせん</span></div>`;
+  const box=$('stThemes');box.innerHTML='';
+  const h=document.createElement('div');h.style.cssText='font-weight:900;color:#ffd23f;font-size:13px';h.textContent='せんじゅつ べつ';box.appendChild(h);
+  const rows=TACTICS.map(t=>({t,s:SAVE.themes[t.id]||{a:0,c:0}}));
+  const played=rows.filter(r=>r.s.a>=2).sort((a,b)=>b.s.c/b.s.a-a.s.c/a.s.a);
+  if(played.length){
+    const best=played[0],worst=played[played.length-1];
+    const p=document.createElement('div');p.style.cssText='font-size:12px;margin-top:5px;font-weight:700;color:#cfe3ff;line-height:1.5';
+    p.innerHTML='⭐ とくい: <b></b>'+(played.length>1?'<br>💪 にがて: <b></b>':'');
+    const bs=p.querySelectorAll('b');bs[0].textContent=best.t.name;if(bs[1])bs[1].textContent=worst.t.name;box.appendChild(p);
+  }
+  rows.forEach(({t,s})=>{
+    const r=document.createElement('div');r.className='trow';
+    const n=document.createElement('div');n.textContent=t.name.replace(/！$/,'');
+    const bar=document.createElement('div');bar.className='tbar';const i=document.createElement('i');i.style.width=(s.a?Math.round(s.c/s.a*100):0)+'%';bar.appendChild(i);
+    const v=document.createElement('div');v.style.textAlign='right';v.textContent=s.a?`${s.c}/${s.a}`:'--';
+    r.appendChild(n);r.appendChild(bar);r.appendChild(v);box.appendChild(r);
+  });
+  showScreen('scStats');
+}
+/* ---------- wiring ---------- */
+document.querySelectorAll('.mbtn').forEach(b=>b.onclick=()=>{sfx('tap');openSetup(b.dataset.mode);});
+$('btnStats').onclick=()=>{sfx('tap');openStats();};
+$('btnStBack').onclick=()=>{updateTitle();showScreen('scTitle');};
+$('btnReset').onclick=()=>{if(confirm('きろくを ぜんぶ けしても いい？')){SAVE=defSave();persist();openStats();updateTitle();}};
+const toggleSound=()=>{SAVE.sound=!SAVE.sound;persist();updateTitle();sfx('tap');};
+$('btnSoundT').onclick=toggleSound;$('btnSound').onclick=toggleSound;
+$('btnMenu').onclick=()=>{goTitle();};
+$('btnHint').onclick=showHint;
+$('btnWatch').onclick=watchCorrect;$('btnRetry').onclick=retry;$('btnNext').onclick=nextBtn;
+$('ovSetup').addEventListener('click',e=>{if(e.target.id==='ovSetup')closeSetup();});
+window.addEventListener('resize',resizeCourt);
+window.addEventListener('orientationchange',()=>setTimeout(resizeCourt,200));
+if(window.ResizeObserver)new ResizeObserver(()=>resizeCourt()).observe($('courtWrap'));
+updateTitle();
+requestAnimationFrame(frame);
+</script>
+<script id="scnui">
+'use strict';
+/* ===== SCENARIO UI 1: scene, scoreboard, events, playback ===== */
+let Z=null;
+const SCN_UNLOCK=[0,2,4,7,10];
+const scnUnlocked=p=>{let l=1;SCN_UNLOCK.forEach((u,i)=>{if(p>=u)l=i+1;});return l;};
+let SHOT_OPP=false;
+function scnLoadScene(st){
+  const def=st.phase==='def';let pl,fo;
+  if(!def){
+    pl=st.off.map((p,i)=>({x:p.x,y:p.y,num:p.num,kind:i===0?'me':'mate'}));
+    fo=st.foes.map(f=>({x:f.x,y:f.y,num:f.num,kind:'foe'}));
+    S={me:pl[0],mates:pl.slice(1),foes:fo,ball:{x:pl[st.h].x,y:pl[st.h].y,h:0,holder:pl[st.h],dribble:false},arrows:[],rings:[],hint:[],parts:[],t0:performance.now()};
+  }else{
+    pl=st.off.map(p=>({x:p.x,y:p.y,num:p.num,kind:'foe'}));
+    fo=st.foes.map((f,i)=>({x:f.x,y:f.y,num:f.num,kind:i===st.hi?'me':'mate'}));
+    S={me:fo[st.hi],mates:fo.filter((_,i)=>i!==st.hi),foes:pl,ball:{x:pl[st.h].x,y:pl[st.h].y,h:0,holder:pl[st.h],dribble:false},arrows:[],rings:[],hint:[],parts:[],t0:performance.now()};
+  }
+  Z.pl=pl;Z.fo=fo;$('scGame').classList.toggle('def',def);
+}
+function scnSync(st){
+  st.off.forEach((p,i)=>{Z.pl[i].x=p.x;Z.pl[i].y=p.y;});
+  st.foes.forEach((f,i)=>{Z.fo[i].x=f.x;Z.fo[i].y=f.y;});
+  S.ball.holder=Z.pl[st.h];S.ball.dribble=false;S.ball.h=0;
+}
+function scnRings(st){
+  if(st.phase==='def'){S.rings=[];return;}
+  S.rings=scnOpenMates(st).map(i=>({x:Z.pl[i].x,y:Z.pl[i].y,c:'#35ff8a',r:6.4}));
+}
+function setClock(t){$('sbClock').textContent=Math.max(0,t).toFixed(1);$('sbMid').classList.toggle('last',t<=5&&t>0);}
+function tickClock(from,to,ms){
+  const t0=performance.now(),id=setInterval(()=>{const k=Math.min(1,(performance.now()-t0)/ms);setClock(from+(to-from)*k);if(k>=1)clearInterval(id);},60);
+}
+function scnScore(st,who,o){
+  o=o||{};who=who||(st.phase==='def'?'opp':'us');
+  $('sbUs').textContent=o.us!=null?o.us:(Z.chal?Z.chal.pts:st.us);
+  $('sbThem').textContent=Z.chal?'-':(o.them!=null?o.them:st.them);
+  $('sbPeriod').textContent=Z.chal?'ATTACK '+Z.chal.i+'/'+Z.chal.total:'FINAL';
+  setClock(o.time!=null?o.time:st.time);
+  $('sbPoss').textContent=who==='opp'?'🏀 RED ATTACK':'🏀 BLUE ATTACK';
+  $('sbBlue').classList.toggle('ball',who!=='opp');$('sbRed').classList.toggle('ball',who==='opp');
+}
+function scoreEvent(team,pts,st){
+  const red=team==='red',el=$(red?'sbThem':'sbUs'),box=$(red?'sbRed':'sbBlue');
+  const to=red?st.them:(Z.chal?Z.chal.pts:st.us),from=Math.max(0,to-pts);
+  burst((red?'RED TEAM +':'BLUE TEAM +')+pts+'!','team '+(red?'team-red':'team-blue'));
+  el.textContent=from;
+  return new Promise(res=>{
+    setTimeout(()=>{el.textContent=to;box.classList.remove('pulse');void box.offsetWidth;box.classList.add('pulse');sfx(red?'bad':'swish');},750);
+    setTimeout(res,2100);
+  });
+}
+function showPhase(team){
+  const p=$('phaseBanner'),red=team==='red';
+  p.className='phase '+(red?'red':'blue');
+  p.querySelector('b').textContent=red?'RED TEAM ATTACK':'BLUE TEAM ATTACK';
+  p.querySelector('span').textContent=red?'相手の攻撃！ まもろう！':'きみの こうげき！';
+  void p.offsetWidth;p.classList.add('show');
+}
+function updateHudS(){
+  const i=rankIdx(SAVE.xp),r=RANKS[i],nx=RANKS[i+1];
+  $('hudStage').textContent=Z.chal?Z.chal.i+'/'+Z.chal.total:'SCN '+Z.num;
+  $('hudCombo').textContent=Z.combo;$('hudXp').textContent=SAVE.xp;
+  const hr=$('hudRank');hr.textContent=r.n;hr.style.color=r.c;
+  $('xpFill').style.width=(nx?Math.round((SAVE.xp-r.xp)/(nx.xp-r.xp)*100):100)+'%';
+}
+function scnBanner(list){
+  const L=$('evtLayer');
+  list.forEach((e,i)=>setTimeout(()=>{
+    const d=document.createElement('div');d.className='evt';
+    const b=document.createElement('b');b.textContent=e.ic+' '+e.id;
+    const s=document.createElement('span');s.textContent=e.t;
+    d.appendChild(b);d.appendChild(s);L.appendChild(d);sfx('pass');setTimeout(()=>d.remove(),2700);
+  },i*400));
+}
+function scnFeed(nar,extra){
+  const f=$('sFeed');f.innerHTML='';
+  const add=(cls,txt)=>{const d=document.createElement('div');d.className=cls;d.textContent=txt;f.appendChild(d);};
+  if(nar){add('fhead '+nar.cls,nar.head);if(nar.line)add('fline',nar.line);if(nar.coach)add('fcoach','📣 '+nar.coach);}
+  if(extra)add('fopp',extra);
+}
+function scnChips(st){
+  const c=$('sChips');c.innerHTML='';
+  st.tags.forEach(t=>{const s=document.createElement('span');s.textContent=t;c.appendChild(s);});
+}
+/* ---------- playback of resolve() steps ---------- */
+async function scnPlay(sim,steps,st0){
+  const box=$('courtBox'),def=st0.phase==='def';
+  for(const stp of steps){
+    if(sim.dead)return;
+    if(stp.k==='move'){
+      const items=[],arrows=[];
+      stp.off.forEach((p,i)=>{
+        const o=Z.pl[i];
+        if(dist(o,p)>.4){items.push({o,x:p.x,y:p.y});
+          if(dist(o,p)>2.5)arrows.push({a:{x:o.x,y:o.y},b:{x:p.x,y:p.y},c:def?'#ff6a77':(i===st0.h?'#ffd23f':'#5aa9ff'),dash:false,w:i===st0.h?1.1:.7});}
+      });
+      stp.foes.forEach((p,i)=>{
+        const o=Z.fo[i];
+        if(dist(o,p)>.4){items.push({o,x:p.x,y:p.y});
+          if(dist(o,p)>2.5)arrows.push({a:{x:o.x,y:o.y},b:{x:p.x,y:p.y},c:def?(i===st0.hi?'#ffd23f':'#5aa9ff'):'#ff6a77',dash:false,w:.7});}
+      });
+      S.arrows=arrows;S.ball.dribble=!!stp.dribble;
+      if(stp.drive){const hd=S.ball.holder;if(hd)sim.spark(hd.x,hd.y,'#ffd23f',14);}
+      await sim.tween(items,stp.ms);
+      S.ball.dribble=false;
+      await sim.wait(260);S.arrows=[];
+    }else if(stp.k==='pass'){
+      const a=Z.pl[stp.from],b=Z.pl[stp.to];
+      S.arrows=[{a,b,c:def?'#ff6a77':'#ff8a1f',dash:true,w:.9}];
+      await passTo(sim,b);S.arrows=[];
+    }else if(stp.k==='steal'){
+      const f=Z.fo[stp.foe];
+      await Promise.all([sim.fly(stp.at,400,4),sim.tween([{o:f,x:stp.at.x,y:stp.at.y}],400)]);
+      S.ball.holder=f;sim.say(stp.say,'miss');await sim.wait(350);
+    }else if(stp.k==='shot'){
+      box.classList.add('cam');
+      SHOT_OPP=!!stp.opp;try{await doShot(sim,Z.pl[stp.who],stp.mode);}finally{SHOT_OPP=false;}
+      setTimeout(()=>box.classList.remove('cam'),500);
+    }else if(stp.k==='say'){
+      sim.say(stp.text,stp.cls);await sim.wait(450);
+    }
+  }
+  await sim.wait(300);
+}
+
+/* ===== SCENARIO UI 2: setup / flow / results / stats ===== */
+const CHAL_SPECS=[
+ {tag:'そくこう',theme:'fast_break'},{tag:'1てん ビハインド',diff:-1},{tag:'ダブルチーム',style:'double'},
+ {tag:'フリーの みかた',theme:'pass_free'},{tag:'のこり 10びょう',time:10},{tag:'スクリーン',theme:'use_screen'},
+ {tag:'ゴールの ちかく',theme:'under_shoot'},{tag:'どうてん',diff:0},{tag:'のこり 3びょう',time:3},{tag:'ラストプレー',time:5,diff:-1,style:'pressure'}];
+function openScnSetup(mode){
+  const sh=$('sheetBody');sh.innerHTML='';
+  const mk=(tag,cls,txt)=>{const e=document.createElement(tag);if(cls)e.className=cls;if(txt!=null)e.textContent=txt;return e;};
+  const hi=scnUnlocked(SAVE.scn.plays);
+  if(mode==='scenario'){
+    sh.appendChild(mk('h2','','GAME SCENARIO'));
+    sh.appendChild(mk('p','','のこりじかんと てんさを みて、きみが プレーを つくろう！ こうげきと まもりを こうたいで やるよ。'));
+    let sel='auto';const row=mk('div','lvrow');
+    const sub=['ドライブを とめる','パスカット','ヘルプ まもり','ふたり まもる','ラスト まもり'];
+    const mkLv=(v,label,s,locked)=>{const b=mk('button','lv'+(v===sel?' sel':''));b.appendChild(document.createTextNode(label));if(s)b.appendChild(mk('small','',s));b.disabled=!!locked;b.onclick=()=>{sel=v;row.querySelectorAll('.lv').forEach(x=>x.classList.remove('sel'));b.classList.add('sel');};row.appendChild(b);};
+    mkLv('auto','おまかせ','AUTO');
+    for(let l=1;l<=5;l++){const lock=l>hi;mkLv(l,'LV'+l,lock?'🔒 あと'+(SCN_UNLOCK[l-1]-SAVE.scn.plays)+'しあい':sub[l-1],lock);}
+    sh.appendChild(row);
+    const go=mk('button','bigbtn','START!');go.onclick=()=>{closeSetup();startScenario(sel);};sh.appendChild(go);
+  }else{
+    sh.appendChild(mk('h2','','10 CHALLENGE'));
+    sh.appendChild(mk('p','','10かいの こうげきを ぜんぶ プレー！ そくこう・ダブルチーム・ラストプレーも でてくるよ。ベスト: '+SAVE.scn.chalBest+'てん'));
+    const go=mk('button','bigbtn','START!');go.onclick=()=>{closeSetup();startChallenge();};sh.appendChild(go);
+  }
+  const cl=mk('button','bigbtn sec','とじる');cl.onclick=closeSetup;sh.appendChild(cl);
+  $('ovSetup').classList.add('show');
+}
+function enterScn(){
+  showScreen('scGame');$('scGame').classList.add('scn');
+  requestAnimationFrame(()=>{resizeCourt();scnBegin(true);});
+}
+function startScenario(sel){
+  const hi=scnUnlocked(SAVE.scn.plays);
+  const lv=sel==='auto'?(Math.random()<.6?hi:1+Math.floor(Math.random()*hi)):Math.min(sel,hi);
+  Z={run:{},mode:'scn',lv,sel,st:null,st0:null,options:[],busy:false,combo:0,hint:false,pending:null,chal:null,num:SAVE.scn.plays+1,pl:[],fo:[]};
+  Z.st=scnStart(lv);Z.st0=Z.st;
+  enterScn();
+}
+function scnBegin(first,msg){
+  const st=Z.st;scnLoadScene(st);
+  $('sTag').textContent=Z.chal?'ATTACK '+Z.chal.i+'/'+Z.chal.total:'SCENARIO '+String(Z.num).padStart(2,'0');
+  $('sTheme').textContent=Z.chal?Z.chal.spec.tag:(SCN_TAG[st.themeId]||'');
+  scnChips(st);scnScore(st);
+  scnFeed({head:msg||(first?'PLAY START!':'もういちど こうげき！'),cls:'ok',line:scnIntro(st),coach:''});
+  if(!Z.chal)showPhase('blue');
+  scnDecision(true);
+}
+function scnDecision(first){
+  const st=Z.st;Z.busy=false;Z.hint=false;
+  Z.options=scnOptions(st);
+  S.arrows=[];S.hint=[];scnRings(st);
+  $('sNext').classList.add('hide');$('btnSHint').classList.remove('hide');$('btnSHint').disabled=false;
+  $('sText').textContent=first?'どうする？':'つぎは どうする？';
+  const o=$('sOpts');o.innerHTML='';o.classList.remove('hide');
+  Z.options.forEach(op=>{
+    const b=document.createElement('button');b.className='opt';
+    const ic=document.createElement('span');ic.className='ic';ic.textContent=op.ic;
+    const t=document.createElement('span');t.textContent=op.label;
+    b.appendChild(ic);b.appendChild(t);b.onclick=()=>scnChoose(op,b);o.appendChild(b);
+  });
+  const ev=scnEvents(st);if(ev.length)scnBanner(ev);
+  scnScore(st);updateHudS();setTimeout(resizeCourt,0);
+}
+async function scnChoose(op,btn){
+  if(!Z||Z.busy)return;Z.busy=true;sfx('tap');
+  document.querySelectorAll('#sOpts .opt').forEach(b=>{b.disabled=true;});btn.classList.add('picked');btn.disabled=false;
+  $('btnSHint').disabled=true;
+  const prev=Z.st,res=scnResolve(prev,op,Z.options),run=Z.run;
+  S.hint=[];S.rings=[];S.arrows=[];
+  const sim=new Sim(S);
+  tickClock(prev.time,res.st.time,900);
+  await scnPlay(sim,res.steps,prev);
+  if(sim.dead||!Z||Z.run!==run)return;
+  const st=res.st;let wrap=null;
+  if(st.end)wrap=scnWrap(st);
+  const nar=scnNarrate(prev,res,wrap);
+  Z.st=st;if(!st.end)scnSync(st);
+  const e=st.end,fail=e&&['miss','rim','block','timeup','steal'].includes(e.type);
+  if(nar.cls==='good'){burst(nar.head);sfx(e&&e.type==='made'?'swish':'good');flash('flash-good');if(e&&e.type==='made')sparks(GOAL.x,GOAL.y+3,'#ffd23f',30);}
+  else{sfx('bad');flash('flash-bad');}
+  if(res.info.q!=='weak'&&!res.info.turnover&&!fail)Z.combo++;else Z.combo=0;
+  if(Z.combo>=2&&nar.cls==='good')setTimeout(()=>burst('COMBO x'+Z.combo+'!','combo'),350);
+  updateHudS();
+  if(!e){scnFeed(nar);scnDecision(false);}
+  else scnAfter(st,wrap,nar);
+}
+function scnShowNext(label,fn){
+  Z.pending=fn;$('sOpts').classList.add('hide');$('btnSHint').classList.add('hide');
+  $('sText').textContent='';
+  const b=$('sNext');b.textContent=label;b.classList.remove('hide');Z.busy=false;setTimeout(resizeCourt,0);
+}
+async function scnAfter(st,wrap,nar){
+  const e=st.end;
+  if(Z.chal){
+    const c=Z.chal;c.pts=st.stats.pts;c.stats=st.stats;
+    scnScore(st,'us',{us:c.pts,time:st.time});
+    scnFeed(nar);
+    if(c.i<c.total)scnShowNext('つぎの こうげき ▶  ('+c.i+'/'+c.total+')',chalNext);else scnShowNext('けっかを みる ▶',chalFinish);
+    return;
+  }
+  const run=Z.run,made=e.type==='made';
+  scnScore(st,'us',{us:made?st.us-e.pts:st.us,them:st.them,time:st.time});
+  const nxt=wrap.gameOver?'':wrap.rebound?'':'  →  RED TEAM ATTACK';
+  scnFeed(nar,made?'🏀 BLUE TEAM SCORE!  '+st.us+' - '+st.them+nxt:wrap.gameOver||wrap.rebound?'':'🏀 ボールが あいてに うつった！'+nxt);
+  if(made)await scoreEvent('blue',e.pts,st);
+  if(!Z||Z.run!==run)return;
+  scnScore(st,wrap.defense?'opp':'us',{us:st.us,them:st.them,time:st.time});
+  if(wrap.gameOver)scnShowNext('けっかを みる ▶',scnFinish);
+  else if(wrap.rebound)scnShowNext('リバウンド ゲット！ ▶',()=>scnNewPoss('リバウンド ゲット！'));
+  else scnShowNext('RED TEAM ATTACK ▶',startDefense);
+}
+/* ---------- defense phase ---------- */
+const DFN_TAG={def_dr:'ドライブを とめろ',def_pass:'パスカット',def_help:'ヘルプ ディフェンス',def_two:'ふたりの こうげき'};
+function startDefense(){
+  const p=Z.st;
+  Z.st=dfnStart(p.level,{time:p.time,us:p.us,them:p.them,stats:p.stats,poss:p.poss});Z.run={};
+  dfnBegin();
+}
+async function dfnBegin(){
+  const st=Z.st,run=Z.run;Z.busy=true;Z.pending=null;scnLoadScene(st);
+  $('sTag').textContent='SCENARIO '+String(Z.num).padStart(2,'0');
+  $('sTheme').textContent='まもり！ '+(DFN_TAG[st.themeId]||'');
+  scnChips(st);scnScore(st,'opp');updateHudS();
+  scnFeed({head:'RED TEAM ATTACK',cls:'bad',line:'相手の こうげき！ ボールを もって せめてくる！',coach:''});
+  $('sOpts').classList.add('hide');$('btnSHint').classList.add('hide');$('sNext').classList.add('hide');$('sText').textContent='';
+  showPhase('red');sfx('pass');setTimeout(resizeCourt,0);
+  const sim=new Sim(S);
+  Z.pl.forEach((o,i)=>{o.y=st.off[i].y+22;});
+  S.ball.dribble=true;
+  await sim.tween(Z.pl.map((o,i)=>({o,x:st.off[i].x,y:st.off[i].y})),1100);
+  S.ball.dribble=false;await sim.wait(750);
+  if(sim.dead||!Z||Z.run!==run)return;
+  dfnDecision(true);
+}
+function dfnDecision(first){
+  const st=Z.st;Z.busy=false;Z.hint=false;
+  Z.options=dfnOptions(st);
+  S.arrows=dfnArrows(st);S.hint=[];S.rings=[];
+  const d=st.us-st.them;
+  st.tags=['RED TEAM ATTACK','のこり '+Math.ceil(st.time)+'びょう',d===0?'どうてん':d>0?d+'てん リード':(-d)+'てん ビハインド'];
+  scnChips(st);
+  const pr=dfnPrompt(st);
+  if(first)scnFeed({head:pr.head,cls:'bad',line:pr.line,coach:''});
+  else{const f=document.createElement('div');f.className='fopp';f.textContent='⚠️ '+pr.head+' '+pr.line;$('sFeed').appendChild(f);}
+  $('sNext').classList.add('hide');$('btnSHint').classList.remove('hide');$('btnSHint').disabled=false;
+  $('sText').textContent='えらんでね！';
+  const o=$('sOpts');o.innerHTML='';o.classList.remove('hide');
+  Z.options.forEach(op=>{
+    const b=document.createElement('button');b.className='opt';
+    const ic=document.createElement('span');ic.className='ic';ic.textContent=op.ic;
+    const t=document.createElement('span');t.textContent=op.label;
+    b.appendChild(ic);b.appendChild(t);b.onclick=()=>dfnChoose(op,b);o.appendChild(b);
+  });
+  const ev=dfnEvents(st);if(ev.length)scnBanner(ev);
+  scnScore(st,'opp');updateHudS();setTimeout(resizeCourt,0);
+}
+async function dfnChoose(op,btn){
+  if(!Z||Z.busy)return;Z.busy=true;sfx('tap');
+  document.querySelectorAll('#sOpts .opt').forEach(b=>{b.disabled=true;});btn.classList.add('picked');btn.disabled=false;
+  $('btnSHint').disabled=true;
+  const prev=Z.st,res=dfnResolve(prev,op,Z.options),run=Z.run;
+  S.hint=[];S.rings=[];S.arrows=[];
+  const sim=new Sim(S);
+  tickClock(prev.time,res.st.time,900);
+  await scnPlay(sim,res.steps,prev);
+  if(sim.dead||!Z||Z.run!==run)return;
+  const st=res.st;let wrap=null;
+  if(st.end)wrap=dfnWrap(st);
+  const nar=dfnNarrate(prev,res,wrap),e=st.end;
+  Z.st=st;if(!e)scnSync(st);
+  if(e&&e.type==='rscore'){burst('RED TEAM SCORE!','miss');sfx('bad');flash('flash-bad');}
+  else if(e){burst(nar.head);sfx('good');flash('flash-good');sparks(S.me.x,S.me.y,'#35ff8a',26);}
+  else if(res.info.ok){burst(nar.head);sfx('good');flash('flash-good');}
+  else{burst(nar.head,'miss');sfx('bad');flash('flash-bad');}
+  if(res.info.ok)Z.combo++;else Z.combo=0;
+  if(Z.combo>=2&&res.info.ok)setTimeout(()=>burst('COMBO x'+Z.combo+'!','combo'),350);
+  updateHudS();
+  if(!e){scnFeed(nar);dfnDecision(false);}
+  else dfnAfter(st,wrap,nar);
+}
+async function dfnAfter(st,wrap,nar){
+  const e=st.end,run=Z.run,red=e.type==='rscore';
+  scnScore(st,'opp',{us:st.us,them:red?st.them-e.pts:st.them,time:st.time});
+  const nxt=wrap.gameOver?'':'  →  BLUE TEAM ATTACK';
+  scnFeed(nar,red?'🏀 RED TEAM SCORE!  '+st.us+' - '+st.them+nxt:(e.type==='steal'?'🏀 ボールを とった！ ':'🏀 あいては はずした！ ')+st.us+' - '+st.them+nxt);
+  if(red)await scoreEvent('red',e.pts,st);else await new Promise(r=>setTimeout(r,900));
+  if(!Z||Z.run!==run)return;
+  scnScore(st,wrap.gameOver?'opp':'us',{us:st.us,them:st.them,time:st.time});
+  if(wrap.gameOver)scnShowNext('けっかを みる ▶',scnFinish);
+  else scnShowNext('BLUE TEAM ATTACK ▶',()=>scnNewPoss(red?'つぎは きみの こうげき！':'ボールを とりかえした！'));
+}
+function scnNewPoss(msg){
+  Z.st=scnNextPossession(Z.st);Z.run={};
+  scnBegin(false,msg);
+}
+function scnFinish(){
+  const st=Z.st,sum=scnResult&&scnSummary(st),before=rankIdx(SAVE.xp),k=st.stats;
+  SAVE.xp+=sum.xp;SAVE.scn.plays++;if(sum.res==='WIN')SAVE.scn.wins++;
+  ['smart','good','assist','score','clutch','turnover','dstop','dsteal'].forEach(x=>{SAVE.scn[x]=(SAVE.scn[x]||0)+(k[x]||0);});persist();updateHudS();
+  const after=rankIdx(SAVE.xp);
+  if(after>before){sfx('rank');const r=RANKS[after];showMsg({title:'RANK UP!',rank:r.n,color:r.c,body:'ランクが あがったよ！ すごい！'});}
+  sfx(sum.res==='WIN'?'rank':'good');
+  const bd=sum.badges.map(b=>'<span class="badge'+(b.soft?' soft':'')+'">'+b.ic+' '+b.t+' <b>×'+b.n+'</b></span>').join('');
+  const msg=sum.res==='WIN'?'やったね！ しょうり！':sum.res==='DRAW'?'どうてん！ いい しょうぶ だったよ！':'おしかった！ つぎは かてるよ！';
+  const hi=scnUnlocked(SAVE.scn.plays),was=scnUnlocked(SAVE.scn.plays-1);
+  showMsg({title:sum.res==='WIN'?'WIN!':sum.res==='DRAW'?'DRAW':'NICE TRY!',rank:'+'+sum.xp+' XP',color:'#ffd23f',
+    body:'BLUE <b style="font-size:20px;color:#9fd8ff">'+st.us+'</b> - <b style="font-size:20px;color:#ff8a93">'+st.them+'</b> RED<br>'+msg+'</div><div class="badges" style="margin-top:8px">'+bd+(hi>was?'<div style="width:100%;margin-top:6px;color:#35ff8a">NEW LEVEL! LV'+hi+' かいほう！</div>':'')+'<div>',
+    ok:'べつの てんかいで もういちど！',cb:()=>{Z.st=scnReplay(Z.st0);Z.run={};Z.combo=0;scnBegin(true);},
+    ok2:'つぎの シナリオ',cb2:()=>startScenario(Z.sel)});
+}
+/* ---------- challenge (10 possessions) ---------- */
+function chalMake(){
+  const c=Z.chal,sp=c.spec;
+  return scnStart(Z.lv,{single:true,us:0,them:sp.diff!=null?-sp.diff:0,time:sp.time,style:sp.style,theme:sp.theme,stats:c.stats});
+}
+function startChallenge(){
+  const hi=scnUnlocked(SAVE.scn.plays);
+  Z={run:{},mode:'chal',lv:Math.max(2,hi),sel:'auto',st:null,st0:null,options:[],busy:false,combo:0,hint:false,pending:null,num:0,pl:[],fo:[],
+     chal:{i:1,total:10,pts:0,spec:CHAL_SPECS[0],stats:SCN_ZERO()}};
+  Z.st=chalMake();Z.st0=Z.st;enterScn();
+}
+function chalNext(){
+  const c=Z.chal;c.i++;c.spec=CHAL_SPECS[c.i-1];Z.run={};Z.st=chalMake();scnBegin(false,'ATTACK '+c.i+'!');
+}
+function chalFinish(){
+  const c=Z.chal,k=c.stats,pts=c.pts,i=pts>=16?4:pts>=12?3:pts>=8?2:pts>=4?1:0,r=RANKS[i],before=rankIdx(SAVE.xp);
+  const xp=pts*10+k.smart*4+k.assist*10+20;
+  SAVE.xp+=xp;if(pts>SAVE.scn.chalBest)SAVE.scn.chalBest=pts;
+  ['smart','good','assist','score','clutch','turnover'].forEach(x=>{SAVE.scn[x]+=k[x];});persist();updateHudS();
+  if(rankIdx(SAVE.xp)>before){sfx('rank');const rr=RANKS[rankIdx(SAVE.xp)];showMsg({title:'RANK UP!',rank:rr.n,color:rr.c,body:'ランクが あがったよ！ すごい！'});}
+  sfx(pts>=8?'rank':'good');
+  const bd=[['🏀','SCORE',k.score],['🤝','ASSIST',k.assist],['🧠','SMART PLAY',k.smart],['🔥','CLUTCH',k.clutch]].filter(x=>x[2]).map(x=>'<span class="badge">'+x[0]+' '+x[1]+' <b>×'+x[2]+'</b></span>').join('');
+  showMsg({title:'RESULT',rank:r.n,color:r.c,body:'10かいの こうげきで <b style="color:#ffd23f;font-size:24px">'+pts+'</b> てん！<br>+'+xp+' XP</div><div class="badges" style="margin-top:8px">'+bd+'<div>',
+    ok:'もういちど ちょうせん',cb:startChallenge,ok2:'タイトルへ',cb2:()=>goTitle()});
+}
+/* ---------- hint / stats / wiring ---------- */
+function fillScnStats(){
+  const k=SAVE.scn,box=$('stScn');box.innerHTML='';
+  const h=document.createElement('div');h.style.cssText='font-weight:900;color:#ffd23f;font-size:13px;margin-bottom:6px';h.textContent='GAME SCENARIO';box.appendChild(h);
+  const g=document.createElement('div');g.className='grid3';
+  [[k.plays,'プレー'],[k.wins,'しょうり'],[k.smart,'SMART PLAY'],[k.assist,'ASSIST'],[k.score,'SCORE'],[k.clutch,'CLUTCH'],[k.dstop,'ナイス まもり'],[k.dsteal,'STEAL'],[k.good,'GOOD PLAY']].forEach(([n,l])=>{const d=document.createElement('div');const b=document.createElement('b');b.textContent=n;const s=document.createElement('span');s.textContent=l;d.appendChild(b);d.appendChild(s);g.appendChild(d);});
+  box.appendChild(g);
+  const p=document.createElement('div');p.style.cssText='font-size:12px;margin-top:8px;font-weight:700;color:#cfe3ff';p.textContent='10 CHALLENGE ベスト: '+k.chalBest+'てん ／ いまの かいほう: LV'+scnUnlocked(k.plays);box.appendChild(p);
+}
+$('btnSHint').onclick=()=>{
+  if(!Z||Z.busy||Z.hint||!S)return;
+  Z.hint=true;sfx('tap');$('btnSHint').disabled=true;
+  const f=document.createElement('div');f.className='fopp';f.style.color='#35ff8a';
+  if(Z.st.phase==='def')f.textContent='💡 '+dfnHintText(Z.st,Z.options);
+  else{S.hint=scnHintDraw(Z.st);f.textContent='💡 みどりの せんは チャンス！ きいろは ちょっと…、あかは あぶない！';}$('sFeed').appendChild(f);
+};
+$('sNext').onclick=()=>{if(!Z||Z.busy||!Z.pending)return;const f=Z.pending;Z.pending=null;Z.busy=true;f();};
+
+</script>
+</body>
+</html>
 
