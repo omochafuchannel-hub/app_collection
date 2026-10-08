@@ -331,6 +331,7 @@ button{font-family:inherit;color:inherit;border:0;cursor:pointer}
      ENGINE  (問題生成ロジック: 描画から完全に分離)
      ============================================================ -->
 <script id="engine">
+
 'use strict';
 /* ---------- basic utils ---------- */
 const W=100,H=88,GOAL={x:50,y:9},FREE_D=11,SEP=8,XMIN=8,XMAX=92,YMIN=13,YMAX=82;
@@ -738,12 +739,14 @@ function makeQuestion(level,opts){
   for(const th of shuffle(pool)){const q=tryTheme(th,level,1500);if(q)return q;}
   throw new Error('question generation failed: level '+level);
 }
+
 </script>
 
 <!-- ============================================================
      APP  (描画・アニメーション・UI・ゲーム進行)
      ============================================================ -->
 <script id="scn">
+
 'use strict';
 /* ===== SCENARIO ENGINE A: state / options / defense reaction / resolve ===== */
 const SCN={cost:{pass:2,drive:3,hold:3,shoot:1.2,off:1},maxDecisions:8};
@@ -799,11 +802,29 @@ function scnAdapterOff(st){
   st.off.forEach((p,i)=>{if(i!==0&&i!==st.h){mates.push(p);map.push(i);}});
   return {sc:{me:st.off[0],mates,foes:st.foes,holder:0,screen:null,drive:null},map};
 }
-const SCN_OFFLB={off_cut:'ゴールへ カットする',off_left:'左へ ひろがる',off_right:'右へ ひろがる',off_ball:'ボールを もらいに いく',off_stay:'その ばで まつ'};
-const SCN_OFFIC={off_cut:'🏃',off_left:'↔️',off_right:'↔️',off_ball:'🙋',off_stay:'✋'};
+const SCN_OFFLB={off_clear:'ドライブの みちを あける',off_cut:'ゴールへ カットする',off_left:'左へ ひろがる',off_right:'右へ ひろがる',off_ball:'ボールを もらいに いく',off_stay:'その ばで まつ'};
+const SCN_OFFIC={off_clear:'🚪',off_cut:'🏃',off_left:'↔️',off_right:'↔️',off_ball:'🙋',off_stay:'✋'};
+/* 主人公が味方のドライブコースに立っているとき：コースを あけて ひろがる（JBA: ドライブへの合わせ） */
+function mvClearOpt(st){
+  const hd=st.off[st.h],me=st.off[0];
+  if(st.h===0||dist(hd,GOAL)<14)return null;
+  const gl={x:GOAL.x,y:GOAL.y+8},d=mvSegD(me,hd,gl);
+  if(d>10||dist(me,GOAL)>=dist(hd,GOAL)||dist(me,hd)<8)return null;
+  let best=null,bs=-1e9;
+  for(const sl of MV_SLOTS){
+    const q=mvToward(me,sl,20);if(!scnLegal(st,q,0))continue;
+    const dd=dist(q,hd),lane=mvSegD(q,hd,gl);if(lane<11||dd<13)continue;
+    const e=recvEval(st.foes,hd,q),sc=e.score+lane*.6-dist(q,me)*.3;
+    if(sc>bs){bs=sc;best=q;}
+  }
+  if(!best)return null;
+  const e=recvEval(st.foes,hd,best);
+  return {key:'off_clear',cat:'off',score:78,ic:SCN_OFFIC.off_clear,label:SCN_OFFLB.off_clear,ev:{score:78,out:e.laneClear?'ok':'covered',spot:best,why:''}};
+}
 function scnOptionsOff(st){
   const ev=evaluateAll(scnAdapterOff(st).sc),list=[];
   for(const k in ev)list.push({key:k,cat:'off',score:ev[k].score,ic:SCN_OFFIC[k]||'🏃',label:SCN_OFFLB[k]||k,ev:ev[k]});
+  const clr=mvClearOpt(st);if(clr)list.push(clr);
   list.sort((a,b)=>b.score-a.score);
   const nMax=st.level<=1?3:4,pick=[list[0]],rest=list.slice(1);
   while(pick.length<nMax&&rest.length)pick.push(rest.splice(Math.floor(Math.random()*rest.length),1)[0]);
@@ -813,9 +834,11 @@ function scnOptions(st){return st.h===0?scnOptionsBall(st):scnOptionsOff(st);}
 /* 味方(AI)が自動で選ぶ行動：全候補から評価の高いものを確率的に選ぶ */
 function scnAIPick(st){
   const {ev,map}=scnEvalAll(st),h=st.off[st.h],c=[];
-  c.push({key:'shoot',cat:'shoot',score:ev.shoot.score,ev:ev.shoot});
+  c.push({key:'shoot',cat:'shoot',score:ev.shoot.score-(ev.shoot.out==='score'?0:MV.aiShoot),ev:ev.shoot});
   map.forEach((oi,j)=>{const e=ev['pass'+j];c.push({key:'pass'+j,cat:'pass',to:oi,score:e.score+(e.out==='ok'?10:0)+(oi===0&&e.out==='ok'?16:0),ev:e});});
   for(const k of ['dribble_goal','dribble_left','dribble_right'])if(ev[k])c.push({key:k,cat:'drive',score:ev[k].score,ev:ev[k]});
+  const safe=c.filter(o=>!(o.ev&&(o.ev.out==='steal'||o.ev.out==='stop')));
+  if(MV.aiSafe&&safe.length>=2)c.splice(0,c.length,...safe);
   const mx=Math.max(...c.map(o=>o.score)),w=c.map(o=>Math.exp((o.score-mx)/7));
   let r=Math.random()*w.reduce((a,b)=>a+b,0);
   for(let i=0;i<c.length;i++){r-=w[i];if(r<=0)return c[i];}
@@ -824,8 +847,8 @@ function scnAIPick(st){
 function scnHintDraw(st,options){
   if(st.h!==0){
     const ev=evaluateAll(scnAdapterOff(st).sc),out=[],col=e=>e.out==='ok'?'#35ff8a':(e.out==='covered'||e.out==='bump')?'#ffd23f':'#ff4d5e';
-    const keys=options?options.map(o=>o.key):Object.keys(ev);
-    for(const k of keys)if(ev[k]&&dist(ev[k].spot,st.off[0])>=2)out.push({t:'line',a:st.off[0],b:ev[k].spot,c:col(ev[k]),dash:true},{t:'ring',p:ev[k].spot,c:col(ev[k])});
+    const items=options?options.map(o=>o.ev):Object.keys(ev).map(k=>ev[k]);
+    for(const e of items)if(e&&e.spot&&dist(e.spot,st.off[0])>=2)out.push({t:'line',a:st.off[0],b:e.spot,c:col(e),dash:true},{t:'ring',p:e.spot,c:col(e)});
     return out;
   }
   const {ev,map}=scnEvalAll(st),h=st.off[st.h],out=[];
@@ -856,9 +879,122 @@ function scnFoesOk(st){
   }
   return true;
 }
+/* ===== MOVEMENT AI (U12 / JBA): 役割のある動き =====
+   攻撃: スペーシング / パス&カット / ドライブ合わせ(あける・ひろがる・キックアウト) / ボールを離したら動く
+   守備: マンツーマン(ボールとマークを同時に見る) / ジャンプ・トゥ・ザ・ボール / ヘルプ→ローテーション→マークへ戻る */
+const MV={offCap:12,cutCap:14,holdCap:8,defPass:12,defDrive:11,defHold:10,kDeny:.4,kGap:.25,hyst:5,wOpen:4,wLane:14,sag:9.5,sagFrom:33,wShot:.5,fill:1,simple:0,rot:1,nomove:0,aiSafe:1,aiShoot:14,lateD:-3,lateCap:4.5};
+const MV_SLOTS=[{x:50,y:46},{x:24,y:34},{x:76,y:34},{x:18,y:22},{x:82,y:22},{x:33,y:48},{x:67,y:48},{x:50,y:60},{x:34,y:28},{x:66,y:28},{x:36,y:38},{x:64,y:38}];
+function mvSegD(p,a,b){return dist(p,segPoint(p,a,b));}
+const mvInPaint=p=>Math.abs(p.x-GOAL.x)<15&&p.y<GOAL.y+22;
+function mvToward(p,t,cap){const d=dist(p,t);if(d<=cap)return {x:t.x,y:t.y};return {x:p.x+(t.x-p.x)/d*cap,y:p.y+(t.y-p.y)/d*cap};}
+function mvFillMen(st){
+  const used=new Set(st.foes.map(f=>f.man).filter(m=>m>=0));
+  st.foes.forEach(f=>{
+    if(f.man>=0)return;let best=-1,bd=1e9;
+    st.off.forEach((o,j)=>{if(used.has(j))return;const d=dist(f,o);if(d<bd){bd=d;best=j;}});
+    if(best>=0){f.man=best;used.add(best);}
+  });
+}
+/* マークマン M に対するディフェンスの立ち位置：ボールとマークが同時に見える位置（k=ボール寄りの度合い） */
+function mvStance(M,ball,k,d){
+  const t={x:ball.x*k+GOAL.x*(1-k),y:ball.y*k+GOAL.y*(1-k)},dx=t.x-M.x,dy=t.y-M.y,l=Math.hypot(dx,dy)||1;
+  return {x:M.x+dx/l*d,y:M.y+dy/l*d};
+}
+function mvCutPoint(p){return {x:GOAL.x+(Math.sign(p.x-50)||1)*8,y:GOAL.y+14};}
+function mvCanCut(st,i){
+  const p=st.off[i],dp=dist(p,GOAL);if(dp<20||dp>54)return null;
+  const C=mvCutPoint(p);
+  for(let j=0;j<st.off.length;j++)if(j!==i&&dist(st.off[j],C)<10)return null;
+  return C;
+}
+function mvScore(st,i,q,ctx,tag){
+  const hd=st.off[st.h];let s=0;
+  for(let j=0;j<st.off.length;j++){
+    if(j===i)continue;const d=dist(q,st.off[j]),w=j===st.h?1.4:1;
+    if(d<14)s-=(14-d)*3*w;else s+=Math.min(d-14,8)*.3;
+  }
+  s+=Math.min(nearest(st.foes,q).d,14)*MV.wOpen;
+  if(recvEval(st.foes,hd,q).laneClear)s+=MV.wLane;
+  s+=MV.wShot*shotQ(st.foes,q);
+  const dh=dist(q,hd);if(dh<14)s-=(14-dh)*2;else if(dh>38)s-=(dh-38)*1.2;
+  if(mvInPaint(q))s-=26;
+  if(ctx.lane&&ctx.lane(q))s-=45;
+  if(ctx.mode==='drive'){
+    if(Math.sign(q.x-50)===ctx.weak)s+=6;
+    if(dh>=13&&dh<=28)s+=5;
+  }
+  if(tag==='exit'||tag==='space'){if(Math.sign(q.x-50)!==Math.sign(hd.x-50)||Math.abs(hd.x-50)<8)s+=7;}
+  return s;
+}
+/* 攻撃側の「ボールを持っていない選手」の動き。主人公(攻撃時)は動かさない＝選ぶのはプレイヤーだけ */
+function scnMoveOff(st,ctx){
+  ctx=ctx||{};const mode=ctx.mode||'hold',hd=st.off[st.h],lv=st.level||1,info={cut:[],clear:[],exit:[],space:[]};
+  if(MV.nomove)return info;
+  const fixHero=st.phase!=='def';
+  st.off[st.h].cut=0;
+  if(mode==='drive'&&ctx.from){
+    const a={x:ctx.from.x,y:ctx.from.y},b={x:hd.x,y:hd.y},dl=dist(b,GOAL),ext=dl>8?mvToward(b,GOAL,Math.min(12,dl-6)):b;
+    ctx.lane=q=>mvSegD(q,a,b)<9.5||mvSegD(q,b,ext)<9;
+    ctx.weak=-(Math.abs(b.x-50)>7?Math.sign(b.x-50):(ctx.dir||Math.sign(b.x-a.x)||1));
+  }
+  const order=st.off.map((_,i)=>i).filter(i=>i!==st.h&&!(fixHero&&i===0));
+  const pri=i=>{const p=st.off[i];let v=0;if(ctx.lane&&ctx.lane(p))v-=100;if(p.cut===2)v-=70;if(ctx.passer===i)v-=80;if(mvInPaint(p))v-=40;return v+dist(p,hd)*.1;};
+  order.sort((a,b)=>pri(a)-pri(b));
+  let cutters=st.off.filter(p=>p.cut===1).length;
+  for(const i of order){
+    const p=st.off[i],from={x:p.x,y:p.y};let cap=mode==='hold'?MV.holdCap:MV.offCap,tag='',must=false,C=null;
+    if(p.cut===1){C=mvCutPoint(p);tag='cut';cap=MV.cutCap;must=true;}
+    else if(p.cut===2){tag='exit';cap=12;must=true;p.cut=0;}
+    else if(ctx.passer===i){
+      C=lv>=2&&cutters===0?mvCanCut(st,i):null;
+      if(C){tag='cut';cap=MV.cutCap;must=true;p.cut=1;p.cutN=0;cutters++;}
+      else{tag='space';cap=10;must=true;}
+    }else if(ctx.lane&&ctx.lane(p)){tag='clear';cap=11;must=true;}
+    else if(mvInPaint(p)){tag='exit';cap=10;must=true;}
+    let best=null;
+    if(tag==='cut'){
+      const q=mvToward(p,C,cap);
+      if(scnLegal(st,q,i))best=q;
+      else{const q2=mvToward(p,C,cap*.6);if(scnLegal(st,q2,i))best=q2;}
+      if(best){p.cutN=(p.cutN||0)+1;if(dist(best,C)<=4||p.cutN>=2)p.cut=2;}
+      else{p.cut=0;tag='space';}
+    }
+    if(!best){
+      const cands=[];
+      for(const s of MV_SLOTS)cands.push(mvToward(p,s,cap));
+      for(let a=0;a<8;a++)cands.push(mvToward(p,{x:p.x+Math.cos(a*.785)*7,y:p.y+Math.sin(a*.785)*7},cap));
+      let bs=-1e9;
+      const cur=mvScore(st,i,p,ctx,tag);
+      for(const q0 of cands){
+        const q={x:clamp(q0.x,XMIN+1,XMAX-1),y:clamp(q0.y,YMIN+1,YMAX-1)};
+        if(dist(q,p)<1.2&&must)continue;
+        if(!scnLegal(st,q,i))continue;
+        const sc=mvScore(st,i,q,ctx,tag)-dist(q,p)*.15;
+        if(sc>bs){bs=sc;best=q;}
+      }
+      if(best&&!must&&bs<cur+MV.hyst)best=null;
+    }
+    if(best){p.x=best.x;p.y=best.y;if(dist(from,best)>2.5&&p.num!=null){
+      if(tag==='cut')info.cut.push(p.num);else if(tag==='exit')info.exit.push(p.num);else if(tag==='clear')info.clear.push(p.num);else if(tag==='space')info.space.push(p.num);}}
+  }
+  return info;
+}
+function scnMvLine(mv){
+  if(!mv)return '';
+  if(mv.cut.length)return mv.cut[0]+'ばんが パスのあと ゴールへ カット！';
+  if(mv.clear.length)return mv.clear[0]+'ばんが ドライブの みちを あけた！';
+  if(mv.exit.length)return mv.exit[0]+'ばんが ゴールの したから そとへ ひろがった！';
+  if(mv.space.length)return mv.space[0]+'ばんが パスの あと うごいて スペースを つくった！';
+  return '';
+}
+/* 守備：マンツーマン。みんな「自分のマーク」を持ち、ボールとマークが同時に見える位置へ動く */
 function scnReact(st,ctx){
   const h=st.off[st.h],style=st.style,press=style==='pressure'?8.2:8.8,keep=st.foes.map(f=>({x:f.x,y:f.y}));
-  const onb=st.foes.findIndex(f=>f.man===st.h),dG=dist(h,GOAL);
+  if(MV.fill)mvFillMen(st);
+  const onb=st.foes.findIndex(f=>f.man===st.h),dG=dist(h,GOAL),lv=st.level||1;
+  const prevRole=st.foes.map(f=>f.role||'');
+  const capOff=ctx.mode==='pass'?MV.defPass:ctx.mode==='drive'?MV.defDrive:MV.defHold;
+  ctx.returned=[];ctx.cutD=[];ctx.rot=-1;
   const tg=st.foes.map((f,i)=>{
     const man=st.off[f.man];
     if(i===onb){
@@ -868,15 +1004,22 @@ function scnReact(st,ctx){
         if(st.screen&&st.screen.active&&ctx.dir===st.screen.side&&st.screen.foe===i){cap=8;st.screen.active=false;}
         return {x:h.x+(o.x-h.x)/l*9.2,y:h.y+(o.y-h.y)/l*9.2,cap};
       }
+      /* フリーの人にパスが通ったとき、守備は「おくれて」寄せる（クローズアウト）。すぐには完全に詰められない */
+      if(ctx.mode==='pass'&&dist(f,h)>=FREE_D+MV.lateD){const g=goalSide(h,FREE_D-.4);return {x:g.x,y:g.y,cap:MV.lateCap};}
       const g=goalSide(h,press);return {x:g.x,y:g.y,cap:ctx.mode==='pass'?7:12};
     }
-    if(man){const g=goalSide(man,press);return {x:g.x,y:g.y,cap:ctx.mode==='pass'?10:8};}
+    if(man){
+      if(lv>=2&&man.cut){const g=mvStance(man,h,.8,8.2);ctx.cutD.push(i);return {x:g.x,y:g.y,cap:12};}
+      const dm=dist(man,h),g=(lv<=1||MV.simple)?goalSide(man,press):mvStance(man,h,dm<30?MV.kDeny:MV.kGap,dm>=MV.sagFrom&&style!=='pressure'?MV.sag:press);
+      return {x:g.x,y:g.y,cap:capOff};
+    }
     return {x:f.x,y:f.y,cap:0};
   });
+  st.foes.forEach(f=>{f.role='';});
   const needHelp=style!=='pressure'&&((ctx.mode==='drive'&&dG<(style==='normal'?24:30))||dG<(style==='normal'?15:20)||(style==='double'&&dG<34));
   if(needHelp){
     const n=style==='double'&&st.foes.length>=4&&dG<26?2:1,base=Math.atan2(GOAL.y-h.y,GOAL.x-h.x);
-    const cand=st.foes.map((f,i)=>({i,d:dist(f,h)+(f.man>=0&&f.man!==st.h?0:12)})).filter(c=>c.i!==onb).sort((a,b)=>a.d-b.d).slice(0,n);
+    const cand=st.foes.map((f,i)=>({i,d:dist(f,h)+(f.man>=0&&f.man!==st.h?(dist(st.off[f.man],h)>26?-3:0):12)})).filter(c=>c.i!==onb).sort((a,b)=>a.d-b.d).slice(0,n);
     let first=0;
     cand.forEach((c,k)=>{
       const f=st.foes[c.i];
@@ -884,34 +1027,31 @@ function scnReact(st,ctx){
       if(k===1)s=-first;else first=s;
       const a=base+s*1.0,r=style==='double'?8.4:9;
       tg[c.i]={x:h.x+Math.cos(a)*r,y:h.y+Math.sin(a)*r,cap:ctx.mode==='drive'?26:20};
-      c.moved=true;
+      f.role='help';
     });
     ctx.helpers=cand.map(c=>c.i);
+    /* ローテーション：ヘルプで空いたマークを、いちばん近い味方ディフェンスがカバーする */
+    if(MV.rot&&lv>=4&&(style==='help'||style==='double')&&cand.length){
+      const hm=st.off[st.foes[cand[0].i].man];
+      if(hm&&hm!==h){
+        const rot=st.foes.map((f,i)=>({i,d:dist(f,hm)})).filter(c=>c.i!==onb&&!cand.some(x=>x.i===c.i)).sort((a,b)=>a.d-b.d)[0];
+        if(rot&&rot.d<36){const g=mvStance(hm,h,.5,8.8);tg[rot.i]={x:g.x,y:g.y,cap:12};st.foes[rot.i].role='rot';ctx.rot=rot.i;}
+      }
+    }
   }
+  /* ヘルプ・ローテーションのあとは、自分のマークへ戻る */
+  st.foes.forEach((f,i)=>{
+    if(prevRole[i]&&!f.role&&i!==onb&&st.off[f.man]){
+      const m=st.off[f.man],g=lv<=1?goalSide(m,press):mvStance(m,h,.5,press);
+      tg[i]={x:g.x,y:g.y,cap:11};ctx.returned.push(i);
+    }
+  });
   st.foes.forEach((f,i)=>stepTo(f,tg[i],tg[i].cap));
   scnSeparate(st);
   if(!scnFoesOk(st)){scnSeparate(st);scnSeparate(st);}
   if(!scnFoesOk(st))st.foes.forEach((f,i)=>{f.x=keep[i].x;f.y=keep[i].y;});
 }
-function scnMoveMates(st,count){
-  const h=st.off[st.h],idx=st.off.map((_,i)=>i).filter(i=>i!==st.h&&(st.phase==='def'||i!==0));
-  idx.sort((a,b)=>nearest(st.foes,st.off[a]).d-nearest(st.foes,st.off[b]).d);
-  let moved=0;
-  for(const i of idx){
-    if(moved>=count)break;
-    const p=st.off[i];
-    if(nearest(st.foes,p).d>=FREE_D+4)continue;
-    const cur=recvEval(st.foes,h,p).score;let best=null,bs=cur+4;
-    for(let a=0;a<14;a++){
-      const ang=Math.random()*6.283,r=rnd(8,15),q={x:clamp(p.x+Math.cos(ang)*r,XMIN+1,XMAX-1),y:clamp(p.y+Math.sin(ang)*r,YMIN+1,YMAX-1)};
-      if(!scnLegal(st,q,i))continue;
-      const sc=recvEval(st.foes,h,q).score;
-      if(sc>bs){bs=sc;best=q;}
-    }
-    if(best){p.x=best.x;p.y=best.y;moved++;}
-  }
-  return moved;
-}
+
 /* ---------- resolve one decision ---------- */
 function scnJudge(options,opt){
   const best=Math.max(...options.map(o=>o.score)),gap=best-opt.score;
@@ -929,7 +1069,7 @@ function scnResolveCore(st,opt,options){
   const nearestFoeIdx=p=>{let d=999,k=0;st.foes.forEach((f,i)=>{const e=dist(f,p);if(e<d){d=e;k=i;}});return k;};
   const turnover=(fi,at,say)=>{steps.push({k:'steal',foe:fi,at:{x:at.x,y:at.y},say});s.end={type:'steal'};s.stats.turnover++;info.turnover=true;};
   const shoot=()=>{
-    const p=s.off[s.h],qq=shotQ(s.foes,p),nd=nearest(s.foes,p),pBlock=nd.d<9.8?Math.min(.5,(9.8-nd.d)/9.8*.55):0,pMake=clamp(.08+qq*.011,.08,.95);
+    const p=s.off[s.h],qq=shotQ(s.foes,p),nd=nearest(s.foes,p),pBlock=nd.d<9.8?Math.min(.5,(9.8-nd.d)/9.8*.55):0,pMake=clamp(.1+qq*.0125,.1,.95);
     let res;
     if(Math.random()<pBlock)res='block';else if(Math.random()<pMake)res='made';else res=qq>=35?'rim':'miss';
     steps.push({k:'shot',who:s.h,mode:res==='made'?'swish':res,foe:res==='block'?s.foes.indexOf(nd.f):-1});
@@ -944,7 +1084,7 @@ function scnResolveCore(st,opt,options){
     }else{
       steps.push({k:'pass',from:s.h,to});
       s.lastPass={from:s.h,to,turn:s.turn};s.h=to;s.stats.pass++;
-      const ctx={mode:'pass',foeStart:startFoes};scnReact(s,ctx);info.helpers=ctx.helpers||[];scnMoveMates(s,s.level>=4?2:1);
+      const ctx={mode:'pass',foeStart:startFoes};scnReact(s,ctx);info.mv=scnMoveOff(s,{mode:'pass',passer:st.h});info.helpers=ctx.helpers||[];info.ctx=ctx;
       steps.push({k:'move',...snap(),ms:640,dribble:false});
     }
   }else if(opt.cat==='drive'){
@@ -957,14 +1097,14 @@ function scnResolveCore(st,opt,options){
     }else{
       const tg0=e.out==='stop'?lerpP(hOld,sp,.5):sp,tgt={x:clamp(tg0.x,XMIN,XMAX),y:clamp(tg0.y,YMIN,YMAX)};
       s.off[s.h].x=tgt.x;s.off[s.h].y=tgt.y;s.stats.drive++;
-      const ctx={mode:'drive',dir,foeStart:startFoes};scnReact(s,ctx);info.helpers=ctx.helpers||[];scnMoveMates(s,s.level>=4?2:1);
+      const ctx={mode:'drive',dir,foeStart:startFoes};scnReact(s,ctx);info.mv=scnMoveOff(s,{mode:'drive',from:hOld,dir});info.helpers=ctx.helpers||[];info.ctx=ctx;
       steps.push({k:'move',...snap(),ms:820,dribble:true,drive:true});
       info.pressed=e.out==='stop';
     }
   }else{ // hold
     const near=s.foes.filter(f=>dist(f,hOld)<11);
     if(near.length>=2&&Math.random()<.18){const fi=st.foes.indexOf(nearest(st.foes,hOld).f);turnover(fi,hOld,'ボールを とられた！');}
-    else{const ctx={mode:'hold',foeStart:startFoes};scnReact(s,ctx);scnMoveMates(s,3);steps.push({k:'move',...snap(),ms:640,dribble:false});}
+    else{const ctx={mode:'hold',foeStart:startFoes};scnReact(s,ctx);info.mv=scnMoveOff(s,{mode:'hold'});info.ctx=ctx;steps.push({k:'move',...snap(),ms:640,dribble:false});}
   }
   if(!s.end&&opt.cat!=='shoot'){
     if(s.time<=0){s.end={type:'timeup'};steps.push({k:'say',text:'ブザー！ じかんぎれ',cls:'miss'});}
@@ -1010,8 +1150,7 @@ function scnResolveOff(st,opt,options){
   const sp=opt.ev.spot,hero=s.off[0];
   if(sp&&scnLegal(s,sp,0)){hero.x=clamp(sp.x,XMIN,XMAX);hero.y=clamp(sp.y,YMIN,YMAX);}
   /* マーク役は少しだけ遅れてついてくる（残りの守備の動きは、このあとの味方のプレーで起きる） */
-  const hm=s.foes.find(f=>f.man===0);if(hm){const g=goalSide(hero,8.8);stepTo(hm,g,4.5);scnSeparate(s);if(!scnFoesOk(s))s.foes.forEach((f,i)=>{f.x=startFoes[i].x;f.y=startFoes[i].y;});}
-  scnMoveMates(s,1);
+  const hm=s.foes.find(f=>f.man===0);if(hm){const g=s.level>=2?mvStance(hero,s.off[s.h],.55,8.8):goalSide(hero,8.8);stepTo(hm,g,4.5);scnSeparate(s);if(!scnFoesOk(s))s.foes.forEach((f,i)=>{f.x=startFoes[i].x;f.y=startFoes[i].y;});}
   steps.push({k:'move',...snap(),ms:640,dribble:false,offball:true});
   const r={st:s,steps,info};
   if(s.time<=0){s.end={type:'timeup'};steps.push({k:'say',text:'ブザー！ じかんぎれ',cls:'miss'});return r;}
@@ -1055,6 +1194,13 @@ function scnPoolFor(level,force){
   if(force){const f=pool.find(p=>p.id===force);if(f)return [f];}
   return pool.map(p=>({...p,w:p.w*(SCN_HIST.slice(-3).includes(p.id)?.15:1)}));
 }
+/* 開始時のスペーシング：味方どうし・ボール保持者が近づきすぎない（スクリーン場面は除く） */
+function mvSpaced(st){
+  if(st.screen)return true;
+  const lim=st.level>=3?11:9.5;
+  for(let i=0;i<st.off.length;i++)for(let j=i+1;j<st.off.length;j++)if(dist(st.off[i],st.off[j])<lim)return false;
+  return true;
+}
 function scnValid(st,must){
   const all=[...st.off,...st.foes];
   for(const p of all)if(!inCourt(p))return false;
@@ -1087,7 +1233,8 @@ function scnBuildStart(level,pick,o){
     const st={phase:'off',off:[me,...mates].map(p=>({x:p.x,y:p.y,num:p.num})),foes:foes.map(f=>({x:f.x,y:f.y,num:f.num,man:-1})),h:0,
       screen:screen?{foe:screen.foe,side:screen.side,mate:1,active:true}:null,flags,themeId:pick.id,level:cl,style:o.style,
       time:o.time,us:o.us,them:o.them,turn:0,maxTurns:o.depth,poss:o.poss||0,single:!!o.single,stats:o.stats||SCN_ZERO(),seen:{},lastPass:null,end:null};
-    scnAssignMen(st,thr);
+    scnAssignMen(st,thr);if(MV.fill)mvFillMen(st);
+    if(!mvSpaced(st))continue;
     if(!scnValid(st,must))continue;
     return st;
   }
@@ -1156,7 +1303,13 @@ function scnWrap(s){
     if(before<=0&&s.us-s.them>=0&&before+3>=0&&s.time<=12){s.stats.clutch++;r.clutch=true;}
   }
   if(e.type==='timeup'||s.single){r.gameOver=true;return r;}
-  if((e.type==='miss'||e.type==='rim')&&s.time>=5&&s.poss<7&&Math.random()<.3){r.rebound=true;r.again=true;s.time=Math.max(0,+(s.time-1).toFixed(1));return r;}
+  if(e.type==='miss'||e.type==='rim'){
+    /* リバウンド：相手(RED)はボックスアウトを して くる。うまく おさえられたら ボールを とれる */
+    const can=s.time>=5&&s.poss<7;let rb=null;
+    for(let t=0;t<10;t++){rb=scnRebSim(s,()=>.68,{say:w=>w.side==='foe'?'リバウンドを とられた…':null});if(can||rb.win!=='off')break;}
+    r.rb=rb;
+    if(rb.win==='off'&&can){r.rebound=true;r.again=true;s.time=Math.max(0,+(s.time-1).toFixed(1));return r;}
+  }
   if(s.time<2.5||s.poss>=7){r.gameOver=true;return r;}
   r.defense=true;r.again=true;
   return r;
@@ -1194,7 +1347,7 @@ function scnAutoLine(A){
   if(A.cat==='drive')return A.num+'ばんが ドライブ！';
   return A.num+'ばんが シュート！';
 }
-const SCN_OFFTXT={off_cut:'ゴールへ カットした！',off_left:'あいている ところへ ひろがった！',off_right:'あいている ところへ ひろがった！',off_ball:'ボールを もらいに いった！',off_stay:'その ばで まった。'};
+const SCN_OFFTXT={off_clear:'ドライブの みちを あけて、ひろがった！',off_cut:'ゴールへ カットした！',off_left:'あいている ところへ ひろがった！',off_right:'あいている ところへ ひろがった！',off_ball:'ボールを もらいに いった！',off_stay:'その ばで まった。'};
 function scnPromptLine(st){
   if(st.h===0)return '';
   return st.off[st.h].num+'ばんが ボールを もっているよ。きみは ボールを もっていないよ。どう うごく？';
@@ -1231,10 +1384,13 @@ function scnNarrate(prev,res,wrap){
     out.head=q==='great'?'NICE PASS!':q==='good'?'GOOD!':'つながった！';if(q==='weak')out.cls='ok';
     const free=recv&&nearest(prev.foes,recv).d>=FREE_D;
     out.line=(free?'フリーの '+recv.num+'ばんへ パス！ ':recv.num+'ばんに つないだ！ ')+(al?al+' ':'')+(A?'':(openLine||''));
+    out.line+=(' '+scnMvLine(res.info.mv)).trimEnd();
     out.coach=pick(SCN_COACH.pass);
   }else if(opt.cat==='drive'){
     out.head=res.info.pressed?'つかまりそう！':q==='weak'?'ドライブ！':'NICE DRIVE!';if(res.info.pressed||q==='weak')out.cls='ok';
     out.line=(res.info.pressed?'てきが さきに まわりこんだ！ ':'ドライブで ぐいぐい すすむ！ ')+(openLine||'');
+    const dm=scnMvLine(res.info.mv);if(dm)out.line+=' '+dm;
+    if(res.info.ctx&&res.info.ctx.returned&&res.info.ctx.returned.length)out.line+=' ヘルプの てきが じぶんの マークへ もどった。';
     out.coach=pick(SCN_COACH.drive);
   }else{
     out.head=nOpen.length?'ナイス がまん！':'まもった！';out.line='ボールを まもって、みかたの うごきを まつ。 '+(openLine||'');out.coach=pick(SCN_COACH.hold);
@@ -1249,15 +1405,48 @@ function scnIntro(st){
   return 'きみの まわりは あいているよ！';
 }
 
+/* ===== リバウンド：チェック → ボックスアウト → 相手をリングから遠ざける → ボールへ =====
+   st.off=シュートを打った側 / st.foes=守る側。boxP(i)=守備i がボックスアウトする確率 */
+function scnRebSim(st,boxP,opts){
+  opts=opts||{};
+  const A=st.off.map(p=>({x:p.x,y:p.y})),D=st.foes.map(p=>({x:p.x,y:p.y}));
+  const L={x:GOAL.x+rnd(-11,11),y:GOAL.y+rnd(10,15)};
+  const boxed=new Set(),boxing=new Set();
+  st.foes.forEach((f,i)=>{
+    const m=f.man>=0?A[f.man]:null;if(!m)return;
+    if(Math.random()<boxP(i)){
+      const dx=L.x-m.x,dy=L.y-m.y,l=Math.hypot(dx,dy)||1,ux=dx/l,uy=dy/l;
+      const dpos={x:m.x+ux*8.2,y:m.y+uy*8.2};
+      D[i]={x:clamp(dpos.x,XMIN,XMAX),y:clamp(dpos.y,YMIN,YMAX)};
+      A[f.man]={x:clamp(m.x-ux*2.2,XMIN,XMAX),y:clamp(m.y-uy*2.2,YMIN,YMAX)};
+      boxing.add(i);boxed.add(f.man);
+    }else{
+      /* ボールを見ているだけ：ボールのほうへ走る（マークを見失う） */
+      const p=D[i],l=dist(p,L)||1,t=Math.min(6,l);D[i]={x:p.x+(L.x-p.x)/l*t,y:p.y+(L.y-p.y)/l*t};
+    }
+  });
+  /* ボックスアウトされていない攻撃側もボールへ向かう（シューターは着地のため1歩おくれる） */
+  A.forEach((p,j)=>{if(boxed.has(j))return;const l=dist(p,L)||1,t=Math.min(j===st.h?2:5,l);A[j]={x:p.x+(L.x-p.x)/l*t,y:p.y+(L.y-p.y)/l*t};});
+  const cands=[];
+  A.forEach((p,j)=>cands.push({side:'off',idx:j,s:10-dist(p,L)*.5-(boxed.has(j)?9:0)-(j===st.h?3:0)}));
+  D.forEach((p,i)=>cands.push({side:'foe',idx:i,s:10-dist(p,L)*.5+(boxing.has(i)?6:0)}));
+  const mx=Math.max(...cands.map(c=>c.s)),w=cands.map(c=>Math.exp((c.s-mx)/4));
+  let r=Math.random()*w.reduce((a,b)=>a+b,0),win=cands[cands.length-1];
+  for(let k=0;k<cands.length;k++){r-=w[k];if(r<=0){win=cands[k];break;}}
+  const steps=[{k:'move',off:A.map(p=>({x:p.x,y:p.y})),foes:D.map(p=>({x:p.x,y:p.y})),ms:560,dribble:false,box:true,boxers:[...boxing]},
+    {k:'reb',side:win.side,idx:win.idx,at:{x:L.x,y:L.y},say:opts.say&&opts.say(win)}];
+  return {steps,win:win.side,idx:win.idx,boxed:[...boxing],A,D,L};
+}
+
 /* ===== DEFENSE ENGINE: 相手(RED)の攻撃を主人公(BLUE)が守る =====
    st.off = 相手の攻撃選手(RED)  /  st.foes = 守備側(BLUE)  /  st.hi = 主人公の守備index(0)
    既存の評価関数(scnEvalAll など)は「off=攻撃側」前提なので、そのまま相手AIの判断に再利用できる */
 const DFN_TURNS={1:1,2:2,3:2,4:3,5:3};
 const DFN_OPTS={
- drive:[['front','🛡️','前に出る'],['slide','↔️','横についていく'],['trust','👥','味方にまかせる']],
- pass:[['deny','🛡️','パスコースを守る'],['ball','🏃','ボールへ行く'],['help','👥','味方を助ける']],
- shot:[['check','🖐️','シュートチェック'],['reb','🏀','リバウンド準備'],['chase','🏃','ボールを追う']],
- help:[['help','🦸','ヘルプに行く'],['stay','🛡️','自分のマークを守る'],['back','🥅','ゴールを守る']],
+ drive:[['front','🛡️','前に出る'],['slide','↔️','横についていく'],['trust','🗣️','みかたと いっしょに止める']],
+ pass:[['deny','🛡️','パスコースを守る'],['ball','🏃','ボールへ行く'],['help','👀','ボールとマークを見る']],
+ shot:[['check','🖐️','シュートチェック'],['reb','💪','ボックスアウト'],['chase','🏃','ボールを追う']],
+ help:[['help','🦸','ヘルプに行って戻る'],['stay','🛡️','自分のマークを守る'],['back','🥅','ゴールを守る']],
  two:[['front','🛡️','ボールを止める'],['cut','🚧','カットをふさぐ'],['sag','👀','ふたりを見る']]
 };
 function dfnPairs(st,n){
@@ -1302,8 +1491,8 @@ function dfnStart(level,o){
     const all=[...st.off,...st.foes];let ok=true;
     for(const p of all)if(!inCourt(p))ok=false;
     for(let i=0;i<all.length&&ok;i++)for(let j=i+1;j<all.length;j++)if(dist(all[i],all[j])<SEP-.01){ok=false;break;}
-    if(!ok)continue;
-    dfnPlayers(st);scnAssignMen(st,13);
+    if(!ok||!mvSpaced(st))continue;
+    dfnPlayers(st);scnAssignMen(st,13);mvFillMen(st);
     st.maxTurns=Math.max(1,Math.min(DFN_TURNS[cl],Math.floor((o.time-1.2)/3)));
     dfnPrepare(st,c.kind);
     if(!st.intent)continue;
@@ -1328,6 +1517,7 @@ function dfnPrepare(st,force){
   if(st.pat==='drive'||st.pat==='two'||st.pat==='help'){if(!st.intent.spot&&st.intent.k==='drive')st.intent.spot=st.off[st.h];}
 }
 function dfnPattern(st,it){
+  if(st.flags.heroBeaten)return 'recover';
   if(st.flags.beaten)return 'help';
   if(it.k==='shoot')return 'shot';
   if(it.k==='pass')return 'pass';
@@ -1344,17 +1534,26 @@ function dfnP(st,key){
   }
   if(pat==='pass'){
     const mine=st.foes[st.hi].man===it.to;
-    return key==='deny'?(mine?.72:.28):key==='ball'?(mine?.42:.38):(mine?.25:.62);
+    return key==='deny'?(mine?.74:.26):key==='ball'?(mine?.4:.3):(mine?.56:.8);
   }
   if(pat==='shot'){
     const dc=dist(hero,H);
-    return key==='check'?clamp(1.05-dc/20,.25,.85):key==='chase'?clamp(.9-dc/22,.2,.6)*.8:.5;
+    return key==='check'?clamp(1.05-dc/20,.25,.85):key==='chase'?clamp(.9-dc/22,.2,.6)*.8:clamp(.3+dc/38,.4,.72);
+  }
+  if(pat==='recover'){
+    const hn=dfnHelperNear(st,H),dh=dist(hero,H);
+    return key==='mark'?.74:key==='watch'?.12:key==='goal'?(hn?.4:.58):(hn?.36:clamp(.92-dh/22,.3,.78));
   }
   const dh=dist(hero,H);
   return key==='help'?clamp(.85-dh/38,.3,.82):key==='stay'?.22:.5;
 }
+function dfnRecoverSet(st){
+  const hn=dfnHelperNear(st,st.off[st.h]);
+  return hn?[['mark','🔁','自分のマークへ戻る'],['side','🏃','横から追いつく'],['goal','🥅','ゴールがわへ戻る']]
+           :[['side','🏃','横から追いつく'],['goal','🥅','ゴール方向へ戻る'],['watch','👀','その場で見ている']];
+}
 function dfnOptions(st){
-  const list=DFN_OPTS[st.pat].map(([key,ic,label])=>({key,ic,label,p:dfnP(st,key),cat:'def'}));
+  const list=(st.pat==='recover'?dfnRecoverSet(st):DFN_OPTS[st.pat]).map(([key,ic,label])=>({key,ic,label,p:dfnP(st,key),cat:'def'}));
   return shuffle(list);
 }
 const dfnDirWord=(st)=>{const H=st.off[st.h],sp=st.intent.spot||H,dx=sp.x-H.x;return Math.abs(dx)<12?'まっすぐ':dx>0?'右':'左';};
@@ -1363,12 +1562,13 @@ function dfnPrompt(st){
   if(st.pat==='drive')return {head:'てきが つっこんできた！',line:'てきは '+dfnDirWord(st)+'へ ドライブ！'};
   if(st.pat==='two')return {head:'ふたりで せめてきた！',line:'ボールを もった てきが ドライブ！ もう ひとりは ゴールへ カット！'};
   if(st.pat==='pass')return {head:'パスされそう！',line:'てきは '+st.off[it.to].num+'ばんへ パスしそう！'};
-  if(st.pat==='shot')return {head:'シュートされる！',line:'てきが シュートを うつよ！'};
+  if(st.pat==='shot')return {head:'シュートされる！',line:'てきが シュートを うつよ！ うたれたら ボックスアウトも わすれずに！'};
+  if(st.pat==='recover')return dfnHelperNear(st,st.off[st.h])?{head:'ぬかれた！',line:'みかたが ヘルプに きた！ きみは どう もどる？'}:{head:'ぬかれた！',line:'てきが ゴールへ！ あきらめずに おいかけよう！'};
   return {head:'ぬかれた！',line:'ゴールの ちかくに てきが いる！ ヘルプに 行く？'};
 }
 function dfnHintText(st,options){
   const b=options.slice().sort((x,y)=>y.p-x.p)[0];
-  const t={drive:'てきの すすむ ほうを みよう。',two:'あぶない ほうを みよう。',pass:'パスが いきそうな ひとを みよう。',shot:'シュートを うつ ひとに ちかい かな？',help:'ゴールに ちかい ひとを まもろう。'}[st.pat];
+  const t={drive:'てきの すすむ ほうを みよう。',two:'あぶない ほうを みよう。',pass:'パスが いきそうな ひとを みよう。 じぶんの マークも わすれずに！',recover:'ぬかれても あきらめない！ ゴールの ほうへ もどろう。',shot:'シュートを うつ ひとに ちかい かな？',help:'ゴールに ちかい ひとを まもろう。'}[st.pat];
   return t+' 「'+b.label+'」が いいかも！';
 }
 function dfnArrows(st){
@@ -1398,7 +1598,7 @@ function dfnResolve(st,opt,options){
   const snap=()=>({off:s.off.map(p=>({x:p.x,y:p.y})),foes:s.foes.map(f=>({x:f.x,y:f.y}))});
   const mv=(ms,dribble)=>steps.push({k:'move',...snap(),ms,dribble:!!dribble});
   const hero=()=>s.foes[hi];
-  const react=(mode,keep)=>{const hp={x:hero().x,y:hero().y};scnReact(s,{mode,foeStart:foeStart0,dir:0});if(keep){hero().x=hp.x;hero().y=hp.y;}};
+  const react=(mode,keep)=>{const hp={x:hero().x,y:hero().y};const c={mode,foeStart:foeStart0,dir:0};scnReact(s,c);info.ctx=c;if(keep){hero().x=hp.x;hero().y=hp.y;}};
   const near=(p)=>{let d=999,k=0;s.foes.forEach((f,i)=>{const e=dist(f,p);if(e<d){d=e;k=i;}});return k;};
   const goto8=(f,from,d)=>{const l=dist(f,from)||1;f.x=from.x+(f.x-from.x)/l*d;f.y=from.y+(f.y-from.y)/l*d;};
   const shoot=(pm,o)=>{
@@ -1409,62 +1609,114 @@ function dfnResolve(st,opt,options){
     return made;
   };
   const steal=(idx,at,head,line)=>{steps.push({k:'steal',foe:idx,at:{x:at.x,y:at.y},say:'ボールを とった！'});s.end={type:'steal'};info.head=head;info.line=line;};
+  /* RED(相手)の味方：ドライブに合わせて あける・ひろがる／パスのあとは うごく */
+  const redMove=(mode,from)=>{if(pat==='two')return;info.mv=scnMoveOff(s,{mode,from,passer:mode==='pass'?from:undefined,dir:0});};
   const passOut=(t)=>{
-    steps.push({k:'pass',from:s.h,to:t});s.lastPass={from:s.h,to:t,turn:s.turn};s.h=t;
-    react('pass',true);scnMoveMates(s,1);mv(640);
+    const from=s.h;
+    steps.push({k:'pass',from,to:t});s.lastPass={from,to:t,turn:s.turn};s.h=t;
+    react('pass',true);scnMoveOff(s,{mode:'pass',passer:from});mv(640);
   };
   const baseMake=()=>clamp(.08+shotQ(s.foes,s.off[s.h])*.011,.08,.95);
+  /* リバウンド：ヒーローの選択で ボックスアウトする確率が変わる（味方CPUは基本的にする） */
+  const rebound=(heroBox)=>{
+    if(s.end&&s.end.block)return true;
+    const rb=scnRebSim(s,i=>i===hi?heroBox:.7,{say:w=>w.side==='off'?'リバウンドを とられた！':null});
+    steps.push(...rb.steps);
+    if(rb.win==='off'){s.end={type:'rscore',pts:2,by:rb.idx};return false;}
+    info.rbHero=rb.idx===hi;return true;
+  };
   if(pat==='drive'||pat==='two'){
     const sp=it.spot||H0,spc={x:clamp(sp.x,XMIN,XMAX),y:clamp(sp.y,YMIN,YMAX)};
-    const h=hero();
+    const h=hero();let helperIdx=-1;
     if(key==='front'){const m=lerpP(h,H0,.2);h.x=m.x;h.y=m.y;goto8(h,H0,Math.max(8.1,dist(h,H0)-1.4));}
     else if(key==='slide'){h.x=clamp(h.x+clamp(spc.x-H0.x,-14,14)*.8,XMIN,XMAX);}
-    else if(key==='trust'){const ti=s.foes.map((f,i)=>({i,d:dist(f,spc)})).filter(c=>c.i!==hi).sort((a,b)=>a.d-b.d)[0];if(ti){const t=s.foes[ti.i];goto8(t,spc,8.6);}}
+    else if(key==='trust'){
+      /* 声をかけて一緒に止める：自分は横についていき、近くの味方が一時的にヘルプ（あとで自分のマークへ戻る） */
+      h.x=clamp(h.x+clamp(spc.x-H0.x,-14,14)*.5,XMIN,XMAX);
+      const ti=s.foes.map((f,i)=>({i,d:dist(f,spc)})).filter(c=>c.i!==hi).sort((a,b)=>a.d-b.d)[0];
+      if(ti){const t=s.foes[ti.i];goto8(t,spc,8.6);t.role='help';helperIdx=ti.i;}
+    }
     else if(key==='cut'){const c=s.off[1];if(c){const m=lerpP(c,GOAL,.35);h.x=h.x+(m.x-h.x)*.6;h.y=h.y+(m.y-h.y)*.6;}}
     else if(key==='sag'){h.x=h.x+(50-h.x)*.3;h.y=h.y+(20-h.y)*.25;}
     mv(520);
     if(ok){
-      const mid=lerpP(H0,spc,.35);s.off[s.h].x=mid.x;s.off[s.h].y=mid.y;mv(700,true);
+      const mid=lerpP(H0,spc,.35);s.off[s.h].x=mid.x;s.off[s.h].y=mid.y;
+      redMove('drive',H0);mv(700,true);
       info.head='GREAT DEFENSE!';
-      info.line=key==='front'?'前に出て ドライブを とめた！':key==='slide'?'よこに ついて ドライブを とめた！':key==='trust'?'ナイスヘルプ！ みかたが とめてくれた！':key==='cut'?'カットを ふさいで ドライブも とめた！':'ふたりを みて うまく とめた！';
+      info.line=key==='front'?'前に出て ドライブを とめた！':key==='slide'?'よこに ついて ドライブを とめた！':key==='trust'?'こえを かけて いっしょに とめた！ ナイスヘルプ！':key==='cut'?'カットを ふさいで ドライブも とめた！':'ふたりを みて うまく とめた！';
       const outs=scnOpenMates(s);
-      if(s.turn<s.maxTurns&&outs.length&&Math.random()<.5){
+      if(key==='trust'&&helperIdx>=0&&s.turn<s.maxTurns&&Math.random()<.55&&s.foes[helperIdx].man>=0&&s.foes[helperIdx].man!==s.h){
+        /* ヘルプに出た味方のマークが フリー → キックアウト。ヘルプの人は もどって おさえる */
+        passOut(s.foes[helperIdx].man);dfnPrepare(s);info.head='とめた！ でも…';
+        info.line='こえを かけて とめたけど、パスで ヘルプに いった ひとの マークが フリー！ もどって おさえよう！';
+      }else if(s.turn<s.maxTurns&&outs.length&&Math.random()<.5){
         passOut(outs[0]);dfnPrepare(s);info.head='とめた！ でも…';info.line+=' パスで べつの てきが フリー！';
       }else if(Math.random()<.55){steal(near(mid),mid,'GREAT DEFENSE!',info.line+' ボールを うばった！');}
-      else{shoot(.12);info.line+' むりに うたせた！';info.line+' むりに うたせた！';}
+      else{shoot(.12);info.line+=' むりに うたせた！';}
     }else{
-      s.off[s.h].x=spc.x;s.off[s.h].y=spc.y;react('drive',true);mv(820,true);
+      s.off[s.h].x=spc.x;s.off[s.h].y=spc.y;react('drive',true);redMove('drive',H0);mv(820,true);
       info.head='ぬかれた！';info.line='てきに ドライブで ぬかれちゃった！';
       if(s.turn>=s.maxTurns||s.time<=0){shoot(clamp(.08+shotQ(s.foes,s.off[s.h])*.011+.2,.1,.9));info.line='てきに ぬかれて、そのまま シュートされた！';}
-      else{s.flags.beaten=true;dfnPrepare(s,'shoot');info.line+=' ゴールが あぶない！';}
+      else{s.flags.beaten=false;s.flags.heroBeaten=true;dfnPrepare(s,'shoot');info.line+=' あきらめずに もどろう！';}
     }
   }else if(pat==='pass'){
-    const t=it.to,R=s.off[t],mine=st.foes[hi].man===t,h=hero();
+    const t=it.to,R=s.off[t],mine=st.foes[hi].man===t,h=hero(),M=st.foes[hi].man>=0?s.off[st.foes[hi].man]:null;
     if(key==='deny'){const m=lerpP(H0,R,.55);h.x=m.x;h.y=m.y;}
     else if(key==='ball'){goto8(h,H0,8.4);}
-    else if(!mine){const g=goalSide(R,8.8);h.x=g.x;h.y=g.y;}
+    else{
+      /* ボールとマークが同時に見える位置（ボールにもマークにも近い） */
+      const g=M?mvStance(M,H0,mine?.7:.5,8.6):goalSide(R,8.8);h.x=g.x;h.y=g.y;
+    }
     mv(520);
     if(ok&&(key==='deny'||key==='ball'||mine)){
-      const pt=segPoint(h,H0,R);steal(hi,pt,key==='deny'?'PASS CUT!':'GREAT DEFENSE!',key==='deny'?'パスコースを ふさいだ！ パスカット！':'ボールへ とびこんで カット！');
+      const pt=segPoint(h,H0,R);steal(hi,pt,key==='deny'?'PASS CUT!':'GREAT DEFENSE!',key==='deny'?'パスコースを ふさいだ！ パスカット！':key==='help'?'ボールと マークを 見て パスカット！':'ボールへ とびこんで カット！');
     }else if(ok){
       steps.push({k:'pass',from:s.h,to:t});s.lastPass={from:s.h,to:t,turn:s.turn};s.h=t;react('pass',true);mv(560);
-      info.head='ナイスヘルプ！';info.line='パスは とおったけど、すぐ おさえた！';
+      info.head='ナイスヘルプ！';info.line=key==='help'?'ボールと マークを 見ていたから、パスが きても すぐ おさえた！':'パスは とおったけど、すぐ おさえた！';
       if(s.turn<s.maxTurns&&s.time>0)dfnPrepare(s,'shoot');else shoot(.22);
     }else{
-      passOut(t);info.head='パスが とおった！';info.line='てきに うまく パスされた！';
+      passOut(t);info.head='パスが とおった！';info.line=(!mine&&key!=='help')?'じぶんの マークから はなれすぎたよ。ボールと マークを 見よう！':'てきに うまく パスされた！';
       if(s.turn<s.maxTurns&&s.time>0)dfnPrepare(s,'shoot');else{shoot(.55);info.line='てきに うまく パスされて シュートされた！';}
     }
   }else if(pat==='shot'){
-    const H=s.off[s.h],h=hero();
-    if(key==='check')goto8(h,H,8.0);else if(key==='chase')goto8(h,H,8.3);else{const m=lerpP(h,P(50,17),.5);h.x=m.x;h.y=m.y;}
+    const H=s.off[s.h],h=hero(),hm=st.foes[hi].man>=0&&st.foes[hi].man!==s.h?s.off[st.foes[hi].man]:null;
+    if(key==='check')goto8(h,H,8.0);
+    else if(key==='chase')goto8(h,H,8.3);
+    else{const m=hm||H;const g=mvToward(m,GOAL,8.2);h.x=g.x;h.y=g.y;}
     mv(520);
     const base=baseMake(),pm=key==='check'?(ok?.1:Math.min(.9,base+.12)):key==='reb'?base*.85:(ok?base*.6:base*.8);
     const made=shoot(pm,{block:key==='check'&&ok&&Math.random()<.4});
     if(made){info.line=key==='check'?'シュートチェックが おくれた…':key==='reb'?'シュートを うたれた…':'おいつけなかった…';}
     else{
-      const mine=key==='reb'?.8:key==='check'?(ok?1:.6):.55;
-      if(Math.random()>=mine&&Math.random()<.5){steps.push({k:'say',text:'リバウンドを とられた！',cls:'miss'});s.end={type:'rscore',pts:2,by:s.h};info.line='リバウンドを とられて いれられた…';}
-      else{info.head=key==='check'?(s.end.block?'SHOT BLOCK!':'SHOT CHECK!'):key==='reb'?'NICE REBOUND!':'GREAT DEFENSE!';info.line=key==='check'?'シュートを じゃました！':key==='reb'?'リバウンドを とった！':'シュートを はずさせた！';}
+      /* シュートチェック→ボックスアウト→リバウンド。ボールを見るだけだと マークに とられる */
+      const got=rebound(key==='reb'?.95:key==='check'?.6:.15);
+      if(!got){info.line='ボックスアウトが できなくて リバウンドを とられた…';}
+      else{info.head=key==='check'?(s.end.block?'SHOT BLOCK!':'SHOT CHECK!'):key==='reb'?'NICE REBOUND!':'GREAT DEFENSE!';
+        info.line=key==='check'?'シュートを じゃました！ リバウンドも ゲット！':key==='reb'?'あいてを おさえて リバウンドを とった！':'シュートを はずさせた！';}
+    }
+  }else if(pat==='recover'){
+    /* ぬかれたあと：横から追いつく／ゴール方向へ戻る／味方がヘルプしたら自分のマークへ戻る */
+    const H=s.off[s.h],h=hero(),hn=dfnHelperNear(st,H0);
+    const man=st.foes[hi].man>=0&&st.foes[hi].man!==s.h?s.off[st.foes[hi].man]:null;
+    if(key==='side'){const g=goalSide(H,8.4);stepTo(h,{x:(g.x+H.x)/2+(h.x<H.x?-2:2),y:(g.y+H.y)/2},22);}
+    else if(key==='goal'){stepTo(h,goalSide(H,9),20);}
+    else if(key==='mark'){
+      if(man)stepTo(h,mvStance(man,H,.5,8.8),22);
+      const t=s.foes.map((f,i)=>({i,d:dist(f,H)})).filter(c=>c.i!==hi).sort((a,b)=>a.d-b.d)[0];
+      if(t){stepTo(s.foes[t.i],goalSide(H,8.6),20);s.foes[t.i].role='help';}
+    }
+    scnSeparate(s);mv(560);
+    s.flags.heroBeaten=false;
+    if(ok){
+      info.head='NICE RECOVERY!';
+      info.line=key==='mark'?'みかたが ヘルプしてくれたから、じぶんの マークへ もどれた！':key==='side'?'よこから おいついて シュートを じゃました！':'ゴールの ほうへ もどって シュートを じゃました！';
+      const made=shoot(.14,{block:Math.random()<.4});
+      if(made)info.line='おいついたけど、はいっちゃった…';
+      else if(s.end.block)info.head='BLOCK!';
+      else if(!rebound(.7)){info.line='おいついたけど リバウンドを とられた…';}
+    }else{
+      shoot(.72);info.head='いれられた…';
+      info.line=key==='watch'?'ボールを 見ているだけだと おいつけないよ。ゴールの ほうへ もどろう！':'おいつけなかった…';
     }
   }else{ // help
     const h=hero();
@@ -1475,8 +1727,11 @@ function dfnResolve(st,opt,options){
       info.head='NICE HELP!';info.line=key==='help'?'ナイスヘルプ！ シュートを じゃました！':'ゴールを まもって シュートを じゃました！';
       const man=st.foes[hi].man;
       if(key==='help'&&s.turn<s.maxTurns&&s.time>0&&man>=0&&man!==s.h&&Math.random()<.45){
-        s.flags.beaten=false;passOut(man);dfnPrepare(s,'shoot');info.line='ヘルプで とめたけど、パスで ひとり フリーに！';info.head='とめた！ でも…';
-      }else{s.flags.beaten=false;const made=shoot(.15,{block:Math.random()<.4});if(made){info.line='じゃまは したけど、はいっちゃった…';}else if(s.end.block)info.head='BLOCK!';}
+        /* ヘルプで止めた → 自分のマークへパス(キックアウト) → すぐ戻って(クローズアウト) おさえる */
+        s.flags.beaten=false;hero().role='help';passOut(man);
+        stepTo(hero(),goalSide(s.off[man],8.4),14);scnSeparate(s);mv(480);
+        dfnPrepare(s,'shoot');info.line='ヘルプで とめたけど、パスで じぶんの マークが フリーに！ すぐ もどって おさえよう！';info.head='とめた！ でも…';
+      }else{s.flags.beaten=false;const made=shoot(.15,{block:Math.random()<.4});if(made){info.line='じゃまは したけど、はいっちゃった…';}else if(s.end.block)info.head='BLOCK!';else rebound(.7);}
     }else{
       s.flags.beaten=false;shoot(.72);info.head='いれられた…';info.line=key==='stay'?'ヘルプに いかなかったから フリーで うたれた！':'ゴールの ちかくで シュートを うたれた！';
     }
@@ -1496,7 +1751,7 @@ function dfnWrap(s){
   if(s.time<3||s.poss>=7)r.gameOver=true;else r.again=true;
   return r;
 }
-const DFN_COACH={drive:'ドライブは「まえに でる」か「よこに つく」。てきの いく ほうを みよう！',pass:'ボールだけ みない！ パスコースも ふさごう。',shot:'シュートの ときは て を あげて チェック！',help:'ぬかれたら みんなで たすける。ヘルプは だいじ！',two:'ふたりの うごきを みて、あぶない ほうを まもろう。'};
+const DFN_COACH={recover:'ぬかれたら ゴールへ もどる！ みかたが たすけたら じぶんの マークへ もどろう。',drive:'ドライブは「まえに でる」か「よこに つく」。てきの いく ほうを みよう！',pass:'ボールだけ みない！ パスコースも ふさごう。',shot:'シュートの ときは て を あげて チェック！',help:'ぬかれたら みんなで たすける。ヘルプは だいじ！',two:'ふたりの うごきを みて、あぶない ほうを まもろう。'};
 function dfnNarrate(prev,res,wrap){
   const e=res.st.end,i=res.info,out={head:i.head||'GOOD!',cls:'good',line:i.line,coach:DFN_COACH[i.pat]};
   if(e){
@@ -1506,9 +1761,11 @@ function dfnNarrate(prev,res,wrap){
   return out;
 }
 
+
 </script>
 
 <script id="app">
+
 'use strict';
 const $=id=>document.getElementById(id);
 /* ---------- save data ---------- */
@@ -2042,8 +2299,10 @@ window.addEventListener('orientationchange',()=>setTimeout(resizeCourt,200));
 if(window.ResizeObserver)new ResizeObserver(()=>resizeCourt()).observe($('courtWrap'));
 updateTitle();
 requestAnimationFrame(frame);
+
 </script>
 <script id="scnui">
+
 'use strict';
 /* ===== FX ENGINE: canvas effects (lightning / shock / trail / speed / flame), titles, combo ===== */
 let FXC=null,FXSLOW=1;
@@ -2405,6 +2664,10 @@ async function scnPlay(sim,steps,st0){
         else if(def&&!P.good&&stp.dribble){fxFollow(()=>Z.pl[st0.h],'flame',stp.ms,'#ff6a2a');sfx('drive');}
       }
       await sim.tween(items,stp.ms);
+      if(stp.box&&stp.boxers){
+        stp.boxers.forEach(i=>{const o=Z.fo[i];if(o)fxRing(o.x,o.y,def?FXCOL.blue.m:FXCOL.red.m,9,14,1.3);});
+        if(stp.boxers.length){sfx('pass2');if(def&&stp.boxers.includes(st0.hi))sim.say('ボックスアウト！','combo');}
+      }
       S.ball.dribble=false;
       await sim.wait(P&&P.tier>=2?200:260);S.arrows=[];
     }else if(stp.k==='pass'){
@@ -2413,6 +2676,14 @@ async function scnPlay(sim,steps,st0){
       if(P)fxPass(a,b,def?'weak':(stp.from!==0?'good':(P.good?P.q:'weak')),def?'red':'blue');
       await passTo(sim,b);S.arrows=[];
       if(P&&!def&&P.good&&stp.from===0)fxArrive(b,P.q,'blue');
+    }else if(stp.k==='reb'){
+      const o=stp.side==='off'?Z.pl[stp.idx]:Z.fo[stp.idx];
+      await Promise.all([sim.fly(stp.at,420,6),sim.tween([{o,x:stp.at.x,y:stp.at.y}],420)]);
+      S.ball.holder=o;
+      const blue=def?stp.side==='foe':stp.side==='off';
+      fxRing(stp.at.x,stp.at.y,blue?FXCOL.blue.m:FXCOL.red.m,10,14,1.4);sfx('pass2');
+      if(stp.say&&!sim.dead)sim.say(stp.say,'miss');
+      await sim.wait(320);
     }else if(stp.k==='steal'){
       const f=Z.fo[stp.foe];
       await Promise.all([sim.fly(stp.at,400,4),sim.tween([{o:f,x:stp.at.x,y:stp.at.y}],400)]);
@@ -2484,6 +2755,18 @@ function scnBegin(first,msg){
   scnChips(st);scnScore(st);
   scnFeed({head:msg||(first?'PLAY START!':'もういちど こうげき！'),cls:'ok',line:scnIntro(st),coach:''});
   if(!Z.chal)showPhase('blue');
+  /* トランジション: 味方がレーンを走って前へ（ボールマンより先にゴール方向へ） */
+  if(!first&&Z.st.poss>0&&Z.pl&&Z.pl.length){
+    const run=Z.run,sim=new Sim(S);Z.busy=true;
+    $('sOpts').classList.add('hide');
+    Z.pl.forEach((o,i)=>{if(i!==st.h)o.y=Math.min(YMAX,st.off[i].y+16);});
+    Z.fo.forEach((o,i)=>{o.y=Math.min(YMAX,st.foes[i].y+8);});
+    sim.tween(Z.pl.map((o,i)=>({o,x:st.off[i].x,y:st.off[i].y})).concat(Z.fo.map((o,i)=>({o,x:st.foes[i].x,y:st.foes[i].y}))),800).then(()=>{
+      if(sim.dead||!Z||Z.run!==run)return;
+      Z.busy=false;$('sOpts').classList.remove('hide');scnDecision(true);
+    });
+    return;
+  }
   scnDecision(true);
 }
 function scnDecision(first){
@@ -2515,6 +2798,7 @@ async function scnChoose(op,btn){
   tickClock(prev.time,st.time,900);
   await scnPlay(sim,res.steps,prev);
   if(sim.dead||!Z||Z.run!==run)return;
+  if(wrap&&wrap.rb&&st.end&&(st.end.type==='miss'||st.end.type==='rim')){await scnPlay(sim,wrap.rb.steps,prev);if(sim.dead||!Z||Z.run!==run)return;}
   const nar=scnNarrate(prev,res,wrap);
   Z.st=st;if(!st.end)scnSync(st);
   const e=st.end,fail=e&&['miss','rim','block','timeup','steal'].includes(e.type);
@@ -2700,6 +2984,7 @@ $('btnSHint').onclick=()=>{
   else{S.hint=scnHintDraw(Z.st,Z.options);f.textContent='💡 みどりの せんは チャンス！ きいろは ちょっと…、あかは あぶない！';}$('sFeed').appendChild(f);
 };
 $('sNext').onclick=()=>{if(!Z||Z.busy||!Z.pending)return;const f=Z.pending;Z.pending=null;Z.busy=true;f();};
+
 
 </script>
 </body>
