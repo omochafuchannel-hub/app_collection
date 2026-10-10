@@ -238,6 +238,51 @@ button{font-family:inherit;color:inherit;border:0;cursor:pointer}
 .xpnote{position:relative;font:900 italic 22px/1 "Arial Black",Impact,sans-serif;color:var(--yellow);margin:2px 0 8px}
 @media (max-height:640px){.qtext{font-size:13px;margin:3px 0}.opt{min-height:46px;font-size:13px}.exp div{font-size:11px}.hud-logo{font-size:13px}}
 </style>
+<style id="clxcss">
+/* ===== v7 CLIMAX / FX ===== */
+#clxLayer{position:absolute;inset:0;pointer-events:none;opacity:0;transition:opacity .6s;border-radius:inherit}
+body.clx1 #clxLayer,body.clx2 #clxLayer,body.clx3 #clxLayer{opacity:1}
+body.clx1 #clxLayer{box-shadow:inset 0 0 26px rgba(255,170,50,calc(.38*var(--k,1)))}
+body.clx2 #clxLayer{box-shadow:inset 0 0 40px rgba(255,100,50,calc(.6*var(--k,1)));animation:clxe2 1s ease-in-out infinite alternate}
+body.clx3 #clxLayer{box-shadow:inset 0 0 58px rgba(255,40,50,calc(.85*var(--k,1)));animation:clxe3 .5s ease-in-out infinite alternate}
+@keyframes clxe2{to{box-shadow:inset 0 0 58px rgba(255,90,50,calc(.9*var(--k,1)))}}
+@keyframes clxe3{to{box-shadow:inset 0 0 84px rgba(255,30,50,calc(1*var(--k,1))),inset 0 0 14px rgba(255,255,255,calc(.35*var(--k,1)))}}
+.sb-mid .c{display:inline-block;transform-origin:center}
+body.clx1 .sb-mid{border-color:#ffb340;box-shadow:0 0 10px rgba(255,160,40,.5)}
+body.clx1 .sb-mid .c{color:#ffd88a;text-shadow:0 0 10px #ff9a2a}
+body.clx2 .sb-mid,body.clx3 .sb-mid{border-color:#ff4d5e;animation:clxm .6s ease-in-out infinite alternate}
+body.clx2 .sb-mid .c{color:#ffb0b6;font-size:19px;text-shadow:0 0 10px #ff3b4a;animation:clxn .6s ease-in-out infinite alternate}
+body.clx3 .sb-mid .c{color:#fff;font-size:22px;text-shadow:0 0 10px #ff3b4a,0 0 22px #ff3b4a;animation:clxn .33s ease-in-out infinite alternate}
+body.clxc .sb-mid,body.clxc .sb-mid .c{animation:none}
+body.clxc .sb-mid .c{font-size:15px}
+@keyframes clxm{to{box-shadow:0 0 18px #ff3b4a}}
+@keyframes clxn{to{transform:scale(1.12)}}
+body.clx2 #sOpts .opt{box-shadow:0 0 10px rgba(255,140,60,.35)}
+body.clx3 #sOpts .opt{box-shadow:0 0 14px rgba(255,70,80,.5)}
+body.clxc #sOpts .opt{box-shadow:none}
+#clxBanner{position:absolute;left:0;right:0;bottom:4%;text-align:center;pointer-events:none;opacity:0}
+#clxBanner b{display:inline-block;font:900 italic clamp(18px,5.8vw,30px)/1 "Arial Black",Impact,sans-serif;letter-spacing:2px;color:#fff;text-shadow:0 0 10px #ff8a1f,0 0 22px #ff3b4a;padding:4px 20px;background:linear-gradient(90deg,transparent,rgba(5,10,30,.82) 15%,rgba(5,10,30,.82) 85%,transparent)}
+#clxBanner small{display:block;margin-top:2px;font:900 clamp(11px,3.3vw,14px) sans-serif;color:#ffe9b0;text-shadow:0 1px 3px #000}
+#clxBanner.on{animation:clxb 1.7s ease-out forwards}
+@keyframes clxb{0%{opacity:0;transform:scaleX(1.6)}12%{opacity:1;transform:none}80%{opacity:1}100%{opacity:0}}
+#superFx{position:absolute;inset:0;pointer-events:none;opacity:0;background:linear-gradient(115deg,transparent 34%,rgba(255,210,80,.55) 47%,rgba(255,255,255,.85) 50%,rgba(255,120,40,.5) 53%,transparent 66%);background-size:300% 100%;box-shadow:inset 0 0 50px rgba(255,170,40,.7)}
+#superFx.on{animation:supsw .8s ease-out}
+@keyframes supsw{0%{opacity:1;background-position:100% 0}100%{opacity:0;background-position:0 0}}
+.fc.c2 b{font-size:clamp(20px,6.4vw,34px)}
+.fc.c3 b{font-size:clamp(22px,7.2vw,38px)}
+.fc.c4 b{font-size:clamp(24px,8.2vw,44px)}
+.fc.c5 b{font-size:clamp(24px,8.4vw,46px);background:linear-gradient(90deg,#fff,#ffd23f,#ff8a1f,#ff3b4a,#ffd23f,#fff);background-size:200% 100%;-webkit-background-clip:text;background-clip:text;color:transparent;filter:drop-shadow(0 0 12px #ff3b1a) drop-shadow(0 0 4px #fff)}
+.fc.c5.on{animation-duration:1.6s}
+.burst.bignum.huge{font-size:clamp(70px,26vw,140px);animation-duration:1.5s}
+@media (prefers-reduced-motion:reduce){
+  body.clx2 #clxLayer,body.clx3 #clxLayer{animation:none}
+  body.clx2 .sb-mid,body.clx3 .sb-mid,body.clx2 .sb-mid .c,body.clx3 .sb-mid .c{animation:none}
+  #court.sh1,#court.sh2{animation:none}
+  #whiteLayer.on{animation-duration:.15s;opacity:.4}
+  #superFx.on{animation:none;opacity:.35}
+  #courtBox.cam{transform:none}
+}
+</style>
 </head>
 <body>
 <div id="app">
@@ -1801,7 +1846,11 @@ const SFXT={
   lock:[[220,0,.2,'sine',110,.12],[700,.08,.12,'triangle',900,.06]],
   clutch:[[523,0,.09],[659,.09,.09],[784,.18,.09],[1047,.27,.09],[784,.36,.07],[1047,.43,.09],[1319,.52,.3]],
   combo:[['n',0,.1,1800,.06],[1400,0,.05,'sawtooth',500,.04],[1700,.06,.06,'triangle',0,.05]],
-  super:[['n',0,.22,1500,.1],[600,0,.3,'sawtooth',1800,.06],[1200,.2,.1],[1600,.3,.16]]
+  super:[['n',0,.22,1500,.1],[600,0,.3,'sawtooth',1800,.06],[1200,.2,.1],[1600,.3,.16]],
+  alarm:[[880,0,.08,'square',0,.05],[1175,.11,.14,'square',0,.05]],
+  beat:[[60,0,.13,'sine',42,.26],[120,0,.08,'triangle',90,.07],[60,.17,.12,'sine',42,.18]],
+  beat3:[[64,0,.15,'sine',42,.34],[130,0,.1,'triangle',90,.1],[64,.16,.14,'sine',42,.26],['n',0,.05,500,.05]],
+  buzzer:[[185,0,.85,'sawtooth',180,.1],[247,0,.85,'square',243,.05]]
 };
 let SFXN=null,SFXLAST={},SFXV=[];
 function sfx(kind){
@@ -2105,7 +2154,7 @@ function pickLevel(){
 }
 function startGame(mode,opts){
   opts=opts||{};
-  Z=null;$('scGame').classList.remove('scn');
+  Z=null;if(typeof clxReset==='function')clxReset();$('scGame').classList.remove('scn');
   G={mode,level:opts.level||'auto',cat:opts.cat||null,qn:0,combo:0,q:null,phase:'idle',hint:false,attempts:0,ch:mode==='challenge'?{i:0,total:10,ok:0,xp:0}:null};
   showScreen('scGame');
   requestAnimationFrame(()=>{resizeCourt();nextQuestion();});
@@ -2208,7 +2257,7 @@ function endChallenge(){
   const mode=G.mode;
   showMsg({title:'RESULT',rank:r.n,color:r.c,body:`10もん ちゅう <b style="color:#ffd23f;font-size:22px">${n}</b> もん せいかい！<br>ボーナス +${bonus} XP${n>=10?'<br>パーフェクト！ さいこうの コートの しはいしゃ！':''}`,ok:'もういちど ちょうせん',cb:()=>startGame('challenge',{}),ok2:'タイトルへ',cb2:()=>goTitle()});
 }
-function goTitle(){if(curSim)curSim=null;S=null;Z=null;$('scGame').classList.remove('scn');updateTitle();showScreen('scTitle');}
+function goTitle(){if(curSim)curSim=null;S=null;Z=null;if(typeof clxReset==='function')clxReset();$('scGame').classList.remove('scn');updateTitle();showScreen('scTitle');}
 
 /* ---------- overlays ---------- */
 const ovQ=[];let ovBusy=false;
@@ -2329,7 +2378,11 @@ const TTL={
  team:{ic:'🤝',en:'TEAM PLAY!',jp:'みんなで きめた！'},
  cutin:{ic:'⚡',en:'CUT IN!',jp:'ゴールへ カットした！'},
  space:{ic:'✨',en:'GOOD SPACING!',jp:'あいている ばしょへ うごいた！'},
- call:{ic:'🙋',en:'SHOW UP!',jp:'パスを もらえる ばしょへ！'}
+ call:{ic:'🙋',en:'SHOW UP!',jp:'パスを もらえる ばしょへ！'},
+ rev:{ic:'🔥',en:'COMEBACK!!',jp:'ぎゃくてん シュート！'},
+ tie:{ic:'⚡',en:'TIE GAME!',jp:'どうてんに おいついた！'},
+ saved:{ic:'🛡️',en:'GAME SAVED!!',jp:'さいごに まもりきった！'},
+ rbuz:{ic:'💥',en:'RED BUZZER BEATER',jp:'ざんねん…！ つぎは とめよう！'}
 };
 const FXSND={drive:'drive',break:'drive',bullet:'bullet',perfect:'bullet',steal:'steal',cut:'steal',block:'block',lock:'lock',reb:'rebound',gdef:'lock'};
 const fxOn=()=>!!(typeof S!=='undefined'&&S);
@@ -2408,12 +2461,14 @@ function fxClassOnce(el,cls,ms,key){
   clearTimeout(fxTimers[key]);el.classList.remove(cls);void el.offsetWidth;el.classList.add(cls);
   fxTimers[key]=setTimeout(()=>el.classList.remove(cls),ms);
 }
-function fxShake(l){fxClassOnce($('court'),l>=2?'sh2':'sh1',l>=2?420:300,'sh');}
+const RMOTION=(()=>{try{return matchMedia('(prefers-reduced-motion: reduce)').matches;}catch(e){return false;}})();
+function fxShake(l){if(RMOTION)return;fxClassOnce($('court'),l>=2?'sh2':'sh1',l>=2?420:300,'sh');}
 function fxWhite(){fxClassOnce($('whiteLayer'),'on',420,'wl');}
-function fxZoom(ms){const b=$('courtBox');b.classList.add('cam');clearTimeout(fxTimers.zm);fxTimers.zm=setTimeout(()=>b.classList.remove('cam'),ms||450);}
+function fxZoom(ms){if(RMOTION)return;const b=$('courtBox');b.classList.add('cam');clearTimeout(fxTimers.zm);fxTimers.zm=setTimeout(()=>b.classList.remove('cam'),ms||450);}
 function fxDim(on){$('dimLayer').classList.toggle('on',!!on);}
+let LASTBIG=0;
 function fxTitle(T,tier,team,long){
-  const el=$('ftitle');if(!el||!T)return;
+  const el=$('ftitle');if(!el||!T)return;if(tier>=2)LASTBIG=performance.now();
   el.className='ft '+(team==='red'?'red':'blue')+' t'+tier+((T.en.length>12)?' long':'');
   el.querySelector('b').textContent=T.ic+' '+T.en;el.querySelector('small').textContent=T.jp;
   const pb=$('phaseBanner');if(pb)pb.classList.remove('show');
@@ -2422,28 +2477,32 @@ function fxTitle(T,tier,team,long){
 }
 function fxCombo(n,hero){
   const el=$('fcombo');if(!el)return;
-  const lv=n>=4?4:n,txt=n>=4?'SUPER COMBO!!':n===3?'COMBO ×3!!':'COMBO ×2';
+  const lv=n>=6?5:n>=4?4:n,txt=n>=6?'SUPER COMBO ×'+n:n>=4?'SUPER COMBO!!':n===3?'COMBO ×3!!':'COMBO ×2';
   el.className='fc c'+lv;el.querySelector('b').textContent=txt;void el.offsetWidth;el.classList.add('on');
-  clearTimeout(fxTimers.fc);fxTimers.fc=setTimeout(()=>el.classList.remove('on'),lv>=4?1300:900);
+  clearTimeout(fxTimers.fc);fxTimers.fc=setTimeout(()=>el.classList.remove('on'),lv>=5?1700:lv>=4?1400:900);
   if(!S||!hero)return;const C=FXCOL.blue;
   const rb=()=>({x:hero.x+rnd(-9,9),y:hero.y+rnd(-8,-2)});
   if(lv>=2){fxBolt({x:hero.x+rnd(-4,4),y:hero.y-12},hero,C.l,8,1.6);sfx('combo');}
-  if(lv>=3){for(let i=0;i<2;i++)fxBolt(rb(),hero,C.m,10,2);fxFollow(()=>hero,'flame',420,'#ff9a2a');}
-  if(lv>=4){fxWhite();fxShake(1);fxRays(hero.x,hero.y,C.g,14,22,20);fxRing(hero.x,hero.y,C.l,22,22,2);for(let i=0;i<3;i++)fxBolt(rb(),hero,C.l,12,2.6);sfx('super');}
+  if(lv>=3){for(let i=0;i<2;i++)fxBolt(rb(),hero,C.m,10,2);fxFollow(()=>hero,'flame',420,'#ff9a2a');fxAura(hero,C.m,36);}
+  if(lv>=4){fxWhite();fxShake(1);fxRays(hero.x,hero.y,C.g,14,22,20);fxRing(hero.x,hero.y,C.l,22,22,2);for(let i=0;i<3;i++)fxBolt(rb(),hero,C.l,12,2.6);sfx('super');
+    /* 画面全体: 光の帯が横切り、コート中央から衝撃波 */
+    const sf=$('superFx');if(sf)fxClassOnce(sf,'on',900,'sup');
+    fxRing(50,44,C.g,46,26,2.2);fxFollow(()=>hero,'flame',700,'#ffd23f');}
+  if(lv>=5){fxRays(50,44,C.l,22,40,26);setTimeout(()=>{if(S){fxRing(50,44,C.l,60,28,2.6);fxRing(hero.x,hero.y,C.g,30,22,2);for(let i=0;i<3;i++)fxBolt({x:rnd(12,88),y:rnd(14,26)},hero,C.l,12,3);}},180);fxShake(2);}
 }
 /* ---------- play effects ---------- */
 function fxPass(a,b,q,team){
   const C=FXCOL[team||'blue'];
   if(q==='weak'){fxFollow(()=>S&&ballNow(),'ball',520,'#9fb6d8');sfx('pass2');return;}
-  fxFollow(()=>S&&ballNow(),'ball',540,q==='great'?'#ffe680':C.m);
+  fxFollow(()=>S&&ballNow(),'ball',q==='great'?700:540,q==='great'?'#ffe680':C.m);
   sfx(q==='great'?'bullet':'pass2');
-  if(q==='great'){fxSpeed(a,b,C.l,8,12);fxBolt(a,b,C.m,6,1.2);}
-  else fxBolt(a,b,C.m,5,.8);
+  if(q==='great'){fxSpeed(a,b,C.l,12,14);fxBolt(a,b,C.m,8,1.4);fxBolt(a,b,C.l,6,2.4);}
+  else{fxBolt(a,b,C.m,5,.8);fxSpeed(a,b,C.l,4,9);}
 }
 function ballNow(){const b=S.ball;return b.holder?ballPos(b.holder):{x:b.x,y:b.y-b.h*.6};}
 function fxArrive(p,q,team){
   const C=FXCOL[team||'blue'];
-  if(q==='great'){fxRing(p.x,p.y,C.g,12,14);sparks(p.x,p.y,C.l,14);fxGlow(p.x,p.y,C.m,8,10);}
+  if(q==='great'){fxAdd({t:'ring',x:p.x,y:p.y,r0:15,r1:2,col:C.l,life:14,lw:1.8});fxRing(p.x,p.y,C.g,14,16);sparks(p.x,p.y,C.l,16);fxGlow(p.x,p.y,C.m,9,12);}
   else if(q==='good'){fxRing(p.x,p.y,C.m,8,12,1);}
 }
 function fxDrive(o,to,key,tier,team){
@@ -2483,12 +2542,14 @@ function fxGoal(){
   if(tier>=0)sparks(GOAL.x,GOAL.y+3,C.g,14+tier*8);
   if(tier>=1){fxRays(GOAL.x,GOAL.y,C.l,12,16+tier*4,16);}
   if(tier>=2){fxWhite();fxShake(1);for(let i=0;i<3;i++)fxBolt({x:GOAL.x+rnd(-14,14),y:GOAL.y+rnd(14,22)},{x:GOAL.x,y:GOAL.y},C.l,12,2.4);}
-  if(tier>=3){fxShake(2);fxRing(GOAL.x,GOAL.y,C.l,32,26,2.6);fxRays(GOAL.x,GOAL.y,C.g,20,30,24);fxFollow(()=>({x:GOAL.x,y:GOAL.y+3}),'flame',700,'#ff9a2a');fxBigNum(P.pts);setTimeout(()=>fxDim(false),150);}
+  if(tier>=3){fxShake(2);fxRing(GOAL.x,GOAL.y,C.l,32,26,2.6);fxRays(GOAL.x,GOAL.y,C.g,20,30,24);fxFollow(()=>({x:GOAL.x,y:GOAL.y+3}),'flame',700,'#ff9a2a');fxBigNum(P.pts,true);setTimeout(()=>fxDim(false),150);
+    /* 勝負を決める一撃: 白フラッシュ→連なる衝撃波(同時数を制限) */
+    fxWhite();setTimeout(()=>{if(S)fxRing(GOAL.x,GOAL.y,'#ffffff',48,28,3);},140);setTimeout(()=>{if(S){fxRing(GOAL.x,GOAL.y,C.g,64,30,2.4);fxRays(GOAL.x,GOAL.y,'#ffffff',26,44,26);}},300);}
   else if(P)fxBigNum(P.pts);
 }
-function fxBigNum(pts){
+function fxBigNum(pts,huge){
   if(!pts)return;const fl=$('fxLayer');
-  const d=document.createElement('div');d.className='burst bignum';d.textContent='+'+pts;fl.appendChild(d);setTimeout(()=>d.remove(),1200);
+  const d=document.createElement('div');d.className='burst bignum'+(huge?' huge':'');d.textContent='+'+pts;fl.appendChild(d);setTimeout(()=>d.remove(),1200);
 }
 function fxGoalSfx(){return 'goal3';}
 function fxRebound(){
@@ -2496,20 +2557,23 @@ function fxRebound(){
 }
 /* ---------- plan: decide which "special play" this was and how big ---------- */
 function fxPlan(side,prev,res,wrap){
-  const e=res.st.end,i=res.info,P={on:true,side,q:i.q,good:false,id:null,tier:0,cat:null,key:null,max:false,team:'blue',pts:0,titled:false};
+  const e=res.st.end,i=res.info,gameEnd=!!(wrap&&wrap.gameOver),P={on:true,side,q:i.q,good:false,id:null,tier:0,cat:null,key:null,max:false,team:'blue',pts:0,titled:false};
   if(side==='off'){
     const opt=i.opt;P.cat=opt.cat;P.key=opt.key;
     if(e){
       if(e.type==='made'){
         P.good=true;P.pts=e.pts;
         const win=wrap&&wrap.gameOver&&res.st.us>res.st.them&&(res.st.us-e.pts)<=res.st.them;
-        if(e.buzzer){P.id='buzzer';P.tier=3;P.max=true;}
+        const b0=res.st.us-e.pts-res.st.them,a0=res.st.us-res.st.them,late=res.st.time<=12;
+        if(e.buzzer){P.id='buzzer';P.tier=3;P.max=true;P.jp=a0>0&&b0<=0?'ブザーと どうじに ぎゃくてん！':a0===0&&b0<0?'ブザーと どうじに どうてん！':null;}
         else if(win){P.id='winner';P.tier=3;P.max=true;}
+        else if(b0<0&&a0>0&&late){P.id='rev';P.tier=3;P.max=true;}
+        else if(b0<0&&a0===0&&late){P.id='tie';P.tier=2;}
         else if(wrap&&wrap.clutch){P.id='clutch';P.tier=2;}
         else if(e.pts===3){P.id='long';P.tier=1;}
         else if(e.q>=45){P.id='pshot';P.tier=2;}
         else{P.id='nice';P.tier=i.q==='great'?1:0;}
-        if(e.by!==0&&!['buzzer','winner','clutch'].includes(P.id)){P.id=e.assist?'assist':'team';P.tier=e.assist?(i.q==='great'?2:1):0;}
+        if(e.by!==0&&!['buzzer','winner','rev','tie','clutch'].includes(P.id)){P.id=e.assist?'assist':'team';P.tier=e.assist?(i.q==='great'?2:1):0;}
       }
     }else if(!i.turnover&&i.q!=='weak'){
       P.good=true;
@@ -2531,7 +2595,13 @@ function fxPlan(side,prev,res,wrap){
     else if(e&&e.type==='miss'&&(i.ok||blocked)){P.good=true;P.id=blocked?'block':(i.head==='NICE REBOUND!'?'reb':'gdef');P.tier=i.q==='great'?2:1;}
     else if(!e&&i.ok){P.good=true;P.id='lock';P.tier=i.q==='great'?1:0;}
     if(e&&P.good&&wrap&&wrap.clutch){P.id='cdef';P.tier=2;}
+    if(e&&P.good&&e.type!=='rscore'&&gameEnd&&res.st.us>=res.st.them){P.id='saved';P.tier=3;}
   }
+  /* 最後の1本 / 大差の抑制 */
+  P.last=!!(e&&['made','miss','rim','rscore'].includes(e.type)&&(gameEnd||res.st.time<=.05));
+  P.calm=Math.abs((prev.us||0)-(prev.them||0))>=8;
+  if(P.calm&&P.tier>=3){P.tier=2;P.max=false;}
+  P.hush=P.last&&!P.calm;
   return P;
 }
 /* ---------- result stage after the animation: title + extras. returns extra wait (ms) ---------- */
@@ -2539,17 +2609,19 @@ function fxResult(P){
   if(!P||!P.good)return 0;
   if(!P.id){sfx('pass2');return 0;}
   const T=TTL[P.id];if(!T)return 0;
-  if(!P.titled)fxTitle(T,P.tier,'blue');
+  if(!P.titled)fxTitle(P.jp?{ic:T.ic,en:T.en,jp:P.jp}:T,P.tier,'blue');
+  if(P.side==='def'&&P.tier>=3&&!P.calm&&S&&S.me){fxWhite();fxShake(2);fxRing(S.me.x,S.me.y,'#ffffff',40,26,2.6);fxRing(S.me.x,S.me.y,FXCOL.blue.m,56,30,2);fxRays(S.me.x,S.me.y,FXCOL.blue.g,22,34,24);}
   if(P.id==='reb')fxRebound();
   else if(FXSND[P.id]&&P.cat==='def'&&(P.id==='lock'||P.id==='gdef'))sfx('lock');
-  if(P.tier>=2&&['clutch','cdef','buzzer','winner'].includes(P.id))sfx('clutch');
+  if(P.tier>=2&&['clutch','cdef','buzzer','winner','rev','tie','saved'].includes(P.id))sfx('clutch');
   else if(P.tier>=2&&!['steal','cut','block'].includes(P.id))sfx('good');
   return P.tier>=3?500:P.tier>=2?300:0;
 }
 (function fxInit(){
   const b=$('courtBox'),fl=$('fxLayer');if(!b||!fl)return;
   const mk=(id,cls,html)=>{const d=document.createElement('div');d.id=id;d.className=cls||'';if(html)d.innerHTML=html;return d;};
-  b.insertBefore(mk('dimLayer'),fl);b.insertBefore(mk('whiteLayer'),fl);
+  b.insertBefore(mk('dimLayer'),fl);b.insertBefore(mk('whiteLayer'),fl);b.insertBefore(mk('clxLayer'),fl);
+  fl.appendChild(mk('superFx'));fl.appendChild(mk('clxBanner','','<b></b><small></small>'));
   fl.appendChild(mk('ftitle','ft','<b></b><small></small>'));fl.appendChild(mk('fcombo','fc','<b></b>'));
 })();
 
@@ -2581,7 +2653,68 @@ function scnRings(st){
   if(st.h!==0){S.rings=[{x:Z.pl[st.h].x,y:Z.pl[st.h].y,c:'#ff8a1f',r:6.4}];return;}
   S.rings=scnOpenMates(st).map(i=>({x:Z.pl[i].x,y:Z.pl[i].y,c:'#35ff8a',r:6.4}));
 }
-function setClock(t){$('sbClock').textContent=Math.max(0,t).toFixed(1);$('sbMid').classList.toggle('last',t<=5&&t>0);}
+/* ===== CLIMAX: 終盤演出（残り10/5/3秒 × 得点差）=====
+   表示される残り時間 t に連動。tier: 0なし / 1=10秒以下 / 2=5秒以下 / 3=3秒以下。
+   バナー・心拍音は「到達したとき一度だけ」(Z.clx.fs / Z.clx.lc)。クラス切替は tier が変わったときだけなので、
+   時計の数字が毎フレーム変わってもCSSアニメーションは再スタートしない（ちらつきなし）。大差(8点以上)は tier1止まり・音とバナーなし */
+const CLX={tier:0,k:1,beat:null,beatAt:0,t:99,ctx:{d:0,def:false}};
+function clxSit(d,def){
+  if(!def)return d<0?(d>=-3?'ぎゃくてん チャンス！':'おいつこう！'):d===0?'どうてん！ きめれば リード！':'リードを まもろう！';
+  return d>0?'まもりきれば しょうり！':d===0?'とめれば どうてん キープ！':'とめて さいごの チャンスへ！';
+}
+function clxBanner(en,sub){
+  const el=$('clxBanner');if(!el)return;
+  el.querySelector('b').textContent=en;el.querySelector('small').textContent=sub||'';
+  fxClassOnce(el,'on',1750,'clxb');
+}
+function clxReset(){
+  CLX.tier=0;CLX.beat=null;
+  document.body.classList.remove('clx1','clx2','clx3','clxc');
+  const el=$('clxBanner');if(el)el.classList.remove('on');
+}
+function clxLine(){
+  if(!Z||Z.mode!=='scn'||CLX.tier<2||CLX.k<.5)return '';
+  return '🔥 のこり '+Math.max(0,Math.ceil(CLX.t))+'びょう！ '+clxSit(CLX.ctx.d,CLX.ctx.def);
+}
+function clxDecision(){
+  const l=clxLine();if(!l)return;
+  const f=document.createElement('div');f.className='fopp';f.textContent=l;$('sFeed').appendChild(f);
+  if(CLX.tier>=3&&S&&S.me)fxAura(S.me,'#ff5a5a',50);
+}
+function clxUpdate(t){
+  if(!Z||Z.mode!=='scn'||Z.chal||!Z.st){if(CLX.tier)clxReset();return;}
+  CLX.t=t;
+  const f=Z.clx||(Z.clx={fs:0,lc:0}),ad=Math.abs(CLX.ctx.d),k=ad<=3?1:ad<=7?.6:.25,calm=k<.5;
+  let tier=t<=3?3:t<=5?2:t<=10?1:0;
+  if(calm)tier=Math.min(tier,1);
+  const L=$('clxLayer');
+  if(L&&CLX.k!==k){CLX.k=k;L.style.setProperty('--k',k);}
+  const B=document.body;
+  if(tier!==CLX.tier){
+    ['clx1','clx2','clx3'].forEach((c,i)=>B.classList.toggle(c,i+1===tier));
+    CLX.tier=tier;
+    if(!calm){
+      if(tier>=1&&!f.fs){f.fs=1;if(tier===1){clxBanner('FINAL SECONDS',clxSit(CLX.ctx.d,CLX.ctx.def));sfx('alarm');}}
+      if(tier>=2&&!f.lc){f.fs=1;f.lc=1;clxBanner(CLX.ctx.def?'LAST DEFENSE!':'LAST CHANCE!',clxSit(CLX.ctx.d,CLX.ctx.def));sfx('alarm');}
+    }
+  }
+  B.classList.toggle('clxc',calm&&t<=10);
+  if(tier>=2&&!calm){
+    const sec=Math.ceil(t);
+    if(sec!==CLX.beat){CLX.beat=sec;const n=performance.now();if(n-CLX.beatAt>280){CLX.beatAt=n;sfx(tier>=3?'beat3':'beat');}}
+  }
+}
+function setClock(t){$('sbClock').textContent=Math.max(0,t).toFixed(1);clxUpdate(t);}
+async function fxTimeUp(st){
+  const r=st.us>st.them?'win':st.us===st.them?'draw':'lose',big=performance.now()-LASTBIG<2600;
+  sfx('buzzer');tickClock(st.time,0,350);
+  if(!big){
+    const T={ic:'⏱️',en:r==='win'?'GAME SET!':'TIME UP!',jp:r==='win'?'しょうり！ やったね！':r==='draw'?'どうてん！ ひきわけ！':'おしかった！ つぎは かてる！'};
+    fxWhite();fxShake(1);fxTitle(T,r==='win'?3:2,r==='lose'?'red':'blue');
+  }
+  await new Promise(res=>setTimeout(res,big?700:1500));
+  clxReset();
+}
 function tickClock(from,to,ms){
   const t0=performance.now(),id=setInterval(()=>{const k=Math.min(1,(performance.now()-t0)/ms);setClock(from+(to-from)*k);if(k>=1)clearInterval(id);},60);
 }
@@ -2590,6 +2723,7 @@ function scnScore(st,who,o){
   $('sbUs').textContent=o.us!=null?o.us:(Z.chal?Z.chal.pts:st.us);
   $('sbThem').textContent=Z.chal?'-':(o.them!=null?o.them:st.them);
   $('sbPeriod').textContent=Z.chal?'ATTACK '+Z.chal.i+'/'+Z.chal.total:'FINAL';
+  CLX.ctx={d:(o.us!=null?o.us:st.us)-(o.them!=null?o.them:st.them),def:who==='opp'};
   setClock(o.time!=null?o.time:st.time);
   $('sbPoss').textContent=who==='opp'?'🏀 RED ATTACK':'🏀 BLUE ATTACK';
   $('sbBlue').classList.toggle('ball',who!=='opp');$('sbRed').classList.toggle('ball',who==='opp');
@@ -2694,7 +2828,8 @@ async function scnPlay(sim,steps,st0){
     }else if(stp.k==='shot'){
       box.classList.add('cam');
       const sh=Z.pl[stp.who],opp=!!stp.opp,made=stp.mode==='swish';
-      if(P&&P.max&&made&&!opp){fxDim(true);fxTitle(TTL[P.id],3,'blue');P.titled=true;sfx('clutch');await sim.wait(560);FXSLOW=1.6;}
+      const hush=!!(P&&P.hush);
+      if(hush){fxDim(true);sfx('beat3');await sim.wait(520);FXSLOW=1.5;}
       if(P)sfx(opp?'pass':'shot');
       if(made)fxFollow(()=>S&&ballNow(),'flame',1300,opp?'#ff6a2a':(P&&P.tier>=1?'#ffb040':'#9fd8ff'));
       else if(stp.mode==='block'){
@@ -2702,6 +2837,8 @@ async function scnPlay(sim,steps,st0){
         setTimeout(()=>{if(S&&!sim.dead){if(opp)fxBlockHit(hp,P?P.tier:1);else{fxRing(hp.x,hp.y,FXCOL.red.m,12,14,1.4);fxShake(1);sfx('bad');}}},270);
       }
       SHOT_OPP=opp;try{await doShot(sim,sh,stp.mode);}finally{SHOT_OPP=false;FXSLOW=1;}
+      if(hush)setTimeout(()=>fxDim(false),made?300:200);
+      if(opp&&made&&P&&P.last&&!P.calm){fxTitle(TTL.rbuz,2,'red');fxShake(1);fxWhite();sfx('bad');}
       setTimeout(()=>box.classList.remove('cam'),500);
     }else if(stp.k==='say'){
       sim.say(stp.text,stp.cls);await sim.wait(450);
@@ -2749,6 +2886,7 @@ function startScenario(sel){
   enterScn();
 }
 function scnBegin(first,msg){
+  if(first){Z.clx=null;clxReset();}
   const st=Z.st;scnLoadScene(st);
   $('sTag').textContent=Z.chal?'ATTACK '+Z.chal.i+'/'+Z.chal.total:'SCENARIO '+String(Z.num).padStart(2,'0');
   $('sTheme').textContent=Z.chal?Z.chal.spec.tag:(SCN_TAG[st.themeId]||'');
@@ -2784,7 +2922,7 @@ function scnDecision(first){
     b.appendChild(ic);b.appendChild(t);b.onclick=()=>scnChoose(op,b);o.appendChild(b);
   });
   const ev=scnEvents(st);if(ev.length)scnBanner(ev);
-  scnScore(st);updateHudS();setTimeout(resizeCourt,0);
+  scnScore(st);updateHudS();setTimeout(resizeCourt,0);clxDecision();
 }
 async function scnChoose(op,btn){
   if(!Z||Z.busy)return;Z.busy=true;sfx('tap');
@@ -2835,7 +2973,7 @@ async function scnAfter(st,wrap,nar){
   if(made)await scoreEvent('blue',e.pts,st);
   if(!Z||Z.run!==run)return;
   scnScore(st,wrap.defense?'opp':'us',{us:st.us,them:st.them,time:st.time});
-  if(wrap.gameOver)scnShowNext('けっかを みる ▶',scnFinish);
+  if(wrap.gameOver){await fxTimeUp(st);if(!Z||Z.run!==run)return;scnShowNext('けっかを みる ▶',scnFinish);}
   else if(wrap.rebound){fxTitle(TTL.reb,1,'blue');fxRebound();scnShowNext('リバウンド ゲット！ ▶',()=>scnNewPoss('リバウンド ゲット！'));}
   else scnShowNext('RED TEAM ATTACK ▶',startDefense);
 }
@@ -2882,7 +3020,7 @@ function dfnDecision(first){
     b.appendChild(ic);b.appendChild(t);b.onclick=()=>dfnChoose(op,b);o.appendChild(b);
   });
   const ev=dfnEvents(st);if(ev.length)scnBanner(ev);
-  scnScore(st,'opp');updateHudS();setTimeout(resizeCourt,0);
+  scnScore(st,'opp');updateHudS();setTimeout(resizeCourt,0);clxDecision();
 }
 async function dfnChoose(op,btn){
   if(!Z||Z.busy)return;Z.busy=true;sfx('tap');
@@ -2920,7 +3058,7 @@ async function dfnAfter(st,wrap,nar){
   if(red)await scoreEvent('red',e.pts,st);else await new Promise(r=>setTimeout(r,900));
   if(!Z||Z.run!==run)return;
   scnScore(st,wrap.gameOver?'opp':'us',{us:st.us,them:st.them,time:st.time});
-  if(wrap.gameOver)scnShowNext('けっかを みる ▶',scnFinish);
+  if(wrap.gameOver){await fxTimeUp(st);if(!Z||Z.run!==run)return;scnShowNext('けっかを みる ▶',scnFinish);}
   else scnShowNext('BLUE TEAM ATTACK ▶',()=>scnNewPoss(red?'つぎは きみの こうげき！':'ボールを とりかえした！'));
 }
 function scnNewPoss(msg){
