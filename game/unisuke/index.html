@@ -1,1 +1,4986 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>JavaScriptで作るテトリス</title>
+    <style>
+        /* スタイルシート */
+        body{background-color:#008;}
+        #exit{
+            margin:0 10px 0 0;
+            background-color:#f77;
+            font-size:18px;
+            float:left;     }
+        #score{
+            color:#fff;
+            font-size:20px;
+            font-weight:bold;       }
+        #start{
+            font-size:40px;
+            border-radius:5px;
+            background-color:#f77;
+            color:#fdd;
+            position:absolute;
+            top: 40%;
+            left: 50%;
+            margin-right: -50%;
+            transform: translate(-50%, -50%)      
+        }          
+        #result{
+            font-size:40px;
+            border-radius:5px;
+            color:#fdd;
+            text-shadow:
+               1px 1px 0 #000, 
+              -1px -1px 0 #000,
+              -1px 1px 0 #000, 
+               1px -1px 0 #000,
+               0px 1px 0 #000,  
+               0-1px 0 #000,
+              -1px 0 0 #000, 
+               1px 0 0 #000;;
+            position:absolute;
+            top: 50%;
+            left: 50%;
+            margin-right: -50%;
+            transform: translate(-50%, -50%)      
+        }  
+    </style>
+</head>
+<body>
+    <!-- ゲーム画面 -->
+    <button id="exit" onclick="over()">×</button>  
+    <div id="score">SCORE:</div>
+    <canvas id="field" width="400px" height="500px"></canvas>
+    <!--
+    <button id="start" onclick="gameStart()">START</button>
+    <div id="result"></div>
+    -->
+<script>
+    const ap = 1000;
+    const pp = 1000;
+    const START_STAGE = 0;
+    const DB_OFS_LIFE = 0;
+    const DB_OFS_LEVEL = 5;
 
+
+    const critical_per = ap/5000;
+    const avoid_per = pp/5000;
+
+    let GAME_WIDTH = 400;
+    let GAME_HEIGHT = 500;
+
+    let BLOCK_WH = 80;
+    let GROUND_YSECNUM = 4;
+    let GROUND_WH = BLOCK_WH/GROUND_YSECNUM;
+    let GROUND_XSECNUM = GAME_WIDTH / GROUND_WH;
+
+    let GROUND_YBASE = GAME_HEIGHT-BLOCK_WH-20;
+
+
+     //エレメントの取得など
+    let field = document.getElementById("field");
+    let can = field.getContext("2d");
+    //let mc_can = field.getContext("2d");
+    let sc = document.getElementById("score");
+    sc.style.fontFamily
+    let exit = document.getElementById("exit");
+
+    // 変数など 
+    let arrayField = [];    //ゲームフィールドの状態を格納
+    let score;              //スコアを格納
+    let main_task_timer;
+
+    //タイトル
+    var title_img = new Image();
+
+    function chkTitleImgLoad() {
+      return new Promise(resolve => {
+        setInterval(() => {
+          if(title_img.naturalWidth!= 0) {
+            resolve();
+          }
+        }, 100);
+      })
+    }
+
+    async function drawTitle() {
+
+         title_img.src = 'img/20221224093635.png';
+
+         await chkTitleImgLoad();
+
+         t_w = title_img.naturalWidth;
+         t_h = title_img.naturalHeight;
+         t_x = GAME_WIDTH/2 - t_w/2;
+         
+
+         can.drawImage(title_img, 0, 0,
+                title_img.naturalWidth, 
+                title_img.naturalHeight,
+                t_x,
+                0,
+                t_w, 
+                t_h
+                );
+    }
+    
+
+    //ファーストスクリプト
+    window.onload = firstScript;    
+    function firstScript(){
+        can.fillStyle = "#120E32";
+        can.fillRect(0, 0, GAME_WIDTH, GAME_HEIGHT);
+        arrayField = [];            //ゲームフィールド初期化(全部"black")
+        for(let y=0; y<20; y++){
+            let sub = [];
+            for(let x=0; x<10; x++){sub.push("black");}
+            arrayField.push(sub);
+        }
+
+        
+        drawTitle();
+
+        //画像の読み込みは先やっとく
+        firstinitMainChara();
+        firstinitJustAttack();
+        firstinitLife();
+        firstinitEnemy();
+        firstinitItem();
+        //firstinitSptAttack();
+        firstinitStage();
+        firstinitBtn();
+
+        //初期背景色
+        cur_bgcolor ="#67AECB";
+ 
+        dispStartBtn();
+
+field.addEventListener("touchstart", touchStartFieldFirst, {passive:false});
+        //キャラセレクト
+        MainCharaSelectBf();
+    }    
+
+
+    function fieldDraw(){
+        can.fillStyle = "#000";                     //フィールドクリア            
+        can.fillRect(0, 0, GAME_WIDTH, GAME_HEIGHT);
+
+
+    }
+
+    
+    var width_cnt = [];
+for (xnum = 0; xnum < GROUND_XSECNUM; xnum++) {
+width_cnt[xnum] = [];
+        for (ynum = 0; ynum < GROUND_YSECNUM; ynum++) {
+            if (ynum % 2 == 0) {
+                width_cnt[xnum][ynum] = xnum * BLOCK_WH;
+            } else {
+                width_cnt[xnum][ynum] = xnum * BLOCK_WH + GROUND_WH*2;
+            }
+        }
+    }
+
+    let cur_bgcolor ;
+    let bgcolor_keep;
+
+    function set_bg_color(bgcolor) {
+        bgcolor_keep = cur_bgcolor;
+        cur_bgcolor = bgcolor;
+    }
+    
+    function reset_bg_color() {
+        cur_bgcolor = bgcolor_keep;
+    }
+
+    function nextDraw(){     
+        can.fillStyle = cur_bgcolor;
+        can.fillRect(0, 0, GAME_WIDTH, GROUND_YBASE);
+        can.fillStyle = "#A0522D";
+        can.fillRect(0, GROUND_YBASE, GAME_WIDTH, BLOCK_WH+20);
+
+        //地面マダラ用
+
+        can.fillStyle = "#90522D";
+        for (xnum=0; xnum < GROUND_XSECNUM; xnum++) {
+            for (ynum=0; ynum < GROUND_YSECNUM; ynum++) {
+            can.fillRect(
+                width_cnt[xnum][ynum], 
+                GROUND_YBASE + ynum 
+                  * GROUND_WH,    
+                GROUND_WH, 
+                GROUND_WH);
+
+                width_cnt[xnum][ynum] -= cur_speed;
+                if (width_cnt[xnum][ynum] <= 0) {
+                    width_cnt[xnum][ynum] = GAME_WIDTH;
+                }
+
+            }
+            
+        }
+
+        can.fillRect(width_cnt+100, GAME_HEIGHT-BLOCK_WH-20, GROUND_WH, GROUND_WH);
+        
+        
+    
+    }
+    //#############################
+    //汎用演算
+    //#############################
+    let acc = 9.8*0.04;//加速度
+    
+    function g_calc (t_dy, t_t, t_v0) {
+        ret = t_dy + t_v0 * t_t + 0.5 * acc * t_t * t_t;
+        return ret;
+    }
+
+    //#############################
+    //動作系
+    //#############################
+    let cur_speed;
+    var CUR_INIT_SPEED = 2;
+    let cur_speed_keep;
+    let spd_cnt=0;
+    let return_cnt=0;
+    let total_cnt=0;
+
+    function startSpdInit() {
+        total_cnt = 0;
+        cur_speed = CUR_INIT_SPEED;
+    }
+
+    function getTotalCnt() {
+        return total_cnt;
+    }
+
+    function chgspdtask() {
+      
+      if (return_cnt != -1) {
+        if ((spd_cnt>200)
+            && (!getStageEnd())){
+            cur_speed += 0.07;
+            spd_cnt=0;
+            total_cnt++;
+        }
+        spd_cnt++;
+      }
+
+        if (return_cnt == -1) {
+        }
+        else if (return_cnt > 0) {
+            return_cnt--;
+        } else {
+            if (cur_speed_keep != -1){
+              cur_speed = cur_speed_keep;
+              cur_speed_keep = -1;
+              reset_bg_color();
+            }
+        }
+      
+      
+    }
+
+    function get_move_ok() {
+        if ( cur_speed == 0 ){
+            return false;
+        } else {
+            return true;
+        }
+    }
+
+    function get_move_spd() {
+        return cur_speed;
+    }
+
+    function init_move_spd(t_k) {
+        cur_speed = cur_speed*t_k;
+        spd_cnt=0;
+        return_cnt = 0;
+        cur_speed_keep = -1;
+    }
+
+    function set_move_ng() {
+        cur_speed = 0;
+    }
+
+    function set_move_slow() {
+        cur_speed = 0.2;
+    }
+
+    function stop_move(t_cnt, bgcolor) {
+        cur_speed_keep = cur_speed;
+        cur_speed = 0;
+        return_cnt = t_cnt;
+
+        set_bg_color(bgcolor);
+        
+    }
+    
+    function stop_move_cnt() {
+        cur_speed_keep = cur_speed;
+        cur_speed = 0;
+        return_cnt = -1;
+    }
+
+    function restart_move_cnt() {
+        cur_speed = cur_speed_keep;
+        cur_speed_keep = -1;
+    }
+    
+    
+    function chg_move_spd() {
+        cur_speed += (0.2/cur_speed);
+    }
+
+    //#############################
+    //スコア系
+    //#############################
+    let chg_score_ary = [];
+    let score_x_ofs = 0;
+
+    function chg_score(chg_val,x,y) {
+        if ((getStageEnd() == false)
+          && (get_move_ok())) {
+          t_lv = get_level();
+          t_upscore = (chg_val * t_lv);
+          score += (chg_val * t_lv);
+          sc.textContent = "SCORE: " + score;
+          if (score_x_ofs == 0) {
+            score_x_ofs = 20;
+          } else if (score_x_ofs == 20) {
+            score_x_ofs = 40;
+          } else {
+            score_x_ofs = 0;
+          }
+     
+          chg_score_ary.push([t_upscore,
+                            0,
+                          x + score_x_ofs,
+                            y]);
+        }
+    }
+
+    function clear_score1() {
+        
+        t_str = 'SCORE '+ score;
+        can.fillStyle = 'red';
+        can.font = '20pt Arial';
+        can.fillText(t_str,       
+                             21, 
+                             251);
+        can.font = '20pt Arial';
+        can.fillStyle = 'white';
+        can.fillText(t_str,       
+                             20, 
+                             250);
+     }
+
+     function clear_score2(chg_val) {
+
+        t_str = 'CLEAR BOUNUS +' + chg_val;
+        score += (chg_val);
+        can.fillStyle = 'red';
+        can.font = '20pt Arial';
+        can.fillText(t_str,       
+                             21, 
+                             326);
+        can.font = '20pt Arial';
+        can.fillStyle = 'white';
+        can.fillText(t_str,       
+                             20, 
+                             325);
+     
+        chg_score_ary.push([t_upscore,
+                            0,
+                            x,
+                            y]);
+    }
+
+    function total_score() {
+        
+        t_str = 'TOTAL SCORE '+ score;
+        can.fillStyle = 'red';
+        can.font = '25pt Arial';
+        can.fillText(t_str,       
+                             21, 
+                             421);
+        can.font = '25pt Arial';
+        can.fillStyle = 'white';
+        can.fillText(t_str,       
+                             20, 
+                             420);
+     }
+
+    function scoreTask() {
+        for (i = 0; i < chg_score_ary.length; i++) {
+            val = chg_score_ary[i][0];
+            if (val > 0) {
+                val = "+" + val;
+            }
+            cnt = chg_score_ary[i][1];
+            x = chg_score_ary[i][2];
+            y = chg_score_ary[i][3];
+            if (cnt < 40) {
+                can.font = '20pt Arial';
+                can.fillStyle = 'brown';
+                can.fillText(val,       
+                             x, 
+                             y - cnt);
+
+                cnt++;
+                chg_score_ary[i][1] = cnt;
+            } else {
+               chg_score_ary.splice(i,1);
+            }
+            
+        }
+    }
+
+    function getScore() {
+        return score;
+    }
+    //#############################
+    //ここから画像処理を書く
+    //#############################
+    
+    let draw_cnt = 0;
+
+    // メインキャラ
+    var cls_McAry = [];
+    var MC_NUM = 4;
+    const MC_H = 66;
+    
+    var inv_img = new Image();
+    let jump_cnt = 0;
+    let jump_ofs_base = 0;
+    let jump_ofs = 0;
+    let dush_sts = 0;
+    let JUMP_END = 0;
+    let JUMP_START = 1;
+    let JUMP_ING = 2;
+    let CRASH = 3;
+    let GAME_CLEAR = 4;
+    let sts_jump = JUMP_END;
+    let CHARA_BASE_X = 20;
+    let CHARA_BASE_Y = GAME_HEIGHT - BLOCK_WH*2;
+    let crash_af_dx;
+    let crash_af_dy;
+    let angle = 0;
+    let end_count = 0;
+    let crash_size_ofs;
+    let JUMP_V0 = -15; //ジャンプ初速
+    let CLEAR_JUMP_V0 = -8; //ジャンプ初速
+    let mc_jp_v0;
+    let mc_clear_ofs;
+    let mc_clear_cnt;
+
+    //無敵系
+    let mainchara_cnt;
+    let invdraw_cnt;
+    let invdush_sts;
+    let inv_dy_confirm;
+    
+
+    function mainCharaTask() {
+        drawMainChara();
+    }
+
+    class clMainChara {
+        constructor( t_img_src, 
+                     t_sp_src,
+                     t_exp_src,
+                     t_v0_k,
+                     t_sp_m,
+                     t_life,
+                     t_avd,
+                     t_crt
+                   ) {
+            this.img = new Image();
+            this.img.src = t_img_src;
+            this.sp_img = new Image();
+            this.sp_img.src = t_sp_src;
+            this.exp_img = new Image();
+            this.exp_img.src = t_exp_src;
+            this.v0_k = t_v0_k;
+            this.sp_m = t_sp_m;
+            this.life = t_life;
+            this.avd = t_avd;
+            this.crt = t_crt;
+  
+            this.sts = JUMP_END;
+            this.stsold = this.sts;
+            this.justhis = false;
+            this.justok = false;
+            this.level = 1;
+
+            this.startx = CHARA_BASE_X;
+            this.starty = CHARA_BASE_Y;
+            this.justsx = 0;
+            this.justsy = 0;
+            this.jecnt = 0;
+        }
+        //ゲット
+        get myImg() {
+            return this.img;
+        }
+        get mySpImg() {
+            return this.sp_img;
+        }
+        get myExpImg() {
+            return this.exp_img;
+        }
+        get myV0_k() {
+            return this.v0_k;
+        }
+        get mySp_m() {
+            return this.sp_m;
+        }
+        get myLife() {
+            return this.life;
+        }
+        get myAvd() {
+            return this.avd;
+        }
+        get myCrt() {
+            return this.crt;
+        }
+
+        get myDispW() {
+            return this.dispw;
+        }
+        get myDispH() {
+            return this.disph;
+        }
+        get myDispX() {
+            return this.dispx;
+        }
+        get myDispY() {
+            return this.dispy;
+        }
+        get myDispCenX() {
+            return this.dispx+this.dispw/2;
+        }
+        get myDispCenY() {
+            return this.dispy+this.disph/2;
+        }
+        get mySts() {
+            return this.sts;
+        }
+        get myStsOld() {
+            return this.stsold;
+        }
+
+        get myDispExpW() {
+            return this.exp_img.naturalWidth;
+        }
+        get myDispExpH() {
+            return this.exp_img.naturalHeight;
+        }
+        get myJustHis() {
+            return this.justhis;
+        }
+        get myJustOk() {
+            return this.justok;
+        }
+        get myJustSX() {
+            return this.justsx;
+        }
+        get myJustSY() {
+            return this.justsy;
+        }
+        get myLevel() {
+            return this.level;
+        }
+        get myStartX() {
+            return this.startx;
+        }
+        get myStartY() {
+            return this.starty;
+        }
+        get myJEndCnt() {
+            return this.jecnt;
+        }
+
+        
+
+
+        //セット
+        set myDispX(value) {
+            this.dispx = value;
+        }
+        set myDispY(value) {
+            this.dispy = value;
+        }
+        set myDispW(value) {
+            this.dispw = value;
+        }
+        set myDispH(value) {
+            this.disph = value;
+        }
+        set mySts(value) {
+            this.sts = value;
+        }
+        set myStsOld(value) {
+            this.stsold = value;
+        }
+        set myJustHis(value) {
+            this.justhis = value;
+        }
+        set myJustOk(value) {
+            this.justok = value;
+        }
+        set myJustSX(value) {
+            this.justsx = value;
+        }
+        set myJustSY(value) {
+            this.justsy = value;
+        }
+        set myLevel(value) {
+            this.level = value;
+        }
+        set myJEndCnt(value) {
+            this.jecnt = value;
+        }
+    }
+ 
+
+    function firstinitMainChara(){
+
+        let t_j = 0;
+
+        cls_McAry[t_j] = 
+        new clMainChara(
+            'img/20221118205425.png',
+            'img/雷.png',
+            'img/20221229164055.png',
+            1.0, //v0
+            10,//sp_m
+            3,//life
+            0.01,//avd
+            0.05//crt
+            );
+        t_j++;
+
+        cls_McAry[t_j] = 
+        new clMainChara(
+            'img/20221218075926.png',
+            'img/ピンクの花.png',
+            'img/20221230114940.png',
+            0.95, //v0
+            9,//sp_m
+            7,//life
+            0.03,//avd
+            0.07//crt
+            );
+        t_j++;
+
+        cls_McAry[t_j] = 
+        new clMainChara(
+            'img/20221222195715.png',
+            'img/鳥居.png',
+            'img/20221231051508.png',
+            1.05, //v0
+            11,//sp_m
+            3,//life
+            0.02,//avd
+            0.02//crt
+            );
+        t_j++;
+
+        cls_McAry[t_j] = 
+        new clMainChara(
+            'img/20230206184556.png',
+            'img/CHARA4skill.png',
+            'img/CHARA4name.png',
+            0.85, //v0
+            20,//sp_m
+            4,//life
+            0.01,//avd
+            0.2,//crt
+            );
+        t_j++;
+
+        inv_img.src = 'img/20221206171222.png';
+
+        
+        chara_sel =Math.floor(Math.random() * MC_NUM);
+    }
+    
+    //wait用
+    function chkMainCharaImgLoad() {
+      return new Promise(resolve => {
+        setInterval(() => {
+          if(cls_McAry[0].img.naturalWidth!= 0) {
+            resolve();
+          }
+        }, 100);
+      })
+    }
+
+    var SEL_WH = 60;
+
+    var SEL_LEFTX = GAME_WIDTH/6*1-SEL_WH/2;
+    var SEL_RIGHTX = GAME_WIDTH/6*5-SEL_WH/2;
+
+    var SEL_Y = 300;
+    let chara_sel = 0;
+    async function MainCharaSelectBf() {
+        //待機
+        await chkMainCharaImgLoad();
+        MainCharaSelect();
+    }
+    function MainCharaSelect(){
+
+        t_w = SEL_WH;
+        t_h = SEL_WH*2;
+        t_x = SEL_LEFTX;
+        t_y = SEL_Y;
+
+        can.fillStyle = "#ffffff";
+        can.fillRect(t_x, t_y, 
+                         t_w, t_h);
+        
+        t_x = GAME_WIDTH/6*1 - t_w/2 + 5;
+        t_y = 379.5;
+
+        can.font = '40pt Arial';
+        can.fillStyle = 'black';
+        can.fillText('◀︎',t_x,t_y);
+
+        t_w = SEL_WH;
+        t_h = SEL_WH*2;
+        t_x = SEL_RIGHTX;
+        t_y = SEL_Y;
+
+        can.fillStyle = "#ffffff";
+        can.fillRect(t_x, t_y, 
+                         t_w, t_h);
+
+
+        t_x = GAME_WIDTH/6*5 - t_w/2 + 5
+        t_y = 379.5;
+
+        can.font = '40pt Arial';
+        can.fillStyle = 'black';
+        can.fillText('▶︎',t_x,t_y);
+
+
+        drawSelectChara(chara_sel);
+
+    }
+
+    function pushSelMainChara(tap) {
+         
+        t_x = SEL_LEFTX;
+        t_y = SEL_Y;
+        t_w = SEL_WH;
+        t_h = SEL_WH*2;
+        tapx = tap[0];
+        tapy = tap[1];
+
+        if (((t_x < tapx) 
+           &&(tapx < (t_x+t_w)))
+         && ((t_y < tapy) 
+           &&(tapy < (t_y+t_h))))
+        {
+            chara_sel --;
+            if (chara_sel < 0){
+                chara_sel =MC_NUM-1;
+            }
+            drawSelectChara(chara_sel);
+        }
+
+        t_x = SEL_RIGHTX;
+        t_y = SEL_Y;
+        t_w = SEL_WH;
+        t_h = SEL_WH*2;
+        tapx = tap[0];
+        tapy = tap[1];
+
+        if (((t_x < tapx) 
+           &&(tapx < (t_x+t_w)))
+         && ((t_y < tapy) 
+           &&(tapy < (t_y+t_h))))
+        {
+            chara_sel ++;
+            if (chara_sel >= MC_NUM){
+                chara_sel =0;
+            }
+            drawSelectChara(chara_sel);
+            
+        }
+         
+    }
+
+function drawSelectChara(idx) {
+    t_x = 100;
+    t_y = 300;
+    t_w = 200;
+    t_h = 120;
+
+    can.fillStyle = "#222222";
+    can.fillRect(t_x, t_y, t_w, t_h);
+
+    t_dw = cls_McAry[idx].img.naturalWidth / 10;
+    t_dh = cls_McAry[idx].img.naturalHeight / 10;
+    t_h = MC_H;
+    t_w = t_h * t_dw / t_dh;
+    t_x = GAME_WIDTH / 2 - t_w / 2;
+    t_y = SEL_Y;
+
+    can.drawImage(
+        cls_McAry[idx].myImg,
+        0, 0,
+        cls_McAry[idx].myImg.naturalWidth,
+        cls_McAry[idx].myImg.naturalHeight,
+        t_x, t_y,
+        t_w, t_h);
+
+    t_y += 60;
+    t_h = cls_McAry[idx].myDispExpH;
+    t_w = cls_McAry[idx].myDispExpW;
+    t_x = GAME_WIDTH / 2 - t_w / 2;
+
+    can.drawImage(
+        cls_McAry[idx].myExpImg,
+        0, 0,
+        cls_McAry[idx].myExpImg.naturalWidth,
+        cls_McAry[idx].myExpImg.naturalHeight,
+        t_x, t_y,
+        t_w, t_h);
+
+    t_x = SEL_LEFTX;
+    t_y = 420;
+    t_w = SEL_WH * 2 + 200 + 7.5;
+    t_h = 120;
+
+    can.fillStyle = "#120E32";
+    can.fillRect(t_x, t_y, t_w, t_h);
+
+    can.font = '15pt Arial';
+    can.fillStyle = 'white';
+    can.fillText('JUMP ' + Math.floor(cls_McAry[idx].myV0_k * 100), 50, 450);
+
+    can.fillText('SP GAGE ' + cls_McAry[idx].mySp_m, 150, 450);
+    can.fillText('LIFE ' + cls_McAry[idx].myLife, 50, 470);
+    can.fillText('AVD ' + Math.floor(cls_McAry[idx].myAvd * 100) + '%', 150, 470);
+    can.fillText('CRT ' + Math.floor(cls_McAry[idx].myCrt * 100) + '%', 250, 470);
+
+    cls_Mc = cls_McAry[idx];
+    SetSptAttack(cls_Mc.mySpImg.src);
+}
+
+    
+
+    function initMainChara(){
+        cw = cls_Mc.myImg.naturalWidth;
+        ch = cls_Mc.myImg.naturalHeight;
+        
+
+        cls_Mc.myDispW = MC_H * cw /ch;
+        cls_Mc.myDispH = MC_H;
+
+
+        cls_Mc.myDispX = CHARA_BASE_X;
+        cls_Mc.myDispY = CHARA_BASE_Y;
+
+
+        inv_img.displayWidth = inv_img.naturalWidth/10;
+        inv_img.displayHeight = inv_img.naturalHeight/10;
+
+        jump_cnt = 0;
+        jump_ofs_base = 0;
+        jump_ofs = 0;
+        dush_sts = 0;
+        cls_Mc.mySts = JUMP_END;
+        draw_k = 1;
+        angle = 0;
+        end_count = 0;
+        mainchara_cnt = 0;
+        invdraw_cnt = 0;
+        invdush_sts = 0;
+        mc_clear_cnt=0;
+        mc_clear_ofs=0;
+
+        mc_jp_v0 = JUMP_V0 *cls_Mc.myV0_k;
+    }
+
+function drawMainChara() {
+    if (cls_Mc.mySts == JUMP_START) {
+        jump_ofs_base = jump_cnt = 40;
+        cls_Mc.mySts = JUMP_ING;
+        jump_t = 0;
+    }
+    dx_confirm = CHARA_BASE_X;
+    dy_confirm = CHARA_BASE_Y;
+    w_confirm = cls_Mc.myDispW;
+    h_confirm = cls_Mc.myDispH;
+
+    if (cls_Mc.mySts == GAME_CLEAR) {
+        if (mc_clear_ofs == 0) {
+            jump_t = 0;
+        }
+        dx_confirm += mc_clear_ofs;
+        draw_cnt += 2;
+
+        if (draw_cnt > 40) {
+            draw_cnt = 0;
+            dush_sts = 1 - dush_sts; // 0と1を切り替える
+        }
+
+        if (dush_sts == 1) {
+            dy_confirm -= BLOCK_WH / 10;
+        }
+
+        if (dx_confirm > GAME_WIDTH / 2 - w_confirm / 2) {
+            jump_t++;
+            dy_confirm = g_calc(dy_confirm, jump_t, CLEAR_JUMP_V0);
+            if (dy_confirm >= CHARA_BASE_Y) {
+                dy_confirm = CHARA_BASE_Y;
+                mc_clear_cnt++;
+                jump_t = 0;
+                if (mc_clear_cnt >= 2) {
+                    setClearEndOk();
+                }
+            }
+        } else {
+            mc_clear_ofs += 2;
+        }
+
+    } else if (cls_Mc.mySts == CRASH) {
+        // 衝突後
+        if (cls_Mc.myDispW > cls_Mc.myImg.naturalWidth / 10 * (3.5 + crash_size_ofs)) {
+            end_count++;
+            set_move_ng();
+            if (end_count > 100) {
+                game_over();
+            }
+        } else {
+            draw_k = 1.02;
+            w_confirm *= draw_k;
+            h_confirm *= draw_k;
+
+            movex_cen = cls_Mc.myDispCenX + crash_af_dx / 2;
+            movey_cen = cls_Mc.myDispCenY + crash_af_dy / 2;
+
+            angle += 10;
+        }
+        dx_confirm = movex_cen - w_confirm / 2;
+        dy_confirm = movey_cen - h_confirm / 2;
+
+    } else if (cls_Mc.mySts == JUMP_ING) {
+        // ジャンプ中
+        draw_cnt = 0;
+
+        jump_t += get_move_spd() / 2; // 時間加算
+
+        dy_confirm = g_calc(dy_confirm, jump_t, mc_jp_v0);
+
+        if (dy_confirm >= CHARA_BASE_Y) {
+            dy_confirm = CHARA_BASE_Y;
+
+            cls_Mc.myJEndCnt++;
+
+            if (cls_Mc.myJEndCnt > 10) {
+                cls_Mc.mySts = JUMP_END; // 終了
+                cls_Mc.myJEndCnt = 0;
+                plus_exp(1);
+            }
+        }
+
+        drawBackJust(
+            cls_Mc.myDispX + cls_Mc.myDispW,
+            cls_Mc.myDispY,
+            cls_Mc.myDispW / 2);
+
+    } else {
+        draw_cnt += get_move_spd();
+        jump_ofs = 0;
+        // 上下の動き
+        if (draw_cnt > 40) {
+            draw_cnt = 0;
+            dush_sts = 1 - dush_sts; // 0と1を切り替える
+        }
+
+        if (dush_sts == 1) {
+            dy_confirm -= BLOCK_WH / 10;
+        }
+    }
+
+    // 回転処理
+    rad = angle * Math.PI / 180;
+    can.save(); // 保存して後で復活
+
+    var cx = cls_Mc.myDispCenX;
+    var cy = cls_Mc.myDispCenY;
+
+    can.setTransform(Math.cos(rad),
+        Math.sin(rad),
+        -Math.sin(rad),
+        Math.cos(rad),
+        cx - cx * Math.cos(rad) + cy * Math.sin(rad),
+        cy - cx * Math.sin(rad) - cy * Math.cos(rad));
+
+    t_nodisp = getLifeNoDisp();
+
+    if ((cls_Mc.mySts == CRASH) || (!t_nodisp)) {
+        // 描画
+        can.drawImage(cls_Mc.myImg, 0, 0,
+            cls_Mc.myImg.naturalWidth,
+            cls_Mc.myImg.naturalHeight,
+            dx_confirm,
+            dy_confirm,
+            w_confirm,
+            h_confirm);
+    }
+
+    can.restore(); // 復活
+
+    cls_Mc.myDispX = dx_confirm;
+    cls_Mc.myDispY = dy_confirm;
+    cls_Mc.myDispW = w_confirm;
+    cls_Mc.myDispH = h_confirm;
+
+    // 無敵系
+    t_mc_cntold = mainchara_cnt;
+    mainchara_cnt -= get_move_spd();
+    if (mainchara_cnt <= 0) {
+        mainchara_cnt = 0;
+        if (t_mc_cntold > 0) {
+            setNoMinus();
+        }
+    } else {
+        invdraw_cnt += get_move_spd();
+
+        inv_dx_confirm = CHARA_BASE_X + 40;
+        inv_dy_confirm = dy_confirm + 30;
+        // 上下の動き
+        if (invdraw_cnt > 20) {
+            invdraw_cnt = 0;
+            invdush_sts = 1 - invdush_sts; // 0と1を切り替える
+        }
+
+        if (invdush_sts == 1) {
+            inv_dy_confirm -= (BLOCK_WH / 10) * 5;
+        }
+
+        if (cls_Mc.mySts != GAME_CLEAR) {
+            can.drawImage(inv_img, 0, 0,
+                inv_img.naturalWidth,
+                inv_img.naturalHeight,
+                inv_dx_confirm,
+                inv_dy_confirm,
+                inv_img.displayWidth,
+                inv_img.displayHeight);
+            inv_img.display_x = inv_dx_confirm;
+            inv_img.display_y = inv_dy_confirm;
+        }
+
+    }
+    cls_Mc.myStsOld = cls_Mc.mySts;
+}
+
+
+function crash_MainChara(t_enclashcall, t_damage) {
+    if (mainchara_cnt <= 0) {
+        const t_avoid = Math.random();
+        
+        if (getAvd() > t_avoid) {
+            chgLife(0);
+        } else {
+            chgLife(-t_damage);
+        }
+
+        const t_life = getLife();
+
+        if (t_life <= 0 && cls_Mc.mySts !== CRASH) {
+            cls_Mc.mySts = CRASH;
+            // 飛んでいく方向
+            const ofs = Math.random() * 0.5;
+            const radian = (1.5 + ofs) * Math.PI;
+            crash_af_dx = Math.cos(radian) * 5;
+            crash_af_dy = Math.sin(radian) * 5;
+            crash_size_ofs = Math.random() * 4;
+        }
+    } else {
+        if (t_enclashcall) {
+            enemyCrash(0.8);
+        }
+    }
+}
+
+function setMainCharaInv() {
+    mainchara_cnt = 2000;
+}
+
+function getMainCharaInv() {
+    return mainchara_cnt;
+}
+
+    
+// レベル用変数宣言と初期化
+let level;
+let level_up_thresh = 0;
+let exp = 0;
+let levelup_cnt;
+let levelup_x;
+let levelup_y;
+
+// レベル初期化関数
+function initLevel() {
+    cls_Mc.myLevel = 1+DB_OFS_LEVEL;
+    level_up_thresh = 3;
+    exp = 0;
+    levelup_cnt = 0;
+}
+
+// レベルタスク関数
+function levelTask() {
+    disp_level();
+}
+
+// 経験値を加算する関数
+function plus_exp(plus_val) {
+    exp += plus_val;
+    if (exp >= level_up_thresh) {
+        cls_Mc.myLevel++;
+        exp = 0;
+        level_up_thresh++;
+        levelup_cnt = 80;
+        levelup_x = cls_Mc.myDispX;
+        levelup_y = cls_Mc.myDispY;
+        chgLife(1);
+    }
+}
+
+// レベル表示関数
+function disp_level() {
+    can.font = '16pt Arial';
+    can.fillStyle = 'black';
+    can.fillText('LV ' + cls_Mc.myLevel, 20, 30);
+    if (levelup_cnt > 0) {
+        can.font = '20pt Arial';
+        can.fillStyle = 'red';
+        can.fillText('LEVEL UP!', levelup_x, levelup_y);
+        levelup_y--;
+        levelup_cnt--;
+    }
+
+    // バー
+    can.fillStyle = "#000000";
+    can.fillRect(20, 35, 100, 20);
+
+    cur_val = exp / level_up_thresh * 98;
+    can.fillStyle = "#FFFF00";
+    can.fillRect(21, 36, cur_val, 18);
+}
+
+// レベルを取得する関数
+function get_level() {
+    return cls_Mc.myLevel;
+}
+
+
+    //----------
+    //ライフ用
+    //----------
+    var life_img = new Image();
+    let life_num;
+    var LIFE_BASEX = GAME_WIDTH/2-15;
+    var LIFE_BASEY = 20;
+    var NOMINUS_MAX = 100;
+    let nominus_cnt;
+    let nodisp_flag;
+    var LIFE_MAX = 100;
+    let miss_cnt;
+    let miss_flag;
+    let miss_y;
+    const MISS_MAX = 100;
+
+    function firstinitLife(){
+        life_img.src = 'img/赤色のハート.png';
+    }
+    
+    function initLife(){
+        
+        life_img.displayWidth = life_img.naturalWidth/20;
+        life_img.displayHeight = life_img.naturalHeight/20;
+        life_num = cls_Mc.myLife + DB_OFS_LIFE;
+        nominus_cnt=0;
+        nodisp_flag = false;
+        miss_cnt = MISS_MAX;
+        miss_flag = false;
+    }
+
+    function drawLife(){
+        
+        for (i=0;i<life_num;i++) {
+            
+            t_x_ofs = i%10 * life_img.displayWidth;
+            t_y_ofs = Math.floor(i/10) * life_img.displayHeight;
+            t_x = LIFE_BASEX + t_x_ofs;
+            t_y = LIFE_BASEY + t_y_ofs;
+            can.drawImage(life_img, 0, 0,
+             life_img.naturalWidth, 
+             life_img.naturalHeight,
+             t_x,
+             t_y,
+             life_img.displayWidth, 
+             life_img.displayHeight);
+        }
+        
+        if (nominus_cnt > 0) {
+          nominus_cnt--;
+          if (!miss_flag) {
+            
+        
+            if ((nominus_cnt%10) == 0) {
+                if (nodisp_flag){
+                    nodisp_flag = false;
+                } else {
+                    nodisp_flag = true;
+                }
+            }
+          }
+        } else {
+            nodisp_flag = false;
+            miss_flag = false;
+        }
+
+        //ミス
+        if (miss_cnt < MISS_MAX) {
+            can.font = '15pt Arial';
+            can.fillStyle = 'white';
+            can.fillText('miss',       
+                       cls_Mc.myDispX +1, 
+                       miss_y +1- miss_cnt/2);
+            can.font = '15pt Arial';
+            can.fillStyle = 'black';
+            can.fillText('miss',       
+                         cls_Mc.myDispX, 
+                         miss_y - miss_cnt/2);
+
+            miss_cnt++;
+
+        }
+    }
+
+    function chgLife(t_val) {
+      let t_spd = get_move_spd();
+      if (t_spd > 0) {
+        if (((nominus_cnt <= 0) 
+              && (t_val <= 0)) 
+           || (t_val > 0)){
+            life_num += t_val;
+            if (life_num > cls_Mc.myLevel+2){
+                life_num = cls_Mc.myLevel+2;
+            }
+
+            if(t_val<=0) {
+                nominus_cnt = NOMINUS_MAX;
+                nodisp_flag = false;
+                miss_flag = false;
+                if (t_val==0){
+                    miss_cnt = 0;
+                    miss_flag = true;
+                    miss_y = cls_Mc.myDispY;
+                }
+            } 
+        }
+      }
+    }
+
+    function setNoMinus() {
+        nominus_cnt = NOMINUS_MAX;
+        nodisp_flag = false;
+    }
+
+    function getLife(t_val) {
+        return life_num;
+    }
+
+    function getLifeNoDisp() {
+        return nodisp_flag;
+    }
+
+//--------
+//パラメータ
+//-------/
+let CrtOfs;
+let AvtOfs;
+function initParam() {
+  CrtOfs = 0;
+  AvtOfs = 0;
+}
+
+function drawParam() {
+    can.font = '15pt Arial';
+    let avd = getAvd()*100;
+
+    const avdText = 'AVD ' + Math.round(avd) + '%';
+
+    can.fillStyle = 'white';
+    can.fillText(avdText, 21, 461);
+    can.fillText(avdText, 19, 459);
+    can.fillText(avdText, 19, 461);
+    can.fillText(avdText, 21, 459);
+    can.fillStyle = 'black';
+    can.fillText(avdText, 20, 460);
+
+    let crt = getCrt()*100;
+
+    const crtText = 'CRT ' + Math.round(crt) + '%';
+    can.fillStyle = 'white';
+    can.fillText(crtText, 19, 429);
+    can.fillText(crtText, 19, 431);
+    can.fillText(crtText, 21, 429);
+    can.fillText(crtText, 21, 431);
+    can.fillStyle = 'black';
+    can.fillText(crtText, 20, 430);
+}
+
+function upCrt(val) {
+  CrtOfs += val;
+}
+
+function upAvd(val) {
+  AvtOfs += val;
+}
+
+function getCrt() {
+  
+  let val =(cls_Mc.myCrt + critical_per + CrtOfs);
+
+  return parseFloat(val.toPrecision(2));
+}
+
+function getAvd() {
+  let val =(cls_Mc.myAvd + avoid_per + AvtOfs);
+  return parseFloat(val.toPrecision(2));
+}
+    //----------
+    // ジャスト攻撃
+    //----------
+    var just_img = new Image();
+    var just_img2 = new Image();
+    let just_cnt;
+    var JUST_BASEX = CHARA_BASE_X+20;
+    var JUST_BASEY = CHARA_BASE_Y+40;
+    let just_x_vector;
+    let just_y_vector;
+    let just_y_old;
+    let just_pow;
+    
+    
+    function firstinitJustAttack(){
+        just_img.src = 'img/音符C.png';
+        just_img2.src = 'img/20230204222238.png';
+    }
+
+    function initJustAttack(){
+        
+        just_img.displayWidth = cls_Mc.myImg.naturalWidth/10;
+        just_img.displayHeight = cls_Mc.myImg.naturalHeight/10;
+
+        just_img2.displayWidth = cls_Mc.myImg.naturalWidth/10;
+        just_img2.displayHeight = cls_Mc.myImg.naturalHeight/10;
+
+        just_cnt=200;
+    }
+
+    function setJustAttack() {
+        just_cnt = 0;
+       
+        cls_Mc.myJustSX = cls_Mc.myDispX;
+        cls_Mc.myJustSY = cls_Mc.myDispY;
+
+        t_cls_En = get_cls_EnCom();
+        en_x = t_cls_En.myDispX;
+        en_w = t_cls_En.myDispW;
+
+        en_y = t_cls_En.myDispY;
+        en_h = t_cls_En.myDispH;
+        
+        //敵位置に向かう
+        just_x_vector = 
+            ((en_x+en_w/2) 
+             - (cls_Mc.myDispX    
+                + cls_Mc.myDispW/2))/50;
+
+        just_y_vector = 
+            ((en_y+en_h/2) 
+             - (cls_Mc.myDispY 
+               + cls_Mc.myDispH/2))/50;
+
+        t_jh = cls_Mc.myStartY-cls_Mc.myDispY;
+
+        //地面からの距離で強さを決める
+        if (t_jh < 20) {
+            just_res = 1;
+        } else if (t_jh < 50){
+            just_res = 0.6;
+        } else if (t_jh < 100){
+            just_res = 0.5;
+        } else if (t_jh < 150){
+            just_res = 0.4;
+        } else if (t_jh < 200){
+            just_res = 0.3;
+        } else {
+            just_res = 0.2;
+        }
+
+
+        
+        if (just_x_vector < 0) { //敵が後ろ
+            just_x_vector = 2;
+            just_y_vector = 0;
+        }
+
+        plus_spgage(1);
+    }
+
+
+    function drawBackJust(t_x, t_y, t_w) {
+        //落下中のみ
+        cls_Mc.myJustOk = false;
+        if (cls_Mc.mySts == JUMP_ING) 
+          if (cls_Mc.myStsOld!=JUMP_ING) {
+            cls_Mc.myJustHis = false;
+          }
+          if ((t_y - just_y_old) > 0){
+            
+            cls_Mc.myJustOk = true;
+            t_h = (t_w*just_img.naturalHeight)/just_img.naturalWidth;
+            t_x = t_x - t_w/2;
+            can.drawImage(just_img2, 
+                  0, 0,
+                  just_img2.naturalWidth, 
+                  just_img2.naturalHeight,
+                  t_x-4,
+                  t_y,
+                  t_w, 
+                  t_h);
+
+            can.drawImage(just_img, 
+                  0, 0,
+                  just_img.naturalWidth, 
+                  just_img.naturalHeight,
+                  t_x,
+                  t_y,
+                  t_w, 
+                  t_h);
+
+        }
+        
+          
+        just_y_old = t_y;
+    }
+
+    function getJustOk() {
+        ret = false;
+
+        if((cls_Mc.myStsOld == JUMP_ING)
+          &&(cls_Mc.myJustOk)
+          &&(cls_Mc.myJustHis == false)){
+          cls_Mc.myJustHis = true;
+          ret = true;
+        }
+        return ret;
+    }
+
+    function JustAttackTask() {
+        if (just_cnt < 200) {
+
+            t_cls_En = get_cls_EnCom();
+
+            en_x = t_cls_En.myDispX;
+            en_w = t_cls_En.myDispW;
+
+            en_y = t_cls_En.myDispY;
+            en_h = t_cls_En.myDispH;
+
+            //敵位置に向かっていく
+            t_xofs = just_cnt *
+                  just_x_vector;
+            t_yofs = just_cnt *
+                  just_y_vector;
+
+
+            t_x = cls_Mc.myJustSX + t_xofs;
+            t_y = cls_Mc.myJustSY + t_yofs;
+
+            t_w = just_img.displayWidth;
+            t_h = just_img.displayHeight;
+
+            can.drawImage(just_img2, 0, 0,
+                  just_img2.naturalWidth, 
+                  just_img2.naturalHeight,
+                  t_x-4,
+                  t_y,
+                  t_w * just_res, 
+                  t_h * just_res);
+
+            can.drawImage(just_img, 0, 0,
+                  just_img.naturalWidth, 
+                  just_img.naturalHeight,
+                  t_x,
+                  t_y,
+                  t_w * just_res, 
+                  t_h * just_res);
+
+            
+            
+
+            //あたり判定
+            ret = crashcommon(
+                  [en_x,en_w,en_y,en_h],
+                  [t_x,t_w,t_y,t_h]);
+
+            
+            if (ret) {
+              
+              
+              enemyCrash(just_res);
+              just_cnt=200;
+
+            }
+
+            just_cnt += get_move_spd();
+        }
+
+        if(cls_Mc.mySts == JUMP_END) {
+            just_y_old = CHARA_BASE_Y +200;
+        }
+    }
+
+    //----------
+    //超必殺用
+    //----------
+    var sp_img = new Image();
+    let spgage;
+    let SPGAGE_MAX = 5;
+    var SPBTN_BASEX = 270;
+    var SPBTN_BASEY = GROUND_YBASE+10;
+    let spgage_max_cnt = 0;
+    let spattck_cnt;
+    var SPATK_NUM = 50;
+    let spattckfl_cnt =[];
+
+    function SetSptAttack(sp_src){
+        sp_img.src = sp_src;
+    }
+    function initSpGage() {
+
+        spgage = 0;
+        spgage_max_cnt = 0;
+        spattck_cnt = 0;
+        SPGAGE_MAX = cls_Mc.mySp_m;
+
+        sp_img.displayWidth = sp_img.naturalWidth/10;
+        sp_img.displayHeight = sp_img.naturalHeight/10;
+    }
+
+    function spgageTask() {
+        disp_spgage();
+        drawSpAtk();
+    }
+    
+    function plus_spgage(t_val) {
+        spgage += t_val;
+        if (spgage > SPGAGE_MAX) {
+            spgage = SPGAGE_MAX;
+        }
+    }
+
+    function disp_spgage() {
+        
+        //バー
+        can.fillStyle = "#000000";
+        can.fillRect(SPBTN_BASEX, SPBTN_BASEY+sp_img.displayHeight, sp_img.displayWidth, 10);
+
+        t_val = spgage/SPGAGE_MAX*sp_img.displayWidth-2;
+        can.fillStyle = "#FF0000";
+        can.fillRect(SPBTN_BASEX+1, SPBTN_BASEY+sp_img.displayHeight+1, t_val, 8);
+
+
+        if (spgage >= SPGAGE_MAX) {
+            spgage_max_cnt++;
+
+            t_x = SPBTN_BASEX;
+            t_y = SPBTN_BASEY;
+            t_w = sp_img.displayWidth;
+            t_h = sp_img.displayHeight;
+
+            //点滅
+            if (spgage_max_cnt<20){
+                can.fillStyle = "#FF0000";
+            } else if (spgage_max_cnt<40){
+                can.fillStyle = "#FFEE00";
+            } else {
+                spgage_max_cnt=0;
+            }
+
+            can.fillRect(t_x, t_y, 
+                         t_w, t_h);
+
+            can.drawImage(sp_img, 0, 0,
+                  sp_img.naturalWidth, 
+                  sp_img.naturalHeight,
+                  t_x, t_y, 
+                  t_w, t_h);
+
+        } else {
+            spgage_max_cnt=0;
+        }
+    }
+
+　
+    function drawSpAtk() {
+        
+        if ((spattck_cnt > 0) 
+          &&(get_move_ok())
+          &&(!getStageEnd())){
+
+            t_w = sp_img.displayWidth;
+            t_h = sp_img.displayHeight;
+
+            t_cls_En = get_cls_EnCom();
+
+            en_x = t_cls_En.myDispX;
+            en_w = t_cls_En.myDispW;
+
+            en_y = t_cls_En.myDispY;
+            en_h = t_cls_En.myDispH;
+
+            for(i=0;i<spattckfl_cnt.length;i++){
+                spattckfl_cnt[i]+=get_move_spd()*8;
+                t_y = spattckfl_cnt[i];
+
+                
+                t_x = 120 + i *BLOCK_WH/2;
+
+                can.drawImage(sp_img, 
+                  0, 0,
+                  sp_img.naturalWidth, 
+                  sp_img.naturalHeight,
+                  t_x, 
+                  t_y, 
+                  t_w, t_h);
+
+                //あたり判定
+                ret = crashcommon(
+                  [en_x,en_w,en_y,en_h],
+                  [t_x,t_w,t_y,t_h]);
+
+            
+                if (ret) {
+                    enemyCrash(0.8);
+                }
+
+                //spattckfl_cnt[i]++;
+                if (t_y > GAME_HEIGHT+BLOCK_WH)
+                {
+                    spattckfl_cnt[i]=-Math.random()*1000;
+                    spattck_cnt--;
+                }
+            }
+
+            
+        }
+
+    }
+
+    function pushSpAtkBtn(tap) {
+         ret = false;
+         if (spgage >= SPGAGE_MAX) {
+            t_x = SPBTN_BASEX;
+            t_y = SPBTN_BASEY;
+            t_w = sp_img.displayWidth;
+            t_h = sp_img.displayHeight;
+            tapx = tap[0];
+            tapy = tap[1];
+
+            if (((t_x < tapx) 
+               &&(tapx < (t_x+t_w)))
+             && ((t_y < tapy) 
+               &&(tapy < (t_y+t_h))))
+            {
+                spattck_cnt = SPATK_NUM;
+                for(i=0;i<6;i++){
+                  spattckfl_cnt[i] = -Math.random()*1000;
+                }
+                ret = true;
+                
+                stop_move(30,'black');
+                spgage = 0;
+            }
+         }
+         return ret;
+    }
+
+    //----////
+    //あたり判定(汎用部)
+    function crashcommon(fig1,fig2) {
+      ret = false;
+      if ((cls_Mc.mySts != CRASH) 
+          && (cls_Mc.mySts != GAME_CLEAR)){
+  
+        fig1_xcen = fig1[0] + fig1[1]/2; //fig1 x軸中心
+        fig1_ycen = fig1[2] + fig1[3]/2; //fig1 y軸中心
+
+        //fig2範囲獲得
+        fig2_x1 = fig2[0];
+        fig2_x2 = fig2[0] + fig2[1];
+
+        fig2_y1 = fig2[2];
+        fig2_y2 = fig2[2] + fig2[3];
+
+        //あたり判定
+        
+        if ((  (fig2_x1 < fig1_xcen) 
+             &&(fig1_xcen < fig2_x2))
+          &&(  (fig2_y1 < fig1_ycen) 
+             &&(fig1_ycen < fig2_y2)))
+        {
+            ret = true;
+        }
+      }
+      return ret;
+    }
+
+
+    //-------
+    //ステージ
+    //-------
+    let stage;
+    let MAX_STAGE = 5;
+    let LAST_STAGE = 5;
+    var STAGE_X = 135;
+    var STAGE_Y = 200;
+    let clear_end_ok;
+    var hanabic_img = [];
+    var hanabio_img = [];
+    let hanabi_cnt = [];
+    let hanabi_posi = [];
+    var HANABI_NUM = 8;
+    
+    
+
+    function firstinitStage(){
+        i=0;
+        hanabic_img[i] = new Image();
+        hanabio_img[i] = new Image();
+        hanabic_img[i].src = 'img/20221221083410.png';
+        hanabio_img[i].src = 'img/20221221083425.png';
+        hanabi_posi[i] = [100,100];
+
+        i++;
+        hanabic_img[i] = new Image();
+        hanabio_img[i] = new Image();
+        hanabic_img[i].src = 'img/20221221181510.png';
+        hanabio_img[i].src = 'img/20221221181516.png';
+        hanabi_posi[i] = [200,130];
+
+        i++;
+        hanabic_img[i] = new Image();
+        hanabio_img[i] = new Image();
+        hanabic_img[i].src = 'img/20221221083410.png';
+        hanabio_img[i].src = 'img/20221221083425.png';
+        hanabi_posi[i] = [50,180];
+
+        i++;
+        hanabic_img[i] = new Image();
+        hanabio_img[i] = new Image();
+        hanabic_img[i].src = 'img/20221221181510.png';
+        hanabio_img[i].src = 'img/20221221181516.png';
+        hanabi_posi[i] = [180,50];
+
+        i++;
+        hanabic_img[i] = new Image();
+        hanabio_img[i] = new Image();
+        hanabic_img[i].src = 'img/20221221083410.png';
+        hanabio_img[i].src = 'img/20221221083425.png';
+        hanabi_posi[i] = [250,160];
+
+        i++;
+        hanabic_img[i] = new Image();
+        hanabio_img[i] = new Image();
+        hanabic_img[i].src = 'img/20221221181510.png';
+        hanabio_img[i].src = 'img/20221221181516.png';
+        hanabi_posi[i] = [110,30];
+
+        i++;
+        hanabic_img[i] = new Image();
+        hanabio_img[i] = new Image();
+        hanabic_img[i].src = 'img/20221221083410.png';
+        hanabio_img[i].src = 'img/20221221083425.png';
+        hanabi_posi[i] = [80,110];
+
+        i++;
+        hanabic_img[i] = new Image();
+        hanabio_img[i] = new Image();
+        hanabic_img[i].src = 'img/20221221181510.png';
+        hanabio_img[i].src = 'img/20221221181516.png';
+        hanabi_posi[i] = [160,70];
+        
+    }
+
+    function initStage() {
+        stage = START_STAGE;
+        clear_end_ok = false;
+        updateStage();
+        
+
+        for(i=0;i<HANABI_NUM;i++){
+          
+          hanabic_img[i].displayWidth = hanabic_img[i].naturalWidth/10;
+          hanabic_img[i].displayHeight = hanabic_img[i].naturalHeight/10;
+
+          hanabio_img[i].displayWidth = hanabio_img[i].naturalWidth/10;
+          hanabio_img[i].displayHeight = hanabio_img[i].naturalHeight/10;
+
+          hanabi_cnt[i]=-i*30;
+        }
+    }
+
+    function updateStage() {
+        stage++;
+        //stage=4;
+        stg_disp_cnt = 100;
+        if (stage == 1) {
+            set_bg_color('#67AECB');
+            init_move_spd(1);
+        } else if (stage == 2) {
+            set_bg_color('#E2A872');
+            init_move_spd(0.75);
+        } else if (stage == 3) {
+            set_bg_color('#444E6A');
+            init_move_spd(0.75);
+        } else if (stage == 4) {
+            set_bg_color('#343E5A');
+            init_move_spd(0.75);
+        } else if (stage == 5) {
+          if(get_enc_exist()){
+            set_bg_color('#333333');
+            init_move_spd(0.75);
+          }
+        } else {
+            //CLEAR時の動作
+            set_move_slow();
+        }
+    }
+
+    function getStage() {
+        return stage;
+    }
+
+    function getStageEnd() {
+        ret = false;
+        if (stage > MAX_STAGE) {
+            ret = true;
+        }
+        return ret;
+    }
+
+    function setClearEndOk() {
+        clear_end_ok = true;
+    }
+
+    function stageTask() {
+        if (stg_disp_cnt > 0) {
+          if (stage < MAX_STAGE) {
+            can.font = 'bold italic 24pt Arial';
+            can.fillStyle = 'Blue';
+            t_str = 'STAGE ' + stage;
+            if (MAX_STAGE == stage) {
+                t_str = 'LAST STAGE';
+            }
+            can.fillText(t_str,       
+                          STAGE_X, 
+                          STAGE_Y);
+          }
+          stg_disp_cnt--;
+          
+        } else {
+            //クリア時アクション
+            if (stage > MAX_STAGE) {
+                t_en_nodisp = get_en_nodisp();
+                  
+              if ((t_en_nodisp)
+                 && (cls_Mc.mySts == JUMP_END)){
+
+                cls_Mc.mySts = GAME_CLEAR;
+                set_move_ng();
+                  
+              }
+              if (!get_move_ok()){
+               for(i=0;i<HANABI_NUM;i++){
+                t_disp = false;
+                if (hanabi_cnt[i]<0){
+
+                }
+                else if (hanabi_cnt[i]<20){
+                  t_img = hanabic_img[i];
+                  t_disp= true;
+                }
+                else if (hanabi_cnt[i]<40){
+                  t_img = hanabio_img[i];
+                  t_disp= true;
+                }
+                if (t_disp) {
+                  can.drawImage(t_img, 
+                    0, 0,
+                    t_img.naturalWidth, 
+                    t_img.naturalHeight,
+                    hanabi_posi[i][0], 
+                    hanabi_posi[i][1], 
+                    t_img.displayWidth,
+                    t_img.displayHeight);
+                }
+                hanabi_cnt[i]++;
+               }
+              }
+            }
+
+            if(clear_end_ok){
+                game_clear();
+            }
+        }
+    }
+
+
+    //-----------
+    // ここから敵
+    //-----------
+    const STS_APPEAR = -1;
+    const STS_WAIT = 0;
+    const STS_ATK1 = 1;
+    const STS_ATK2 = 2;
+    const STS_ATK3 = 3;
+    const STS_ATK4 = 4;
+    const STS_ATK5 = 5;
+    const STS_RET1 = 6;
+    const STS_RET2 = 7;
+    const STS_RET3 = 8;
+    const STS_RET4 = 9;
+    const STS_RET5 = 10;
+
+    const NODATA = -1;
+
+    class clEnemy {
+      constructor( t_img_src, 
+                   t_scale,
+                   t_enc, 
+                   t_lifemax,
+                   t_damage,
+                   t_stage,
+                   t_startx,
+                   t_starty,
+                   t_func,
+                   t_boss,
+                   t_sub1,
+                   t_sub2,
+                   t_encjdg
+                 ) {
+          this.img = new Image();
+          this.img.src = t_img_src;
+          this.scale = t_scale;
+          this.enc = t_enc;
+          this.lifemax = t_lifemax;
+          this.life = t_lifemax;
+          this.damage = t_damage;
+          this.stage = t_stage;
+          this.startx = t_startx;
+          this.starty = t_starty;
+          this.func = t_func;
+          this.boss = t_boss;
+          this.sub1 = t_sub1;
+          this.sub2 = t_sub2;
+          this.sts = STS_APPEAR;
+          this.angle = 0;
+          this.drwcnt = 0;
+          this.up = false;
+          this.cnt1 = 0;
+          this.cnt2 = 0;
+          this.cnt3 = 0;
+          this.tmpx1 = 0;
+          this.tmpx2 = 0;
+          this.tmpx3 = 0;
+          this.flg1 = false;
+          this.flg2 = false;
+          this.flg3 = false;
+          this.data1 = NODATA;
+          this.data2 = NODATA;
+          this.data3 = NODATA;
+          this.encfc = t_encjdg;
+    }
+
+    //ゲット
+    get myImg()     {return this.img;}
+    get myImgSrc()  {return this.img.src;}
+    get myScale()   {return this.scale;}
+    get myLifeMax() {return this.lifemax;}
+    get myLife()    {return this.life;}
+    get myDamage()  {return this.damage;}
+    get myEnc()     {return this.enc;}
+    get myStage()   {return this.stage;}
+    get myStartX()  {return this.startx;}
+    get myStartY()  {return this.starty;}
+    get myDispW()   {return this.dispw;}
+    get myDispH()   {return this.disph;}
+    get myDispX()   {return this.dispx;}
+    get myDispY()   {return this.dispy;}
+    get myFunc()    {return this.func;}
+    get myBoss()    {return this.boss;}
+    get mySub1()    {return this.sub1;}
+    get mySub2()    {return this.sub2;}
+    get mySts()     {return this.sts;}
+    get myAngle()   {return this.angle;}
+    get myDrwCnt()  {return this.drwcnt;}
+    get myUp()      {return this.up;}
+    get myCnt1()    {return this.cnt1;}
+    get myCnt2()    {return this.cnt2;}
+    get myCnt3()    {return this.cnt3;}
+    get myTmpX1()   {return this.tmpx1;}
+    get myTmpX2()   {return this.tmpx2;}
+    get myTmpX3()   {return this.tmpx3;}
+    get myFlg1()    {return this.flg1;}
+    get myFlg2()    {return this.flg2;}
+    get myFlg3()    {return this.flg3;}
+    get myData1()   {return this.data1;}
+    get myData2()   {return this.data2;}
+    get myData3()   {return this.data3;}       
+    get myEncFc()   {return this.encfc;}   
+
+    //セット
+    set myDispX(v)  {this.dispx = v;}
+    set myDispY(v)  {this.dispy = v;}
+    set myDispW(v)  {this.dispw = v;}
+    set myDispH(v)  {this.disph = v;}
+    set myLife(v)   {this.life = v;}
+    set mySts(v)    {this.sts = v;}
+    set myAngle(v)  {this.angle = v;}
+    set myDrwCnt(v) {this.drwcnt = v;}
+    
+    set myUp(v)     {this.up = v;}
+    set myCnt1(v)   {this.cnt1 = v;}
+    set myCnt2(v)   {this.cnt2 = v;}
+    set myCnt3(v)   {this.cnt3 = v;}
+    set myTmpX1(v)  {this.tmpx1 = v;}
+    set myTmpX2(v)  {this.tmpx2 = v;}
+    set myTmpX3(v)  {this.tmpx3 = v;}
+    set myFlg1(v)   {this.flg1 = v;}
+    set myFlg2(v)   {this.flg2 = v;}
+    set myFlg3(v)   {this.flg3 = v;}
+    set myData1(v)  {this.data1 = v;}
+    set myData2(v)  {this.data2 = v;}
+    set myData3(v)  {this.data3 = v;}
+    }
+
+    class clEnemySub {
+      constructor( t_img_src,
+                   t_scale,
+                   t_damage,
+                   t_startx,
+                   t_starty,
+                   t_func,
+                 ) {
+          this.img = new Image();
+          this.img.src = t_img_src;
+          this.scale = t_scale;
+          this.damage = t_damage;
+          this.startx = t_startx;
+          this.starty = t_starty;
+          this.func = t_func;
+          this.sts = STS_APPEAR;
+          this.cnt1 = 0;
+          this.cnt2 = 0;
+          this.cnt3 = 0;
+          this.tmpx1 = 0;
+          this.tmpx2 = 0;
+          this.tmpx3 = 0;
+          this.flg1 = false;
+          this.flg2 = false;
+          this.flg3 = false;
+          this.data1 = NODATA;
+          this.data2 = NODATA;
+          this.data3 = NODATA;
+
+    }
+
+    //ゲット
+    get myImg()    {return this.img;}
+    get myScale()  {return this.scale;}
+    get myDamage() {return this.damage;}
+    get myStage()  {return this.stage;}
+    get myStartX() {return this.startx;}
+    get myStartY() {return this.starty;}
+    get myDispW()  {return this.dispw;}
+    get myDispH()  {return this.disph;}
+    get myDispX()  {return this.dispx;}
+    get myDispY()  {return this.dispy;}
+    get myFunc()   {return this.func;}
+    get mySts()    {return this.sts;}
+    get myCnt1()   {return this.cnt1;}
+    get myCnt2()   {return this.cnt2;}
+    get myCnt3()   {return this.cnt3;}
+    get myTmpX1()  {return this.tmpx1;}
+    get myTmpX2()  {return this.tmpx2;}
+    get myTmpX3()  {return this.tmpx3;}
+    get myFlg1()   {return this.flg1;}
+    get myFlg2()   {return this.flg2;}
+    get myFlg3()   {return this.flg3;}
+    get myData1()  {return this.data1;}
+    get myData2()  {return this.data2;}
+    get myData3()  {return this.data3;}
+         
+
+    //セット
+    set myDispX(v) {this.dispx = v;}
+    set myDispY(v) {this.dispy = v;}
+    set myDispW(v) {this.dispw = v;}
+    set myDispH(v) {this.disph = v;}
+    set mySts(v)   {this.sts = v;}
+    set myCnt1(v)  {this.cnt1 = v;}
+    set myCnt2(v)  {this.cnt2 = v;}
+    set myCnt3(v)  {this.cnt3 = v;}
+    set myTmpX1(v) {this.tmpx1 = v;}
+    set myTmpX2(v) {this.tmpx2 = v;}
+    set myTmpX3(v) {this.tmpx3 = v;}
+    set myFlg1(v)  {this.flg1 = v;}
+    set myFlg2(v)  {this.flg2 = v;}
+    set myFlg3(v)  {this.flg3 = v;}
+    set myData1(v) {this.data1 = v;}
+    set myData2(v) {this.data2 = v;}
+    set myData3(v) {this.data3 = v;}
+    }
+
+    const DMGCNTMAX = 40;
+    class clEnemyDmg {
+      constructor() {
+          this.num = 0;
+          this.cnt = DMGCNTMAX;
+          this.x = 0;
+          this.y = 0;
+          this.no_mcnt = 0;
+          this.nodisp = false;
+          this.crt = false;
+      }
+
+    get myNum()     {return this.num;}
+    get myCnt()     {return this.cnt;}
+    get myX()       {return this.x;}
+    get myY()       {return this.y;}
+    get myNoMCnt()  {return this.no_mcnt;}
+    get myNoDisp()  {return this.nodisp;}
+    get myCrt()   {return this.crt;}
+
+    set myNum(v)    {this.num = v;}
+    set myCnt(v)    {this.cnt = v;}
+    set myX(v)      {this.x = v;}
+    set myY(v)      {this.y = v;}
+    set myNoMCnt(v) {this.no_mcnt = v;}
+    set myNoDisp(v) {this.nodisp = v;}
+    set myCrt(v)    {this.crt = v;}
+    }
+
+    let cls_EnAry = [];
+     
+    const ENEMY1   = 0;
+    const ENEMY2   = 1;
+    const ENEMY3   = 2;
+    const BOSS1    = 3;
+    const ENEMY3_2 = 4;
+    const ENEMY4   = 5;
+    const ENEMY5   = 6;
+    const BOSS2    = 7;
+    const ENEMY6   = 8;
+    const ENEMY7   = 9;
+    const ENEMY8   = 10;
+    const BOSS3    = 11;
+    const ENEMY9   = 12;
+    const ENEMY10  = 13;
+    const ENEMY11  = 14;
+    const BOSS4    = 15;
+    const LBOSS1   = 16;
+   
+    const ENEMY_NUM = 17;
+
+    let cls_EnDmg;
+
+    function firstinitEnemyChara(){
+        
+        cls_EnAry[ENEMY1]
+            = new clEnemy(
+                'img/かに.png',
+                10,//縮尺
+                12,//エンカウント
+                60,//ライフ
+                1,//ダメージ
+                1,//ステージ
+                GAME_WIDTH,//開始x
+                GAME_HEIGHT - BLOCK_WH*2+18, //開始y
+                Enemy1Move,//動作
+                false,//ボスかどうか
+                null,
+                null,
+                null
+                );
+        
+        cls_EnAry[ENEMY2]
+            = new clEnemy(
+                'img/20221124180818.png',
+                10,//縮尺
+                6,//エンカウント
+                80,//ライフ
+                1,//ダメージ
+                1,//ステージ
+                GAME_WIDTH,//開始x
+                GAME_HEIGHT - BLOCK_WH*4+18, //開始y
+                Enemy2Move,//動作
+                false,//ボスかどうか
+                null,
+                null,
+                null
+                );
+
+        cls_EnAry[ENEMY3]
+            = new clEnemy(
+                'img/ゴリラ.png',
+                8,//縮尺
+                2,//エンカウント
+                120,//ライフ
+                1,//ダメージ
+                1,//ステージ
+                GAME_WIDTH,//開始x
+                GAME_HEIGHT - BLOCK_WH*2-36, //開始y
+                Enemy3Move,//動作
+                false,//ボスかどうか
+                null,
+                null,
+                null
+                );
+
+        cls_EnAry[BOSS1]
+            = new clEnemy(
+                'img/カピバラ.png',
+                5,//縮尺
+                0,//エンカウント
+                2000,//ライフ
+                1,//ダメージ
+                1,//ステージ
+                GAME_WIDTH,//開始x
+                GAME_HEIGHT - BLOCK_WH*2-60, //開始y
+                Boss1Move,//動作
+                true,//ボスかどうか
+                null,
+                null,
+                null
+                );
+
+        cls_EnAry[ENEMY3_2]
+            = new clEnemy(
+                'img/ゴリラ.png',
+                8,//縮尺
+                2,//エンカウント
+                120,//ライフ
+                1,//ダメージ
+                2,//ステージ
+                GAME_WIDTH,//開始x
+                GAME_HEIGHT - BLOCK_WH*2-36, //開始y
+                Enemy3Move,//動作
+                false,//ボスかどうか
+                null,
+                null,
+                null
+                );
+
+        cls_EnAry[ENEMY4]
+            = new clEnemy(
+                'img/茶色のウマ.png',
+                10,//縮尺
+                2,//エンカウント
+                170,//ライフ
+                1,//ダメージ
+                2,//ステージ
+                GAME_WIDTH,//開始x
+                GAME_HEIGHT - BLOCK_WH*2, //開始y
+                Enemy4Move,//動作
+                false,//ボスかどうか
+                null,
+                null,
+                null
+                );
+
+        cls_EnAry[ENEMY5]
+            = new clEnemy(
+                'img/カラス.png',
+                10,//縮尺
+                3,//エンカウント
+                160,//ライフ
+                1,//ダメージ
+                2,//ステージ
+                GAME_WIDTH,//開始x
+                BLOCK_WH, //開始y
+                Enemy5Move,//動作
+                false,//ボスかどうか
+                null,
+                null,
+                null
+                );
+
+        cls_EnAry[BOSS2]
+            = new clEnemy(
+                'img/横向きのライオン.png',
+                5,//縮尺
+                0,//エンカウント
+                4000,//ライフ
+                2,//ダメージ
+                2,//ステージ
+                GAME_WIDTH,//開始x
+                GAME_HEIGHT - BLOCK_WH*2-60, //開始y
+                Boss2Move,//動作
+                true,//ボスかどうか
+                null,
+                null,
+                null
+                );
+
+        cls_EnAry[ENEMY6]
+            = new clEnemy(
+                'img/緑の服を着たB-BOY.png',
+                10,//縮尺
+                3,//エンカウント
+                240,//ライフ
+                1,//ダメージ
+                3,//ステージ
+                GAME_WIDTH,//開始x
+                GAME_HEIGHT - BLOCK_WH*2-6, //開始y
+                Enemy6Move,//動作
+                false,//ボスかどうか
+                null,
+                null,
+                null
+                );
+
+        cls_EnAry[ENEMY7]
+            = new clEnemy(
+                'img/花月 カヲル（かげつ かおる）・手裏剣ver.png',
+                10,//縮尺
+                2,//エンカウント
+                240,//ライフ
+                1,//ダメージ
+                3,//ステージ
+                GAME_WIDTH,//開始x
+                GAME_HEIGHT - BLOCK_WH*2-12, //開始y
+                Enemy7Move,//動作
+                false,//ボスかどうか
+                null,
+                null,
+                null
+                );
+
+        cls_EnAry[ENEMY8]
+            = new clEnemy(
+                'img/レンジャー（レッド）.png',
+                10,//縮尺
+                1,//エンカウント
+                270,//ライフ
+                2,//ダメージ
+                3,//ステージ
+                GAME_WIDTH,//開始x
+                GAME_HEIGHT - BLOCK_WH*2 +6, //開始y
+                Enemy8Move,//動作
+                false,//ボスかどうか
+                null,
+                null,
+                null
+                );
+
+        cls_sub_b3
+            = new clEnemySub(
+                'img/だるま.png',
+                10,//縮尺
+                1,//ダメージ
+                GAME_WIDTH,//開始x
+                GAME_HEIGHT - BLOCK_WH*2-60, //開始y
+                Boss3Sub1Move
+                );
+
+        cls_EnAry[BOSS3]
+            = new clEnemy(
+                'img/錫杖（しゃくじょう）を持った天狗.png',
+                5,//縮尺
+                0,//エンカウント
+                6000,//ライフ
+                2,//ダメージ
+                3,//ステージ
+                GAME_WIDTH,//開始x
+                GAME_HEIGHT - BLOCK_WH*2-60, //開始y
+                Boss3Move,//動作
+                true,//ボスかどうか
+                cls_sub_b3,
+                null,
+                null
+                );
+
+        cls_EnAry[ENEMY9]
+            = new clEnemy(
+                'img/おばけ.png',
+                10,//縮尺
+                2,//エンカウント
+                280,//ライフ
+                2,//ダメージ
+                4,//ステージ
+                GAME_WIDTH,//開始x
+                GAME_HEIGHT - BLOCK_WH*2-20, //開始y
+                Enemy9Move,//動作
+                false,//ボスかどうか
+                null,
+                null,
+                null
+                );
+
+        cls_sub_e10
+            = new clEnemySub(
+                'img/ゾンビの男の子.png',
+                15,//縮尺
+                1,//ダメージ
+                GAME_WIDTH+150,//開始x
+                GAME_HEIGHT - BLOCK_WH*2+20, //開始y
+                Enemy10Sub1Move
+                 );
+
+        cls_EnAry[ENEMY10]
+            = new clEnemy(
+                'img/ゾンビの女の子.png',
+                10,//縮尺
+                2,//エンカウント
+                450,//ライフ
+                2,//ダメージ
+                4,//ステージ
+                GAME_WIDTH,//開始x
+                GAME_HEIGHT - BLOCK_WH*2+6, //開始y
+                Enemy10Move,//動作
+                false,//ボスかどうか
+                cls_sub_e10,
+                null,
+                null
+                );
+
+        cls_EnAry[ENEMY11]
+            = new clEnemy(
+                'img/ハロウィンのカボチャ.png',
+                7.5,//縮尺
+                2,//エンカウント
+                200,//ライフ
+                2,//ダメージ
+                4,//ステージ
+                GAME_WIDTH-BLOCK_WH*1.5,//開始x
+                -BLOCK_WH, //開始y
+                Enemy11Move,//動作
+                false,//ボスかどうか
+                null,
+                null,
+                null
+                );
+
+
+        cls_sub1_b1
+            = new clEnemySub(
+                'img/カボチャ.png',
+                7.5,//縮尺
+                2,//ダメージ
+                GAME_WIDTH,//開始x
+                GAME_HEIGHT - BLOCK_WH*2+12, //開始y
+                Boss4Sub1Move
+                );
+
+        cls_sub2_b1
+            = new clEnemySub(
+                'img/金づち.png',
+                7.5,//縮尺
+                1,//ダメージ
+                GAME_WIDTH,//開始x
+                GAME_HEIGHT - BLOCK_WH*2-20, //開始y
+                Boss4Sub2Move
+                );
+
+        cls_EnAry[BOSS4]
+            = new clEnemy(
+                'img/カボチャくん.png',
+                5,//縮尺
+                0,//エンカウント
+                8000,//ライフ
+                3,//ダメージ
+                4,//ステージ
+                GAME_WIDTH,//開始x
+                GAME_HEIGHT - BLOCK_WH*2-60, //開始y
+                Boss4Move,//動作
+                true,//ボスかどうか
+                cls_sub1_b1,
+                cls_sub2_b1,
+                null
+                );
+
+        cls_sub1_lb1
+            = new clEnemySub(
+                'img/lboss1sub1.png',
+                7.5,//縮尺
+                2,//ダメージ
+                GAME_WIDTH,//開始x
+                GAME_HEIGHT - BLOCK_WH*2+12, //開始y
+                LBoss1Sub1Move
+                );
+
+        cls_sub2_lb1
+            = new clEnemySub(
+                'img/lboss1sub2.png',
+                7.5,//縮尺
+                3,//ダメージ
+                GAME_WIDTH,//開始x
+                GAME_HEIGHT - BLOCK_WH*2+12, //開始y
+                LBoss1Sub2Move
+                );
+
+
+        cls_EnAry[LBOSS1]
+            = new clEnemy(
+                'img/lastboss1.png',
+                3,//縮尺
+                0,//エンカウント
+                12000,//ライフ
+                3,//ダメージ
+                5,//ステージ
+                GAME_WIDTH,//開始x
+                GAME_HEIGHT - BLOCK_WH*2-107, //開始y
+                LBoss1Move,//動作
+                true,//ボスかどうか
+                cls_sub1_lb1,
+                cls_sub2_lb1,
+                get_item8his
+                );
+
+        cls_EnDmg = new clEnemyDmg();
+    }
+
+    function initEnemyChara(){
+      for (i = 0; i < ENEMY_NUM;i++){
+        cls_En = cls_EnAry[i];
+        cls_En.myDispW = cls_En.img.naturalWidth/cls_En.myScale;
+        cls_En.myDispH =
+cls_En.img.naturalHeight/cls_En.myScale;
+
+        if(cls_En.mySub1 != null) {
+          cls_En.mySub1.myDispW = cls_En.mySub1.img.naturalWidth/cls_En.mySub1.myScale;
+
+          cls_En.mySub1.myDispH =
+cls_En.mySub1.img.naturalHeight/cls_En.mySub1.myScale;
+        }
+
+        if(cls_En.mySub2 != null) {
+          cls_En.mySub2.myDispW = cls_En.mySub2.img.naturalWidth/cls_En.mySub2.myScale;
+
+          cls_En.mySub2.myDispH =
+cls_En.mySub2.img.naturalHeight/cls_En.mySub2.myScale;
+        }
+      }
+
+    }
+
+    function drawEnemyChara(cls_En, t_xinit) {
+
+        if (t_xinit) {
+            cls_En.myDispX = cls_En.myStartX;
+            cls_En.myDispY = cls_En.myStartY;
+            cls_En.myAngle = 0;
+
+
+            if (cls_En.mySub1 != null) {
+                cls_En.mySub1.myDispX = cls_En.mySub1.myStartX;
+                cls_En.mySub1.myDispY = cls_En.mySub1.myStartY;
+            }
+            if (cls_En.mySub2 != null) {
+                cls_En.mySub2.myDispX = cls_En.mySub2.myStartX;
+                cls_En.mySub2.myDispY = cls_En.mySub2.myStartY;
+            }
+        }
+
+        cls_En.myFunc(t_xinit);
+        moveEnemyCrash(cls_En);
+        drawEnemyCommon(cls_En);
+        //あたり判定
+        crashMainEnemyJdg(cls_En);
+
+        if (cls_En.mySub1 != null) {
+            cls_En.mySub1.myFunc(t_xinit);
+            drawEnemySub1Common(
+                cls_En.mySub1);
+
+        }
+        if (cls_En.mySub2 != null) {
+            cls_En.mySub2.myFunc(t_xinit);
+            drawEnemySub2Common(
+                cls_En.mySub2);
+
+        }
+
+        cls_EnCom = cls_En;//公開用
+    }
+
+
+    function drawEnemySub1Common(clsEnSub1)
+    {
+        can.drawImage(clsEnSub1.myImg, 
+            0, 0, 
+            clsEnSub1.myImg.naturalWidth,     
+            clsEnSub1.myImg.naturalHeight,
+            clsEnSub1.myDispX,
+            clsEnSub1.myDispY,
+            clsEnSub1.myDispW,    
+            clsEnSub1.myDispH);
+        
+        crashMainEnemyJdg(clsEnSub1);
+    }
+
+    function drawEnemySub2Common(clsEnSub2)
+    {
+        can.drawImage(clsEnSub2.myImg, 
+            0, 0, 
+            clsEnSub2.myImg.naturalWidth,     
+            clsEnSub2.myImg.naturalHeight,
+            clsEnSub2.myDispX,
+            clsEnSub2.myDispY,
+            clsEnSub2.myDispW,    
+            clsEnSub2.myDispH);
+        
+        crashMainEnemyJdg(clsEnSub2);
+    }
+
+//--------------------------------------
+
+    //敵キャラ1
+    function Enemy1Move(t_xinit) {
+        cls_EnAry[ENEMY1].myDispX -= get_move_spd()*1.1;
+    }
+
+    //敵キャラ2
+    function Enemy2Move(t_xinit) {
+        cls_EnAry[ENEMY2].myDispX -= get_move_spd()*1.5;
+    }
+
+    //敵キャラ3
+    var ENEMY3_NOTITEM = 0;
+    var ENEMY3_OKITEM = 1;
+    var ENEMY3_NGITEM = 2;
+
+    function Enemy3Move(t_xinit) {
+      t_stage = getStage();
+      if (t_stage == 1){
+          t_enidx = ENEMY3;
+      } else {
+          t_enidx = ENEMY3_2;
+      }
+      item_req =cls_EnAry[t_enidx].myData1;
+      disp_his =cls_EnAry[t_enidx].myFlg1;
+      dx = cls_EnAry[t_enidx].myDispX;
+
+        if (t_xinit) {
+            item_req = ENEMY3_NOTITEM;
+            disp_his = false;
+        }
+        dx -= get_move_spd()*1;
+
+   
+        if ((item_req == ENEMY3_NOTITEM)
+            &&(dx < BLOCK_WH*2)
+            &&(!disp_his)) {
+
+            t_rdmjdg = Math.random()*3;
+            if (t_rdmjdg < 1) {
+
+            } else if (t_rdmjdg < 2){
+                item_req = ENEMY3_OKITEM;
+            } else {
+                item_req = ENEMY3_NGITEM;
+            }
+
+            disp_his = true;
+        }
+
+      cls_EnAry[t_enidx].myDispX = dx;
+      cls_EnAry[t_enidx].myData1 =item_req;
+      cls_EnAry[t_enidx].myFlg1 = disp_his;
+       }
+
+    function getEnemy3OkItemReq(){
+      t_stage = getStage();
+      if (t_stage == 1){
+          t_enidx = ENEMY3;
+      } else {
+          t_enidx = ENEMY3_2;
+      }
+      item_req =cls_EnAry[t_enidx].myData1;
+      ret = false;
+      if (item_req == ENEMY3_OKITEM) {
+        ret = true;
+      }
+      return ret;
+    }
+
+    function getEnemy3NgItemReq(){
+      t_stage = getStage();
+      if (t_stage == 1){
+          t_enidx = ENEMY3;
+      } else {
+          t_enidx = ENEMY3_2;
+      }
+      item_req = cls_EnAry[t_enidx].myData1;
+      ret = false;
+      if (item_req == ENEMY3_NGITEM) {
+        ret = true;
+      }
+      return ret;
+    }
+
+    function setEnemy3ItemReqEnd(){
+      t_stage = getStage();
+      if (t_stage == 1){
+          t_enidx = ENEMY3;
+      } else {
+          t_enidx = ENEMY3_2;
+      }
+      cls_EnAry[t_enidx].myData1 = ENEMY3_NOTITEM;
+
+    }
+
+
+    //ボス1
+    var BOSS1_WAITX = 270;
+
+    function Boss1Move(t_xinit){
+        dx = cls_EnAry[BOSS1].myDispX;
+        sts = cls_EnAry[BOSS1].mySts;
+        atk2cnt = cls_EnAry[BOSS1].myCnt1;
+        tmpx1 = cls_EnAry[BOSS1].TmpX1;
+        if (t_xinit) {
+            atk2cnt = 0;
+            sts = STS_APPEAR;
+        } else {
+
+          if (sts==STS_APPEAR) {
+            dx -= get_move_spd()/2;
+            if (dx <= BOSS1_WAITX) {
+              dx = BOSS1_WAITX;
+              sts = STS_WAIT;
+            }
+          }else if(sts==STS_WAIT){
+            t_jdg = Math.random()*1000;
+            if(t_jdg < 10) {
+              sts = STS_ATK1;
+              tmpx1 = dx;
+            }
+          }else if(sts==STS_ATK1) {
+            dx -= get_move_spd();
+            t_mx = dx - tmpx1;
+            if (t_mx < -80) {
+              sts = STS_ATK2;
+              atk2cnt = 0;
+            }
+          }else if(sts==STS_ATK2) {
+            atk2cnt++;
+            if (dx < 30) {
+              sts = STS_RET1;
+            }
+            else if (atk2cnt > 30) {
+              sts = STS_ATK1;
+              tmpx1 = dx;
+            }
+          } else {
+            dx += get_move_spd()*3.5;
+            if (dx >= BOSS1_WAITX) {
+              dx = BOSS1_WAITX;
+              sts = STS_WAIT;
+            }
+          }
+        }
+
+        cls_EnAry[BOSS1].myDispX = dx;
+        cls_EnAry[BOSS1].mySts = sts;
+        cls_EnAry[BOSS1].myCnt1 = atk2cnt;
+        cls_EnAry[BOSS1].TmpX1 = tmpx1;
+    }
+
+
+    //敵キャラ4
+    function Enemy4Move(t_xinit) {
+        cls_EnAry[ENEMY4].myDispX -= get_move_spd()*2;
+    }
+
+    //敵キャラ5
+    function Enemy5Move(t_xinit) {
+        cnt = cls_EnAry[ENEMY5].myCnt1;
+        dx = cls_EnAry[ENEMY5].myDispX;
+        dy = cls_EnAry[ENEMY5].myDispY;
+
+        if (t_xinit) {
+            cnt = 0;
+        } else {
+            cnt += get_move_spd();
+            if (cnt < 100) {
+                dx -= get_move_spd();
+            } else if (cnt < 300) {
+
+            } else {
+                dx -= get_move_spd()*4;
+                dy += get_move_spd()*4;
+            }
+        }
+
+        cls_EnAry[ENEMY5].myCnt1 = cnt;
+        cls_EnAry[ENEMY5].myDispX = dx;
+        cls_EnAry[ENEMY5].myDispY = dy;
+    }
+
+    //ボス2
+    function Boss2Move(t_xinit){
+
+        cnt = cls_EnAry[BOSS2].myCnt1;
+        sts = cls_EnAry[BOSS2].mySts;
+        dx = cls_EnAry[BOSS2].myDispX;
+        dy = cls_EnAry[BOSS2].myDispY;
+
+        if(t_xinit) {
+            cnt = 0;
+            sts = STS_APPEAR;
+        } else {
+          if (sts==STS_APPEAR) {
+            dx -= get_move_spd()/2;
+            if (dx <= 240) {
+              sts = STS_WAIT;
+            }
+          }else if(sts==STS_WAIT){
+            t_jdg = Math.random()*1000;
+            if(t_jdg < 15) {
+              sts = STS_ATK1;
+            }
+          }else if(sts==STS_ATK1) {
+            dx -= get_move_spd()/4;
+            if (dx < 200) {
+              sts = STS_ATK2;
+            }
+          }else if(sts==STS_ATK2) {
+            dx -= get_move_spd()*3.5;
+            if (dx < 0) {
+              sts = STS_RET1;
+            }
+          } else {
+            dx += get_move_spd()*3.5;
+            if (dx >= 240) {
+              sts = STS_WAIT;
+            }
+          }
+        }
+        cls_EnAry[BOSS2].myCnt1 = cnt;
+        cls_EnAry[BOSS2].mySts = sts;
+        cls_EnAry[BOSS2].myDispX = dx;
+        cls_EnAry[BOSS2].myDispY = dy;
+    }
+
+    //敵キャラ6
+    function Enemy6Move(t_xinit) {
+        cnt = cls_EnAry[ENEMY6].myCnt1;
+        dx = cls_EnAry[ENEMY6].myDispX;
+
+        if (t_xinit) {
+            cnt = 0;
+        } else {
+            cnt += get_move_spd();
+            if (cnt < 100) {
+                
+            } else if (cnt < 250) {
+                dx -= get_move_spd();
+            } else {
+                cnt = 0;
+            }
+        }
+
+        cls_EnAry[ENEMY6].myCnt1 = cnt;
+        cls_EnAry[ENEMY6].myDispX = dx;
+    }
+
+    //敵キャラ7
+    const ENEMY7_DWBS = GAME_HEIGHT - BLOCK_WH*2-12;
+    const ENEMY7_UPBS = GAME_HEIGHT - BLOCK_WH*4;
+    function Enemy7Move(t_xinit) {
+        upflg = cls_EnAry[ENEMY7].myFlg1;
+        dx = cls_EnAry[ENEMY7].myDispX;
+        dy = cls_EnAry[ENEMY7].myDispY;
+
+        if (t_xinit) {
+            t_random = Math.random();
+            if (t_random <= 0.5) {
+                upflg = true;
+            } else {
+                dy = GAME_HEIGHT - BLOCK_WH*4;
+                upflg = false;
+            }
+            
+        } else {
+         
+          if(dx >= BLOCK_WH*3){
+            if (upflg) {
+                  dy -= get_move_spd();
+                  if (dy <= ENEMY7_UPBS) {
+                    upflg = false;
+                  }
+            } else {
+                dy += get_move_spd();
+                if (dy >= ENEMY7_DWBS) {
+                    upflg = true;
+                }
+            } 
+          }
+
+            dx -= get_move_spd();
+        }
+
+        cls_EnAry[ENEMY7].myFlg1 = upflg;
+        cls_EnAry[ENEMY7].myDispX = dx;
+        cls_EnAry[ENEMY7].myDispY = dy;
+    }
+
+    //敵キャラ8
+    var ENEMY8_V0 = -16;
+    function Enemy8Move(t_xinit) {
+        dx = cls_EnAry[ENEMY8].myDispX;
+        dy = cls_EnAry[ENEMY8].myDispY;
+        time = cls_EnAry[ENEMY8].myCnt1;
+        cnt = cls_EnAry[ENEMY8].myCnt2;
+        sy = cls_EnAry[ENEMY8].myStartY;
+
+        if(t_xinit){
+            time = 0;
+            enemy8_cnt = 0;
+        } else {
+            dx -= get_move_spd();
+            time += get_move_spd()/2;          
+            dy =g_calc(sy,time,ENEMY8_V0);
+            if (dy >= sy) {
+              dy = sy;
+              cnt++;
+              if (cnt > 50){
+                t_random = Math.random();
+                if (t_random < 0.5){
+                  time = 0;
+                }
+                cnt=0;
+              }
+            }
+        }
+
+        cls_EnAry[ENEMY8].myDispX = dx;
+        cls_EnAry[ENEMY8].myDispY = dy;
+        cls_EnAry[ENEMY8].myCnt1 = time;
+        cls_EnAry[ENEMY8].myCnt2 = cnt;
+    }
+
+    //ボス3
+    function Boss3Move(t_xinit){
+        dx = cls_EnAry[BOSS3].myDispX;
+        dy = cls_EnAry[BOSS3].myDispY;
+        sts = cls_EnAry[BOSS3].mySts;
+        
+        if (t_xinit) {
+           
+            sts = STS_APPEAR ;
+            //bs3_at3cnt = 0;
+        } else {
+             
+
+          if (sts==STS_APPEAR) {
+            dx -= get_move_spd()/2;
+            if (dx <= 240) {
+              sts = STS_WAIT;
+            }
+          }else if(sts==STS_WAIT){
+            t_jdg = Math.random()*1000;
+            //bs3_at3cnt = 0;
+            if(t_jdg < 15) {
+              sts = STS_ATK1;
+            } else if (t_jdg < 30) {
+              sts = STS_ATK3;
+
+              
+            }
+          
+          } else if(sts==STS_ATK1) {
+            dx -= get_move_spd()/4;
+            if (dx < 190) {
+              sts = STS_ATK2;
+            }
+          } else if(sts==STS_ATK2) {
+            dx -= get_move_spd()*2;
+            if (dx < 0) {
+              sts = STS_RET1;
+            }
+          } else if(sts==STS_ATK3) {
+            //sub1で処理
+          } else {
+            dx += get_move_spd()*4;
+            if (dx >= 240) {
+              sts = STS_WAIT;
+            }
+          }
+        }
+
+        cls_EnAry[BOSS3].myDispX = dx;
+        cls_EnAry[BOSS3].myDispY = dy;
+        cls_EnAry[BOSS3].mySts = sts;
+    }
+
+    function Boss3Sub1Move(t_xinit) {
+        dx = cls_EnAry[BOSS3].mySub1.myDispX;
+        dy = cls_EnAry[BOSS3].mySub1.myDispY;
+        dh = cls_EnAry[BOSS3].mySub1.myDispH;
+        cnt = cls_EnAry[BOSS3].mySub1.myCnt1;
+        sts = cls_EnAry[BOSS3].mySts;
+        sts_old = cls_EnAry[BOSS3].mySub1.myData1;
+
+        if (sts == STS_ATK3){
+
+            if (sts != sts_old){
+                cnt = 0;
+                dx = GAME_WIDTH;
+                t_random = Math.random();
+                dy=GROUND_YBASE
+                 -dh
+                 -(t_random*BLOCK_WH);
+            }
+            dx -= get_move_spd()*4;
+
+            if (dx < -BLOCK_WH) {
+              sts = STS_WAIT;
+            }
+        }
+
+        cls_EnAry[BOSS3].mySub1.myDispX = dx;
+        cls_EnAry[BOSS3].mySub1.myDispY = dy;
+        cls_EnAry[BOSS3].mySub1.myDispH = dh;
+        cls_EnAry[BOSS3].mySub1.myCnt1 = cnt;
+        cls_EnAry[BOSS3].mySts = sts;
+        cls_EnAry[BOSS3].mySub1.myData1 = sts;
+        
+    }
+
+    //敵キャラ9
+    function Enemy9Move(t_xinit) {
+        cnt = cls_EnAry[ENEMY9].myCnt1;
+        dx = cls_EnAry[ENEMY9].myDispX;
+        dy = cls_EnAry[ENEMY9].myDispY;
+        up = cls_EnAry[ENEMY9].myFlg1;
+
+        if (t_xinit) {
+            cnt = 0;
+            up = false;
+        } else {
+            cnt++;
+            if (cnt < 10) {
+                if (up) {
+                    dy--;
+                } else {
+                    dy++;
+                }
+            } else {
+                cnt = 0;
+                t_random = Math.random();
+                if (t_random < 0.4) {
+                    up = true;
+                } else if (t_random <0.8){
+                    up = false;
+                } else {
+                    dx -= get_move_spd() *10;
+                }
+            }
+            dx -= get_move_spd();
+        }
+
+        cls_EnAry[ENEMY9].myCnt1 = cnt;
+        cls_EnAry[ENEMY9].myDispX = dx;
+        cls_EnAry[ENEMY9].myDispY = dy;
+        cls_EnAry[ENEMY9].myFlg1 = up;
+    }
+
+    //敵キャラ10
+    function Enemy10Move(t_xinit) {
+        cnt = cls_EnAry[ENEMY10].myCnt1;
+        dx = cls_EnAry[ENEMY10].myDispX;
+        dy = cls_EnAry[ENEMY10].myDispY;
+        stop = cls_EnAry[ENEMY10].myFlg1;
+
+        if (t_xinit) {
+            cnt = 0;
+            stop = false;
+        } else {
+            cnt++;
+            if (cnt < 10) {
+                if (stop) {
+                    
+                } else {
+                    dx -= get_move_spd()*0.75;
+                }
+            } else {
+                cnt = 0;
+                t_random = Math.random();
+                if (t_random < 0.2) {
+                    stop = true;
+                } else {
+                    stop = false;
+                } 
+            }
+            
+        }
+
+        cls_EnAry[ENEMY10].myCnt1 = cnt;
+        cls_EnAry[ENEMY10].myDispX = dx;
+        cls_EnAry[ENEMY10].myDispY = dy;
+        cls_EnAry[ENEMY10].myFlg1 = stop;
+    }
+
+    function Enemy10Sub1Move(t_xinit) {
+        dx = cls_EnAry[ENEMY10].mySub1.myDispX;
+        sy = cls_EnAry[ENEMY10].mySub1.myStartY;
+        stop = cls_EnAry[ENEMY10].myFlg1;
+        up = cls_EnAry[ENEMY10].myUp;
+        
+        if (stop) {
+                    
+        } else {
+             dx -= get_move_spd()*0.75; 
+        }
+        dy = sy;
+        if (up) {
+             dy -= 5;
+        }
+
+        cls_EnAry[ENEMY10].mySub1.myDispX = dx;
+        cls_EnAry[ENEMY10].mySub1.myDispY = dy;
+        
+    }
+
+
+    //敵キャラ11
+    function Enemy11Move(t_xinit) {
+        dx = cls_EnAry[ENEMY11].myDispX;
+        dy = cls_EnAry[ENEMY11].myDispY;
+        dh = cls_EnAry[ENEMY11].myDispH;
+        sy = cls_EnAry[ENEMY11].myStartY;
+        up = cls_EnAry[ENEMY11].myFlg1;
+        time = cls_EnAry[ENEMY11].myCnt1;
+
+        if (t_xinit) {
+            time = 0;
+            time = 0;
+            up = false;
+        } else {
+            dy =g_calc(sy,time,5);
+            gy = GROUND_YBASE-dh+8;
+            if (dy > gy){
+                dy = gy;
+            }
+            time+= get_move_spd()/2; 
+
+            
+            dx -= get_move_spd();
+        }
+
+        cls_EnAry[ENEMY11].myCnt1 = time;
+        cls_EnAry[ENEMY11].myDispX = dx;
+        cls_EnAry[ENEMY11].myDispY = dy;
+        cls_EnAry[ENEMY11].myFlg1 = up;
+    }
+
+    //ボス4
+    function Boss4Move(t_xinit){
+        dx = cls_EnAry[BOSS4].myDispX;
+        dy = cls_EnAry[BOSS4].myDispY;
+        sts = cls_EnAry[BOSS4].mySts;
+        sb1_sta = cls_EnAry[BOSS4].myFlg1;
+        
+        if (t_xinit) {
+           
+            sts = STS_APPEAR ;
+        } else {
+
+          if (sts==STS_APPEAR) {
+            dx -= get_move_spd()/2;
+            if (dx <= 240) {
+              sts = STS_WAIT;
+            }
+          }else if(sts==STS_WAIT){
+            t_jdg = Math.random() *1000
+            
+            if(t_jdg < 20) {
+              sts = STS_ATK1;
+            } else if (t_jdg < 40) {
+              if (sb1_sta == false) {
+                sb1_sta = true;
+              }
+            } else if (t_jdg < 50) {
+              sts = STS_ATK3;
+            console.log(3);
+            } else if (t_jdg < 55) {
+              sts = STS_ATK4;
+            }
+          
+          } else if(sts==STS_ATK1) {
+            dx -= get_move_spd()/4;
+            if (dx < 200) {
+              sts = STS_ATK2;
+            }
+          } else if(sts==STS_ATK2) {
+            dx -= get_move_spd()*2;
+            if (dx < 0) {
+              sts = STS_RET1;
+            }
+          } else if(sts==STS_ATK3) {
+            //sub1で処理
+          } else if(sts==STS_ATK4) {
+            dx -= get_move_spd()/4;
+            if (dx < 200) {
+              sts = STS_RET1;
+            }
+          } else {
+            dx += get_move_spd()*4;
+            if (dx >= 240) {
+              sts = STS_WAIT;
+            }
+          }
+        }
+
+        cls_EnAry[BOSS4].myDispX = dx;
+        cls_EnAry[BOSS4].myDispY = dy;
+        cls_EnAry[BOSS4].mySts = sts;
+        cls_EnAry[BOSS4].myFlg1 = sb1_sta;
+
+    }
+
+    function Boss4Sub1Move(t_xinit) {
+        dx = cls_EnAry[BOSS4].mySub1.myDispX;
+        sx = cls_EnAry[BOSS4].mySub1.myStartX;
+        
+        sb1_sta = cls_EnAry[BOSS4].myFlg1;
+        sb1_sta_old = cls_EnAry[BOSS4].mySub1.myFlg1;
+        
+        if (sb1_sta) {
+
+             if(!sb1_sta_old) {
+                 dx = sx;
+             }
+        
+             dx -= get_move_spd()*0.5; 
+             if (dx < -BLOCK_WH) {
+                 sb1_sta = false;
+             }
+        }
+        
+
+        cls_EnAry[BOSS4].mySub1.myDispX = dx;
+        cls_EnAry[BOSS4].myFlg1 = sb1_sta;
+        cls_EnAry[BOSS4].mySub1.myFlg1 = sb1_sta;
+    }
+
+    function Boss4Sub2Move(t_xinit) {
+        dx = cls_EnAry[BOSS4].mySub2.myDispX;
+        dy = cls_EnAry[BOSS4].mySub2.myDispY;
+        dh = cls_EnAry[BOSS4].mySub2.myDispH;
+        sy = cls_EnAry[BOSS4].mySub2.myStartY;
+        time = cls_EnAry[BOSS4].mySub2.myCnt1;
+        sts = cls_EnAry[BOSS4].mySts;
+        bdx = cls_EnAry[BOSS4].myDispX;
+        sts_old = cls_EnAry[BOSS4].mySub2.myData1;
+
+        if (sts == STS_ATK3){
+
+            if (sts != sts_old){
+                time = 0;
+                dx = bdx+60;
+                t_random = Math.random();
+                
+            }
+            dy =g_calc(sy,time,-12);
+            time+= get_move_spd()/2; 
+            dx -= get_move_spd()*2;
+
+            if (dx < -BLOCK_WH) {
+              sts = STS_WAIT;
+            }
+        }
+
+        cls_EnAry[BOSS4].mySub2.myDispX = dx;
+        cls_EnAry[BOSS4].mySub2.myDispY = dy;
+        cls_EnAry[BOSS4].mySub2.myDispH = dh;
+        cls_EnAry[BOSS4].mySub2.myCnt1 = time;
+        cls_EnAry[BOSS4].mySts = sts;
+        cls_EnAry[BOSS4].mySub2.myData1 = sts;
+    }
+
+    //ラスボス1
+    function LBoss1Move(t_xinit){
+        dx = cls_EnAry[LBOSS1].myDispX;
+        dy = cls_EnAry[LBOSS1].myDispY;
+        sts = cls_EnAry[LBOSS1].mySts;
+        
+        
+        if (t_xinit) {
+           
+            sts = STS_APPEAR ;
+        } else {
+
+          if (sts==STS_APPEAR) {
+            dx -= get_move_spd()/2;
+            if (dx <= 200) {
+              sts = STS_WAIT;
+            }
+          }else if(sts==STS_WAIT){
+            t_jdg = Math.random() *1000
+            
+            if(t_jdg < 1) {
+              sts = STS_ATK1;
+            } else if (t_jdg < 40) {
+              
+            } else if (t_jdg < 60) {
+              sts = STS_ATK3;
+            
+            } else if (t_jdg < 70) {
+              sts = STS_ATK4;
+            }
+          
+          } else if(sts==STS_ATK1) {
+            dx -= get_move_spd()/4;
+            if (dx < 200) {
+              sts = STS_ATK2;
+            }
+          } else if(sts==STS_ATK2) {
+            dx -= get_move_spd()*2;
+            if (dx < 0) {
+              sts = STS_RET1;
+            }
+          } else if(sts==STS_ATK3) {
+            //sub1で処理
+          } else if(sts==STS_ATK4) {
+            //sub2で処理
+          } else {
+            dx += get_move_spd()*4;
+            if (dx >= 200) {
+              sts = STS_WAIT;
+            }
+          }
+        }
+
+        cls_EnAry[LBOSS1].myDispX = dx;
+        cls_EnAry[LBOSS1].myDispY = dy;
+        cls_EnAry[LBOSS1].mySts = sts;
+    }
+
+    function LBoss1Sub1Move(t_xinit) {
+        dx = cls_EnAry[LBOSS1].mySub1.myDispX;
+        dy = cls_EnAry[LBOSS1].mySub1.myDispY;
+        dh = cls_EnAry[LBOSS1].mySub1.myDispH;
+        cnt = cls_EnAry[LBOSS1].mySub1.myCnt1;
+        sts = cls_EnAry[LBOSS1].mySts;
+        sts_old = cls_EnAry[LBOSS1].mySub1.myData1;
+
+        if (sts == STS_ATK3){
+
+            if (sts != sts_old){
+                cnt = 0;
+                dx = GAME_WIDTH;
+                t_random = Math.random();
+                dy=GROUND_YBASE
+                 -dh
+                 -(t_random*BLOCK_WH);
+            }
+            dx -= get_move_spd()*6;
+
+            if (dx < -BLOCK_WH) {
+              sts = STS_WAIT;
+            }
+        }
+
+        cls_EnAry[LBOSS1].mySub1.myDispX = dx;
+        cls_EnAry[LBOSS1].mySub1.myDispY = dy;
+        cls_EnAry[LBOSS1].mySub1.myDispH = dh;
+        cls_EnAry[LBOSS1].mySub1.myCnt1 = cnt;
+        cls_EnAry[LBOSS1].mySts = sts;
+        cls_EnAry[LBOSS1].mySub1.myData1 = sts;
+        
+    }
+
+    function LBoss1Sub2Move(t_xinit) {
+        dx = cls_EnAry[LBOSS1].mySub2.myDispX;
+        dy = cls_EnAry[LBOSS1].mySub2.myDispY;
+        dh = cls_EnAry[LBOSS1].mySub2.myDispH;
+        cnt = cls_EnAry[LBOSS1].mySub2.myCnt1;
+        sts = cls_EnAry[LBOSS1].mySts;
+        sts_old = cls_EnAry[LBOSS1].mySub2.myData1;
+        yofs = cls_EnAry[LBOSS1].mySub2.myData2;
+
+        if (sts == STS_ATK4){
+
+            if (sts != sts_old){
+                cnt = 0;
+                dx = GAME_WIDTH-200;
+                t_random = Math.random();
+                dy=GROUND_YBASE
+                 -dh
+                 -(t_random*BLOCK_WH);
+
+                 yofs = (t_random - 0.5)*2;
+            }
+            dx -= get_move_spd()*2;
+            dy += yofs;
+
+
+            if (dx < -BLOCK_WH) {
+              sts = STS_WAIT;
+            }
+        }
+
+        cls_EnAry[LBOSS1].mySub2.myDispX = dx;
+        cls_EnAry[LBOSS1].mySub2.myDispY = dy;
+        cls_EnAry[LBOSS1].mySub2.myDispH = dh;
+        cls_EnAry[LBOSS1].mySub2.myCnt1 = cnt;
+        cls_EnAry[LBOSS1].mySts = sts;
+        cls_EnAry[LBOSS1].mySub2.myData1 = sts;
+cls_EnAry[LBOSS1].mySub2.myData2 = yofs;
+        
+    }
+//---------------------------------
+
+
+    //敵キャラ共通
+    let en_draw_cnt = 0;
+    let en_move_sts = 0;
+    let en_xnodisp = true;
+    
+    let enemy_crash_flag;
+    let en_crash_af_dx;
+    let en_crash_af_dy;
+    const BOSS_CHG_NUM = 20;
+    const NO_MMAX = 50;
+    let boss_no_mcnt;
+    let boss_nodisp;
+    let enidx;
+    let cls_EnCom;
+    
+
+    function firstinitEnemy() {
+        firstinitEnemyChara();
+    }
+
+    function enemyReset() {
+        initEnemyChara();
+    
+        en_xnodisp = true;
+        en_draw_cnt = 0;
+        en_move_sts = 0;
+        boss_sel = -1;
+        en_cnt = 0;
+        boss_no_mcnt = 0;
+        boss_nodisp = false;
+        enidx = -1;
+    }
+
+    function enemyTask() {
+        t_en_nodisp = get_en_nodisp();
+        t_xinit = false;
+
+        if (t_en_nodisp) {
+          if (enidx != -1) {
+            chg_score(10,
+                    cls_Mc.myDispX,
+                    cls_Mc.myDispY);
+                
+          }
+          
+          en_cnt++;
+          boss_sel = 0;
+          t_stage = getStage();
+
+          if (en_cnt <= BOSS_CHG_NUM){
+            //雑魚
+            t_enc=0;
+            //enc合計値取得
+            for(i=0;i<ENEMY_NUM;i++){
+              if ((t_stage == cls_EnAry[i].myStage)
+                &&(!cls_EnAry[i].myBoss)) {
+
+                t_enc += cls_EnAry[i].myEnc;
+              }
+            }
+            
+
+            t_en_sel = Math.random()*
+                        t_enc;
+            enidx = -1;
+            t_last_i = 0;
+            t_encsum = 0;
+            //敵キャラ確定
+            for(i=0;i<ENEMY_NUM;i++){
+              if (t_stage == cls_EnAry[i].myStage) {
+
+                t_encsum += cls_EnAry[i].myEnc;
+
+                if(t_en_sel < t_encsum) {
+                  enidx = i;
+                  break;
+                }
+                t_last_i = i;
+              }
+            }
+
+            //見つからなかったら最後の子
+            if (enidx == -1) {
+              enidx = t_last_i;
+            }
+
+          } else {
+            //ボス
+            for(i=0;i<ENEMY_NUM;i++){
+              if ((t_stage == cls_EnAry[i].myStage)
+                &&(cls_EnAry[i].myBoss)) {
+                t_jdg = true;
+                if (cls_EnAry[i].myEncFc != null){
+                  t_jdg = cls_EnAry[i].myEncFc();
+
+}
+
+                if (t_jdg){
+                  enidx = i;
+                  break;
+                }
+              }
+            }
+            
+          }
+
+          cls_EnAry[enidx].myLife = cls_EnAry[enidx].myLifeMax;
+          
+          cls_EnDmg.myNoDisp = false;
+          cls_EnDmg.myNoMCnt = 0;
+             
+          if (getStageEnd() == false){
+                t_xinit = true;
+                en_xnodisp = false;
+          }
+
+        }
+        drawEnemyChara(cls_EnAry[enidx],           
+                       t_xinit);
+        
+    }
+    
+
+    function initEnemyCommon(enemy_img,resize){
+        
+        enemy_img.displayWidth = enemy_img.naturalWidth/resize;
+        enemy_img.displayHeight = enemy_img.naturalHeight/resize;
+
+    }
+
+    function moveEnemyCrash(cls_En) {
+        dx = cls_En.myDispX;
+        dy = cls_En.myDispY;
+        agl = cls_En.myAngle;
+        
+
+        //クラッシュ時はdxを奪う
+        if (enemy_crash_flag) {
+            dx +=en_crash_af_dx;
+            dy +=en_crash_af_dy;
+            agl += 10;
+        }
+
+        cls_En.myAngle = agl;
+        cls_En.myDispX = dx;
+        cls_En.myDispY = dy;
+    }
+
+    function drawEnemyCommon(cls_En) {
+
+        nodisp = cls_EnDmg.myNoDisp;
+        no_mcnt = cls_EnDmg.myNoMCnt;
+        drwcnt = cls_En.myDrwCnt;
+        up = cls_En.myUp;
+        dx = cls_En.myDispX;
+        dy = cls_En.myDispY;
+
+        if ((dx <= -BLOCK_WH*2)
+            ||(dx >= (GAME_WIDTH + BLOCK_WH*2))
+            ||(dy <= (0 - BLOCK_WH*2))
+            ||(dy >= (GAME_HEIGHT + BLOCK_WH*2))
+        ) 
+        {
+            en_xnodisp = true;
+            enemy_crash_flag = false;
+        }
+
+        drwcnt += get_move_spd();
+            
+        //上下の動き
+        if (get_move_ok() == true) {
+            if (drwcnt > 80) {
+                drwcnt = 0;
+                if (up == false) {
+                    up = true;
+                } else {
+                    up = false;
+                }
+            }
+
+            if (up == 1) {
+                dy -= BLOCK_WH/10;
+            }
+        }
+
+
+        t_rad = cls_En.myAngle * Math.PI/180;
+        can.save();   //保存して後で復活
+        
+        t_cx = dx + cls_En.myDispW/2;
+        t_cy = dy + cls_En.myDispH/2;
+
+        // 画像を回転
+        can.setTransform(Math.cos(t_rad), 
+            Math.sin(t_rad), 
+           -Math.sin(t_rad), 
+            Math.cos(t_rad),
+            t_cx-t_cx*Math.cos(t_rad)+t_cy*Math.sin(t_rad),
+            t_cy-t_cx*Math.sin(t_rad)-t_cy*Math.cos(t_rad));
+
+        if (!nodisp) {
+            can.drawImage(
+                  cls_En.myImg, 0, 0, 
+                  cls_En.myImg.naturalWidth,     
+                  cls_En.myImg.naturalHeight,
+                  dx,
+                  dy,
+                  cls_En.myDispW,    
+                  cls_En.myDispH); 
+        }
+
+        can.restore(); //復活
+
+        //バー
+        if (cls_En.myLife > 0){
+          if(cls_En.myBoss) {
+              varw = 100;
+          } else {
+              varw = 50;
+          }
+          lifex = dx 
+                + (cls_En.myDispW / 2)
+                - varw / 2;
+        
+          can.fillStyle = "#000000";
+          can.fillRect(lifex, dy-10, varw, 5);
+
+          t_val = (cls_En.myLife/
+                 cls_En.myLifeMax)
+                *(varw * 0.98)
+          can.fillStyle = "#FF0000";
+          can.fillRect(lifex+1, dy-9, t_val, 3);
+        }
+
+        //ダメージ
+        if (cls_EnDmg.myCnt < DMGCNTMAX) {
+          if (cls_EnDmg.myCrt) {
+            can.font = '20pt Arial';
+            can.fillStyle = 'red';
+          } else {
+            can.font = '15pt Arial';
+            can.fillStyle = 'white';
+          }
+          can.fillText(cls_EnDmg.myNum,       
+                       cls_EnDmg.myX +1, 
+                       cls_EnDmg.myY +1- cls_EnDmg.myCnt/2);
+          if (cls_EnDmg.myCrt) {
+            can.font = '20pt Arial';
+            can.fillStyle = 'white';
+          } else {
+            can.font = '15pt Arial';
+            can.fillStyle = 'black';
+          }
+          can.fillText(cls_EnDmg.myNum,       
+                       cls_EnDmg.myX, 
+                       cls_EnDmg.myY - cls_EnDmg.myCnt/2);
+
+          cls_EnDmg.myCnt++;
+
+        }
+
+
+        if (no_mcnt > 0){//敵無敵期間
+
+          no_mcnt--;
+          
+          if ((no_mcnt % 10)==0) {
+            if (nodisp){
+              nodisp = false;
+            } else {
+              nodisp = true;
+            }
+          }
+        } else {
+           nodisp = false;
+        }
+
+        cls_En.myDrwCnt = drwcnt;
+        cls_En.myUp = up;
+        cls_EnDmg.myNoDisp = nodisp;
+        cls_EnDmg.myNoMCnt = no_mcnt;
+    }
+
+    //衝突判定
+    function crashMainEnemyJdg(cls_En){
+        t_invcnt = getMainCharaInv();
+        if(t_invcnt > 0){
+            //無敵ウクレレ
+            x = inv_img.display_x;
+            w = inv_img.displayWidth;
+
+            y = inv_img.display_y;
+            h = inv_img.displayHeight;
+
+        } else {
+            //メインキャラ
+            x = cls_Mc.myDispX;
+            w = cls_Mc.myDispW;
+
+            y = cls_Mc.myDispY;
+            h = cls_Mc.myDispH;
+        }
+
+        //敵1
+        t_en_x = cls_En.myDispX;
+        t_en_w = cls_En.myDispW;
+
+        t_en_y = cls_En.myDispY;
+        t_en_h = cls_En.myDispH;
+
+        ret = crashcommon([x,w,y,h],[t_en_x,t_en_w,t_en_y,t_en_h]);
+
+        if (ret) {
+            crash_MainChara(true, cls_En.myDamage);
+        }
+    }
+
+
+    function get_en_nodisp () {
+        return en_xnodisp;
+    }
+
+    function get_cls_EnCom () {
+        return cls_EnCom;
+    }
+
+function get_enc_exist() {
+  let t_jdg1 = false;
+  let t_encok;
+
+  for (let i = 0; i < ENEMY_NUM; i++) {
+    if (getStage() == cls_EnAry[i].myStage) {
+      if (cls_EnAry[i].myEncFc != null) {
+        t_encok = cls_EnAry[i].myEncFc();
+      } else {
+        t_encok = true;
+      }
+      if (t_encok) {
+        t_jdg1 = true;
+      }
+    }
+  }
+  return t_jdg1;
+}
+
+    function enemyCrash(t_dmg) {
+      t_life0 = false;
+      
+      if (cls_EnDmg.myNoMCnt <= 0) {
+        //敵ライフへる
+        t_random = Math.random();
+        crt_ofs = 1;
+        crt = false;
+        if (t_random < (getCrt())) {
+            crt_ofs = 1.5;
+            crt = true;
+
+        }
+        dmgk = 10 + 1 * cls_Mc.myLevel ;
+        dmg_c = Math.ceil(t_dmg *  dmgk * 10*crt_ofs);
+
+        cls_EnCom.myLife -= dmg_c;
+        cls_EnDmg.myNum = dmg_c;
+        cls_EnDmg.myCnt = 0;
+        cls_EnDmg.myX = cls_EnCom.myDispX;
+        cls_EnDmg.myY = cls_EnCom.myDispY;
+        cls_EnDmg.myCrt = crt;
+      }
+        
+        if ((cls_EnCom.myLife <= 0) 
+            &&(!enemy_crash_flag)) {
+            t_life0 = true; //ライフ0
+            if (cls_EnCom.myBoss){
+              plus_exp(getStage()*10);
+              updateStage();
+              
+              if (!get_enc_exist()){
+                updateStage();
+              }
+
+              if(LAST_STAGE!=getStage()){
+                en_cnt=0;//ボス出現条件クリア
+              }
+            }
+            else {
+              plus_exp(getStage());
+            }
+
+        } else {
+            if (cls_EnDmg.myNoMCnt <= 0) {
+                cls_EnDmg.myNoMCnt = NO_MMAX;
+
+            }
+        }
+      
+
+      if (t_life0) {
+        if (!enemy_crash_flag) {
+          enemy_crash_flag = true;
+
+          t_ofs=Math.random() * 0.5;
+          t_radian = (1.75+t_ofs)*3.14;
+          en_crash_af_dx = Math.cos(t_radian)*10*get_move_spd();
+          
+          en_crash_af_dy = Math.sin(t_radian)*10*get_move_spd();
+
+          if (get_move_ok()) {
+              chg_score(25,
+              cls_Mc.myDispX,
+              cls_Mc.myDispY);
+          }
+        }
+      }
+
+    }
+
+    function getBossSel(){
+        return cls_EnCom.myBoss;
+    }
+
+    //-------------
+    //ここからアイテム
+    //-------------
+    //アイテムなし
+
+     function drawnoItem(t_xinit){
+
+        if (t_xinit) {
+            item_x = GAME_WIDTH;
+            item_y = GAME_HEIGHT - BLOCK_WH*2+18;
+        } else {
+            item_x -= get_move_spd()*0.5;
+        }
+        if (item_x <= -BLOCK_WH*2) {
+            it_xnodisp = true;
+        }
+    }
+
+
+
+
+    //アイテム1
+    var item1_img = new Image();
+    var item1_enc = 20;
+    function firstinitItem1(){
+        item1_img.src = 'img/瓶ビール.png';
+    }
+
+    function initItem1(){
+        initItemCommon(item1_img);
+
+    }
+
+    function drawItem1(t_xinit){
+        if (t_xinit) {
+            item_x = GAME_WIDTH;
+            item_y = GAME_HEIGHT - BLOCK_WH*2;
+        } else {
+            item_x -= get_move_spd();
+        }
+
+        ret = drawItemCommon(item1_img, 
+                       item_x, 
+                       item_y,
+                       30);
+        if (ret) {
+            chgLife(1);
+        }
+    }
+
+    //アイテム2
+    var item2_img = new Image();
+    var item2_enc = 10;
+
+    function firstinitItem2(){
+        item2_img.src = 'img/たこ焼き.png';
+
+    }
+    function initItem2(){
+        initItemCommon(item2_img);
+
+    }
+
+    function drawItem2(t_xinit){
+        if (t_xinit) {
+            item_x = GAME_WIDTH;
+            item_y = GAME_HEIGHT - BLOCK_WH*4;
+        } else {
+            item_x -= get_move_spd();
+        }
+
+        ret = drawItemCommon(item2_img, 
+                       item_x, 
+                       item_y,
+                       50);
+        if (ret) {
+            chgLife(1);
+        }
+    }
+
+    //アイテム3
+    var item3_img = new Image(); 
+    var ITEM3_BASEY = GAME_HEIGHT - BLOCK_WH*2+24;
+    let item3_disp;
+    let item3_disp_old;
+    let item3_t;
+    var ITEM3_V0 = -11;
+    let item3sel;
+
+    function firstinitItem3(){
+        item3_img.src = 'img/一本のバナナ.png';
+
+    }
+    function initItem3(){
+        initItemCommon(item3_img);
+        item3_disp = false;
+        item3_disp_old = false;
+    }
+
+    function drawItem3(t_xinit){
+        if (t_xinit) {
+            item3_x = BLOCK_WH*2;
+            item3_y = ITEM3_BASEY;
+            item3_t = 0;
+        } else {
+
+
+            item3_t += get_move_spd()/2;          
+            item3_y = g_calc(ITEM3_BASEY,item3_t,ITEM3_V0);
+
+            if(ITEM3_BASEY < item3_y){
+                //地面に落ちた場合
+                item3_y = ITEM3_BASEY;
+                item3_x -= get_move_spd();
+            } else {
+                item3_x += get_move_spd()*1.2;
+            }
+            
+        }
+
+        if (item3_x <= -BLOCK_WH*2) {
+            setEnemy3ItemReqEnd();
+            item3sel = false;
+        }
+        
+
+        can.drawImage(item3_img, 0, 0, 
+                item3_img.naturalWidth,     
+                item3_img.naturalHeight,
+                item3_x,
+                item3_y,
+                item3_img.displayWidth, 
+                item3_img.displayHeight);
+        
+        item3_img.display_x = item3_x;
+        item3_img.display_y = item3_y;
+
+        //あたり判定
+        ret = crashMainItemJdg(item3_img,
+                        100);
+
+        if (ret) {
+            chg_score(80,
+                      cls_Mc.myDispX,
+                      cls_Mc.myDispY);
+            setEnemy3ItemReqEnd();
+            item3sel = false;
+            chgLife(1);
+
+        }
+    }
+
+    //アイテム4
+    var item4_img = new Image(); 
+    var ITEM4_BASEY = GAME_HEIGHT - BLOCK_WH*2+18;
+    let item4_disp;
+    let item4_disp_old;
+    let item4_t;
+    var ITEM4_V0 = -11;
+    let item4sel;
+
+    function firstinitItem4(){
+        item4_img.src = 'img/バナナの皮.png';
+
+    }
+    function initItem4(){
+        initItemCommon(item4_img);
+        item4_disp = false;
+        item4_disp_old = false;
+    }
+
+    function drawItem4(t_xinit){
+        if (t_xinit) {
+            item4_x = BLOCK_WH*2;
+            item4_y = ITEM4_BASEY;
+            item4_t = 0;
+        } else {
+
+            item4_t += get_move_spd()/2;          
+            item4_y = g_calc(ITEM4_BASEY,item4_t,ITEM4_V0);
+
+            if(ITEM4_BASEY < item4_y){
+                //地面に落ちた場合
+                item4_y = ITEM4_BASEY;
+                item4_x -= get_move_spd();
+            } else {
+                item4_x += get_move_spd()*1.2;
+            }
+            
+        }
+
+        if (item4_x <= -BLOCK_WH*2) {
+            setEnemy3ItemReqEnd();
+            item4sel = false;
+        }
+        
+
+        can.drawImage(item4_img, 0, 0, 
+                item4_img.naturalWidth,     
+                item4_img.naturalHeight,
+                item4_x,
+                item4_y,
+                item4_img.displayWidth, 
+                item4_img.displayHeight);
+        
+        item4_img.display_x = item4_x;
+        item4_img.display_y = item4_y;
+
+        //あたり判定
+        ret = crashMainItemJdg(item4_img,
+                        90);
+
+        if (ret) {
+            crash_MainChara(false,1);
+            setEnemy3ItemReqEnd();
+            item4sel = false;
+        }
+    }
+
+    //アイテム5
+    var item5_img = new Image();
+    var item5_enc = 10;
+    var ITEM5_BASEY = GAME_HEIGHT - BLOCK_WH*2+18;
+    let item5_t;
+    let item5_v0_af;
+    var ITEM5_V0 = -12;
+
+
+    function firstinitItem5(){
+        item5_img.src = 'img/ウクレレ.png';
+
+    }
+    function initItem5(){
+        initItemCommon(item5_img);
+
+    }
+
+    function drawItem5(t_xinit){
+        if (t_xinit) {
+            item_x = GAME_WIDTH;
+            item_base_y = BLOCK_WH + 
+                     BLOCK_WH * 3 * 
+                     Math.random();
+            item5_v0_af = ITEM5_V0 + Math.random() * -5;
+            item5_t = 0;
+        } else {
+            item5_t += get_move_spd()/2;          
+            item_y = g_calc(item_base_y,item5_t,item5_v0_af);
+
+            if(ITEM5_BASEY < item_y){
+                //地面に落ちた場合
+                item5_t = 0;
+                item5_v0_af++;
+                item_base_y = ITEM5_BASEY;
+            } 
+            item_x -= get_move_spd()*1.2;
+        }
+
+        if (item_x <= -BLOCK_WH*2) {
+            it_xnodisp = true;
+        }
+        
+
+        can.drawImage(item5_img, 0, 0, 
+                item5_img.naturalWidth,     
+                item5_img.naturalHeight,
+                item_x,
+                item_y,
+                item5_img.displayWidth, 
+                item5_img.displayHeight);
+        
+        item5_img.display_x = item_x;
+        item5_img.display_y = item_y;
+
+        //あたり判定
+        ret = crashMainItemJdg(item5_img);
+
+        if (ret) {
+            setMainCharaInv();
+            it_xnodisp = true;
+        }
+    }
+
+    //アイテム6
+    var item6_img = new Image();
+    var item6_enc = 15;
+    var b_item6_enc = 15;
+    let item6_atk;
+    let item6_atk_cnt;
+    let item6_angle;
+    let item6_x_vec;
+    let item6_y_vec;
+
+    function firstinitItem6(){
+        item6_img.src = 'img/丸っこいどんぐり.png';
+
+    }
+    function initItem6(){
+        initItemCommon(item6_img);
+
+    }
+
+    function drawItem6(t_xinit){
+        if (t_xinit) {
+            item_x = GAME_WIDTH;
+            t_random = Math.random()*BLOCK_WH;
+            item_y = GAME_HEIGHT 
+                     - BLOCK_WH*5
+                     + t_random;
+            item6_atk = false;
+            item6_atk_cnt = 0;
+            item6_angle = 0;
+        } else {
+            if (!item6_atk) {
+                item_x -= get_move_spd();
+                item6_atk_cnt = 0;
+            } else {
+                item_x += get_move_spd()*3 + item6_x_vec;
+                item_y += get_move_spd()*2 + item6_y_vec;
+                item6_angle+=10;
+            }
+            
+        }
+
+        if (item_x <= -BLOCK_WH*2) {
+            it_xnodisp = true;
+        }
+        if (item_x >= GAME_WIDTH+BLOCK_WH*2) {
+            it_xnodisp = true;
+        }
+        item_w = item6_img.displayWidth +item6_atk_cnt*2;
+        item_h = item6_img.displayHeight + item6_atk_cnt*2;
+
+        t_rad = item6_angle * Math.PI/180;
+
+        can.save();   //保存して後で復活
+        
+        t_cx = item6_img.display_x + item6_img.displayWidth/2;
+        t_cy = item6_img.display_y + item6_img.displayHeight/2;
+
+        // 画像を回転
+        can.setTransform(Math.cos(t_rad), 
+            Math.sin(t_rad), 
+           -Math.sin(t_rad), 
+            Math.cos(t_rad),
+            t_cx-t_cx*Math.cos(t_rad)+t_cy*Math.sin(t_rad),
+            t_cy-t_cx*Math.sin(t_rad)-t_cy*Math.cos(t_rad));
+
+        can.drawImage(item6_img, 0, 0, 
+                item6_img.naturalWidth,     
+                item6_img.naturalHeight,
+                item_x,
+                item_y,
+                item_w, 
+                item_h);
+
+        can.restore(); //復活
+      
+        item6_img.display_x = item_x;
+        item6_img.display_y = item_y;
+        
+        t_cls_En = get_cls_EnCom();
+
+        en_x = t_cls_En.myDispX;
+        en_w = t_cls_En.myDispW;
+
+        en_y = t_cls_En.myDispY;
+        en_h = t_cls_En.myDispH;
+
+        if (!item6_atk) {
+            ret = crashMainItemJdg(item6_img); //アイテムゲット
+            if (ret) {
+              item6_atk = true;
+
+              
+              //敵位置に向かう
+              item6_x_vec = ((en_x-en_w/2) - item_x)/10;
+              item6_y_vec = ((en_y-en_h/2) - item_y)/10;
+        
+              if (just_x_vector < 0) { 
+                  item6_x_vec=0;
+                  item6_y_vec=0;
+              }
+
+            }
+        } else {
+            
+            t_x = item6_img.display_x;
+            t_y = item6_img.display_y;
+
+            t_w = item6_img.displayWidth;
+            t_h = item6_img.displayHeight;
+
+
+            //あたり判定
+            ret = crashcommon(
+                  [t_x,t_w,t_y,t_h],
+                  [en_x,en_w,en_y,en_h]);
+
+            if (ret) {
+                enemyCrash(1);
+                it_xnodisp = true;
+                plus_spgage(1);
+            }
+            item6_atk_cnt++;
+        }
+    }
+
+
+    //アイテム7
+    var item7_img = new Image();
+    var item7_enc = 5;
+
+    function firstinitItem7(){
+        item7_img.src = 'img/ハンバーガー.png';
+
+    }
+    function initItem7(){
+        initItemCommon(item7_img);
+
+    }
+
+    function drawItem7(t_xinit){
+        if (t_xinit) {
+            item_x = GAME_WIDTH;
+            item_y = GAME_HEIGHT - BLOCK_WH*5+20;
+        } else {
+            item_x -= get_move_spd();
+        }
+
+        ret = drawItemCommon(item7_img, 
+                       item_x, 
+                       item_y,
+                       10);
+
+        if(ret) {
+            chgLife(2);
+        }
+    }
+
+    //アイテム8
+    var item8_img = new Image();
+    var item8_enc = 2;
+    var item8_his = false;
+
+    function firstinitItem8(){
+        item8_img.src = 'img/item8.png';
+
+    }
+    function initItem8(){
+        initItemCommon(item8_img);
+        item8_his = false;
+    }
+
+    function drawItem8(t_xinit){
+        if (t_xinit) {
+            item_x = GAME_WIDTH;
+            item_y = GAME_HEIGHT - BLOCK_WH*5+20;
+        } else {
+            item_x -= get_move_spd();
+        }
+
+        ret = drawItemCommon(item8_img, 
+                       item_x, 
+                       item_y,
+                       0);
+
+        if(ret) {
+            item8_his = true;
+        }
+
+        item8_enc = 0;
+    }
+
+    function get_item8his(){
+        return item8_his;
+    }
+
+    //アイテム9
+    var item9_img = new Image();
+    var item9_enc = 2;
+
+    function firstinitItem9(){
+        item9_img.src = 'img/item9.png';
+
+    }
+    function initItem9(){
+        initItemCommon(item9_img);
+
+    }
+
+    function drawItem9(t_xinit){
+        if (t_xinit) {
+            item_x = GAME_WIDTH;
+            item_y = GAME_HEIGHT - BLOCK_WH*5+20;
+        } else {
+            item_x -= get_move_spd();
+        }
+
+        ret = drawItemCommon(item9_img, 
+                       item_x, 
+                       item_y,
+                       10);
+
+        if(ret) {
+            upCrt(0.01);
+        }
+    }
+
+    //アイテム10
+    var item10_img = new Image();
+    var item10_enc = 2;
+
+    function firstinitItem10(){
+        item10_img.src = 'img/item10.png';
+
+    }
+    function initItem10(){
+        initItemCommon(item10_img);
+
+    }
+
+    function drawItem10(t_xinit){
+        if (t_xinit) {
+            item_x = GAME_WIDTH;
+            item_y = GAME_HEIGHT - BLOCK_WH*5+20;
+        } else {
+            item_x -= get_move_spd();
+        }
+
+        ret = drawItemCommon(item10_img, 
+                       item_x, 
+                       item_y,
+                       10);
+
+        if(ret) {
+            upAvd(0.01);
+        }
+    }
+
+    //アイテム11
+    var item11_img = new Image();
+    var item11_enc = 2;
+
+    function firstinitItem11(){
+        item11_img.src = 'img/item11.png';
+
+    }
+    function initItem11(){
+        initItemCommon(item11_img);
+
+    }
+
+    function drawItem11(t_xinit){
+        if (t_xinit) {
+            item_x = GAME_WIDTH;
+            item_y = GAME_HEIGHT - BLOCK_WH*5+20;
+        } else {
+            item_x -= get_move_spd();
+        }
+
+        ret = drawItemCommon(item11_img, 
+                       item_x, 
+                       item_y,
+                       10);
+
+        if(ret) {
+            plus_exp(getStage()*5);
+        }
+    }
+
+ // アイテム共通
+let it_xnodisp = false;
+let item_x = GAME_WIDTH;
+let item_y;
+let ITEM_NUM = 1;
+let item_sel;
+var noitem_enc = 20;
+
+function firstinitItem() {
+  firstinitItem1();
+  firstinitItem2();
+  firstinitItem3();
+  firstinitItem4();
+  firstinitItem5();
+  firstinitItem6();
+  firstinitItem7();
+  firstinitItem8();
+  firstinitItem9();
+  firstinitItem10();
+  firstinitItem11();
+}
+
+function itemReset() {
+  initItem1();
+  initItem2();
+  initItem3();
+  initItem4();
+  initItem5();
+  initItem6();
+  initItem7();
+  initItem8();
+  initItem9();
+  initItem10();
+  initItem11();
+  item_sel = 0;
+  it_xnodisp = false;
+  item_x = GAME_WIDTH;
+}
+
+function ItemTask() {
+  t_it_nodisp = get_it_nodisp();
+  t_xinit = false;
+
+  if (t_it_nodisp) {
+    t_bosssel = getBossSel();
+
+    // Boss戦特殊判定
+    b_item6_enc = item6_enc;
+    if (t_bosssel != 0) {
+      b_item6_enc = item6_enc * 4;
+    }
+
+    item_sel = Math.random() *
+      (noitem_enc +
+        item1_enc +
+        item2_enc +
+        item5_enc +
+        b_item6_enc +
+        item7_enc +
+        item8_enc +
+        item9_enc +
+        item10_enc +
+        item11_enc 
+      );
+
+    t_xinit = true;
+    it_xnodisp = false;
+  }
+
+  // アイテムと対応する描画関数の配列
+  const items = [
+    { threshold: noitem_enc, drawFunction: drawnoItem },
+    { threshold: noitem_enc + item1_enc, drawFunction: drawItem1 },
+    { threshold: noitem_enc + item1_enc + item2_enc, drawFunction: drawItem2 },
+    { threshold: noitem_enc + item1_enc + item2_enc + item5_enc, drawFunction: drawItem5 },
+    { threshold: noitem_enc + item1_enc + item2_enc + item5_enc + b_item6_enc, drawFunction: drawItem6 },
+    { threshold: noitem_enc + item1_enc + item2_enc + item5_enc + b_item6_enc + item7_enc, drawFunction: drawItem7 },
+    { threshold: noitem_enc + item1_enc + item2_enc + item5_enc + b_item6_enc + item7_enc + item8_enc, drawFunction: drawItem8 },
+    { threshold: noitem_enc + item1_enc + item2_enc + item5_enc + b_item6_enc + item7_enc + item8_enc + item9_enc, drawFunction: drawItem9 },
+    { threshold: noitem_enc + item1_enc + item2_enc + item5_enc + b_item6_enc + item7_enc + item8_enc + item9_enc + item10_enc, drawFunction: drawItem10 }
+  ];
+
+  // アイテムを選択し、対応する描画関数を呼び出す
+  let selectedFunction = drawItem11; // デフォルトはdrawItem11
+  for (const item of items) {
+    if (item_sel <= item.threshold) {
+      selectedFunction = item.drawFunction;
+      break;
+    }
+  }
+
+  // 選択された描画関数を実行する
+  selectedFunction(t_xinit);
+
+  // アイテム3例外処理
+  t_xinit = false;
+  if (!item3sel) {
+    item3_disp = getEnemy3OkItemReq();
+
+    if (item3_disp) {
+      t_xinit = true;
+      item3sel = true;
+    }
+  }
+
+  if (item3sel) {
+    drawItem3(t_xinit);
+  }
+
+  // アイテム4例外処理
+  t_xinit = false;
+  if (!item4sel) {
+    item4_disp = getEnemy3NgItemReq();
+
+    if (item4_disp) {
+      t_xinit = true;
+      item4sel = true;
+    }
+  }
+
+  if (item4sel) {
+    drawItem4(t_xinit);
+  }
+}
+
+function initItemCommon(item_img) {
+  item_img.displayWidth = item_img.naturalWidth / 10;
+  item_img.displayHeight = item_img.naturalHeight / 10;
+}
+
+function drawItemCommon(it_img, dx, dy, t_chg_score) {
+  if (item_x <= -BLOCK_WH * 2) {
+    it_xnodisp = true;
+  }
+
+  dx_confirm = dx;
+  dy_confirm = dy;
+
+  can.drawImage(
+    it_img, 0, 0,
+    it_img.naturalWidth,
+    it_img.naturalHeight,
+    dx_confirm,
+    dy_confirm,
+    it_img.displayWidth,
+    it_img.displayHeight
+  );
+
+  it_img.display_x = dx_confirm;
+  it_img.display_y = dy_confirm;
+
+  // あたり判定
+  t_ret = crashMainItemJdg(it_img);
+  if (t_ret) {
+    chg_score(t_chg_score, cls_Mc.myDispX, cls_Mc.myDispY);
+    it_xnodisp = true;
+  }
+  return t_ret;
+}
+
+
+function crashMainItemJdg(it_img) {
+    // メインキャラ
+    x = cls_Mc.myDispX;
+    w = cls_Mc.myDispW;
+    y = cls_Mc.myDispY;
+    h = cls_Mc.myDispH;
+
+    // アイテム
+    it_x = it_img.display_x;
+    it_w = it_img.displayWidth;
+    it_y = it_img.display_y;
+    it_h = it_img.displayHeight;
+
+    ret = crashcommon([x, w, y, h], [it_x, it_w, it_y, it_h]);
+    return ret;
+}
+
+function get_it_nodisp() {
+    return it_xnodisp;
+}
+
+
+//#############################
+//ここからゲームの状態ごとの処理を書く
+//#############################
+
+function gameStart() {
+    //firstScript();
+    score = 0;
+    sc.textContent = "SCORE: " + score;
+    init_move_spd();
+    enemy_x = GAME_WIDTH;
+    from_r_sel = 0;
+
+    // 画像初期化
+    initMainChara();
+    initJustAttack();
+    initLife();
+    enemyReset();
+    initParam();
+    itemReset();
+    initLevel();
+    initSpGage();
+    initStage();
+    startSpdInit();
+    initStopRestart();
+
+    // document.getElementById("start").style.visibility = "hidden"; // スタートボタン非表示
+    // document.getElementById("result").style.visibility = "hidden";
+
+    field.addEventListener("touchstart", touchStartField, { passive: false });
+    document.addEventListener("touchstart", touchStart, { passive: false });
+
+    field.removeEventListener("touchstart", touchStartFieldFirst, { passive: false });
+    document.addEventListener("touchend", touchEnd, { passive: false });
+    exit.addEventListener("touchstart", game_over);
+
+    fieldDraw();
+    nextDraw();
+
+    // task立ち上げ
+    main_task_timer = setInterval(maintask, 10);
+}
+
+function maintask() {
+    nextDraw();
+    enemyTask();
+    ItemTask();
+    drawLife();
+    drawParam();
+    mainCharaTask();
+    JustAttackTask();
+    scoreTask();
+    levelTask();
+    spgageTask();
+    chgspdtask();
+    stageTask();
+    drawStopRestart();
+}
+
+// イベントハンドラー(スマホタップ)
+let startX = 0;
+let startY = 0;
+let fieldtapMask = false;
+
+function touchStart(e) {
+    e.preventDefault();
+    startX = e.touches[0].pageX;
+    startY = e.touches[0].pageY;
+
+    if (!getStageEnd()) {
+        if (!fieldtapMask) {
+            if (getJustOk()) {
+                setJustAttack();
+            }
+
+            if (cls_Mc.mySts == JUMP_END) {
+                cls_Mc.mySts = JUMP_START;
+            }
+        }
+        fieldtapMask = false;
+    }
+}
+
+function touchStartField(e) {
+    e.preventDefault();
+    startX = e.touches[0].pageX;
+    startY = e.touches[0].pageY;
+    fieldtapMask = false;
+
+    if (e.changedTouches.length == 1) {
+        ret = pushStopRestart(
+            pos(e.changedTouches[0])
+        );
+        if (!ret) {
+            ret = pushSpAtkBtn(
+                pos(e.changedTouches[0])
+            );
+
+            if (ret) {
+                fieldtapMask = true;
+            }
+        }
+        else {
+            fieldtapMask = true;
+        }
+    }
+}
+
+function touchStartFieldFirst(e) {
+    e.preventDefault();
+    startX = e.touches[0].pageX;
+    startY = e.touches[0].pageY;
+    fieldtapMask = true;
+
+    if (e.changedTouches.length == 1) {
+        pushSelMainChara(
+            pos(e.changedTouches[0])
+        );
+
+        pushGameStart(
+            pos(e.changedTouches[0])
+        );
+    }
+}
+
+
+function pos(e) {
+    var x, y;
+    x = e.clientX - field.getBoundingClientRect().left;
+    y = e.clientY - field.getBoundingClientRect().top;
+    return [x, y];
+}
+
+function touchEnd(e) {
+    e.preventDefault();
+    tetroDown = false;
+}
+
+function wait1sec() {
+    return new Promise(resolve => {
+        setTimeout(() => {
+            resolve();
+        }, 1000);
+    });
+}
+
+
+function wait01sec() {
+    return new Promise(resolve => {
+        setTimeout(() => {
+            resolve();
+        }, 100);
+    });
+}
+
+async function game_clear() {
+    clearInterval(main_task_timer);
+    t_totalcnt = getTotalCnt();
+    t_score = getScore();
+    t_pval = Math.round(t_score / t_totalcnt * 10);
+    t_str = 'CONGRATULATIONS!!';
+    
+    can.fillStyle = 'red';
+    can.font = '25pt Arial';
+    can.fillText(t_str, 21, 151);
+    
+    can.font = '25pt Arial';
+    can.fillStyle = 'white';
+    can.fillText(t_str, 20, 150);
+    
+    await wait1sec();
+    clear_score1();
+    
+    await wait1sec();
+    clear_score2(t_pval);
+    
+    await wait1sec();
+    total_score();
+    
+    await wait1sec();
+    await wait1sec();
+    
+    field.addEventListener("touchstart", touchStartFieldFirst, { passive: false });
+    MainCharaSelect();
+    dispContinueBtn();
+    field.removeEventListener("touchstart", touchStart, { passive: false });
+    document.removeEventListener("touchstart", touchStart, { passive: false });
+    document.removeEventListener("touchend", touchEnd, { passive: false });
+}
+
+
+// ゲームオーバー
+async function game_over() {
+    clearInterval(main_task_timer);
+
+    await wait01sec();
+
+    total_score();
+
+    await wait1sec();
+
+    field.addEventListener("touchstart", touchStartFieldFirst, { passive: false });
+
+    // キャラセレクト
+    MainCharaSelect();
+
+    dispContinueBtn();
+
+    field.removeEventListener("touchstart", touchStart, { passive: false });
+    document.removeEventListener("touchstart", touchStart, { passive: false });
+    document.removeEventListener("touchend", touchEnd, { passive: false });
+}
+
+// スタートボタン
+let gs_w;
+let gs_h;
+let gs_x;
+let gs_y;
+
+function firstinitBtn() {
+    start_img.src = 'img/20221224233402.png';
+    cont_img.src = 'img/20221225001827.png';
+}
+
+var start_img = new Image();
+
+function chkBtnImgLoad(btn_img) {
+    return new Promise(resolve => {
+        setInterval(() => {
+            if (btn_img.naturalWidth !== 0) {
+                resolve();
+            }
+        }, 100);
+    });
+}
+
+async function dispStartBtn() {
+    await chkBtnImgLoad(start_img);
+
+    gs_w = start_img.naturalWidth;
+    gs_h = start_img.naturalHeight;
+    gs_x = GAME_WIDTH / 2 - gs_w / 2;
+    gs_y = 230;
+
+    can.drawImage(
+        start_img, 0, 0,
+        start_img.naturalWidth,
+        start_img.naturalHeight,
+        gs_x,
+        gs_y,
+        gs_w,
+        gs_h
+    );
+}
+
+var cont_img = new Image();
+
+function dispContinueBtn() {
+    gs_w = cont_img.naturalWidth;
+    gs_h = cont_img.naturalHeight;
+    gs_x = GAME_WIDTH / 2 - gs_w / 2;
+    gs_y = 230;
+
+    can.drawImage(
+        cont_img, 0, 0,
+        cont_img.naturalWidth,
+        cont_img.naturalHeight,
+        gs_x,
+        gs_y,
+        gs_w,
+        gs_h
+    );
+}
+
+function pushGameStart(tap) {
+    tapx = tap[0];
+    tapy = tap[1];
+
+    if (((gs_x < tapx)
+        && (tapx < (gs_x + gs_w)))
+        && ((gs_y < tapy)
+            && (tapy < (gs_y + gs_h)))) {
+        gameStart();
+    }
+}
+
+// ストップ/リスタート
+let StopRestart;
+const GAME_STOP = 0;
+const GAME_START = 1;
+const SR_X = 20;
+const SR_Y = 490;
+const SR_H = 19;
+var sr_rectw;
+
+function initStopRestart() {
+    StopRestart = GAME_START;
+}
+
+function drawStopRestart() {
+    if (StopRestart === GAME_START) {
+        t_sr = 'STOP';
+        sr_rectw = 58;
+    } else {
+        t_sr = 'RESTART';
+        sr_rectw = 98;
+    }
+
+    can.fillStyle = "#555555";
+    can.fillRect(SR_X - 2, SR_Y - SR_H + 2, sr_rectw, SR_H);
+
+    can.font = '15pt Arial';
+    can.fillStyle = 'black';
+    can.fillText(t_sr, SR_X + 1, SR_Y + 1);
+    can.fillText(t_sr, SR_X - 1, SR_Y - 1);
+    can.fillText(t_sr, SR_X - 1, SR_Y + 1);
+    can.fillText(t_sr, SR_X + 1, SR_Y - 1);
+
+    can.fillStyle = 'white';
+    can.fillText(t_sr, SR_X, SR_Y);
+}
+
+function pushStopRestart(tap) {
+    // tap 配列から X と Y 座標を抽出
+    const tapx = tap[0];
+    const tapy = tap[1];
+    let ret = false;
+
+    if (SR_X < tapx && tapx < (SR_X + sr_rectw) &&
+        (SR_Y - 15) < tapy && tapy < (SR_Y + SR_H + 10)) {
+        if (StopRestart === GAME_START) {
+            StopRestart = GAME_STOP;
+            clearInterval(main_task_timer);
+        } else {
+            StopRestart = GAME_START;
+            main_task_timer = setInterval(maintask, 10);
+        }
+        drawStopRestart();
+        ret = true;
+    }
+
+    return (ret);
+}
+
+
+</script>
+</body>
+</html>
